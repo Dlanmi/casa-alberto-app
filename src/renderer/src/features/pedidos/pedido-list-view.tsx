@@ -1,0 +1,88 @@
+import { ClipboardList } from 'lucide-react'
+import { Table, Thead, Tbody, Tr, Th, Td } from '@renderer/components/ui/table'
+import { EstadoPedidoBadge } from '@renderer/components/shared/estado-badge'
+import { PrecioDisplay } from '@renderer/components/shared/precio-display'
+import { FechaDisplay } from '@renderer/components/shared/fecha-display'
+import { PagoBar } from '@renderer/components/shared/pago-bar'
+import { InitialsAvatar } from '@renderer/components/shared/initials-avatar'
+import { EmptyState } from '@renderer/components/ui/empty-state'
+import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
+import { TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
+import type { Pedido } from '@shared/types'
+
+type PedidoListViewProps = {
+  pedidos: Pedido[]
+  onRowClick: (pedido: Pedido) => void
+  clienteMap?: Map<number, string>
+}
+
+export function PedidoListView({
+  pedidos,
+  onRowClick,
+  clienteMap
+}: PedidoListViewProps): React.JSX.Element {
+  if (pedidos.length === 0) {
+    return (
+      <EmptyState
+        icon={ClipboardList}
+        title="Aún no hay pedidos"
+        description="Cuando hagas tu primera cotización y la confirmes, aparecerá aquí. Empieza creando una cotización."
+      />
+    )
+  }
+
+  return (
+    <Table>
+      <Thead>
+        <Tr>
+          <Th>Número</Th>
+          <Th>Cliente</Th>
+          <Th>Tipo</Th>
+          <Th>Descripción</Th>
+          <Th>Medidas</Th>
+          <Th>Entrega</Th>
+          <Th className="text-right">Total</Th>
+          <Th>Pago</Th>
+          <Th>Estado</Th>
+        </Tr>
+      </Thead>
+      <Tbody>
+        {pedidos.map((p) => {
+          const TipoIcon = TIPO_TRABAJO_ICON[p.tipoTrabajo]
+          const clienteNombre = clienteMap?.get(p.clienteId) ?? 'Sin cliente'
+          return (
+            <Tr key={p.id} className="cursor-pointer" onClick={() => onRowClick(p)}>
+              <Td className="font-medium tabular-nums">{p.numero}</Td>
+              <Td>
+                <div className="flex items-center gap-2">
+                  <InitialsAvatar nombre={clienteNombre} id={p.clienteId} size="sm" />
+                  <span className="truncate text-text">{clienteNombre}</span>
+                </div>
+              </Td>
+              <Td className="text-text-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <TipoIcon size={14} className="text-accent-strong" />
+                  {TIPO_TRABAJO_LABEL[p.tipoTrabajo]}
+                </span>
+              </Td>
+              <Td className="max-w-50 truncate text-text-muted">{p.descripcion ?? '—'}</Td>
+              <Td className="tabular-nums text-text-muted">
+                {p.anchoCm && p.altoCm ? `${p.anchoCm}×${p.altoCm}` : '—'}
+              </Td>
+              <Td>{p.fechaEntrega ? <FechaDisplay fecha={p.fechaEntrega} relative /> : '—'}</Td>
+              <Td className="text-right">
+                <PrecioDisplay value={p.precioTotal} size="sm" />
+              </Td>
+              <Td className="w-30">
+                <PagoBar total={p.precioTotal} pagado={0} />
+              </Td>
+              <Td>
+                <EstadoPedidoBadge estado={p.estado} />
+              </Td>
+            </Tr>
+          )
+        })}
+      </Tbody>
+    </Table>
+  )
+}

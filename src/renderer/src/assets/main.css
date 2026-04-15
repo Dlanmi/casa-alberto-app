@@ -1,0 +1,377 @@
+@import 'tailwindcss';
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/InterVariable.woff2') format('woff2');
+}
+
+@theme {
+  /* --- Warm Neutrals (NOT default Tailwind slate) --- */
+  --color-neutral-50: #fafaf9;
+  --color-neutral-100: #f5f5f4;
+  --color-neutral-200: #e7e5e4;
+  --color-neutral-300: #d6d3d1;
+  --color-neutral-400: #a8a29e;
+  --color-neutral-600: #78716f;
+  --color-neutral-700: #57534e;
+  --color-neutral-900: #2c2b2a;
+
+  /* --- Status Colors --- */
+  --color-success: #047857;
+  --color-warning: #b45309;
+  --color-error: #b42318;
+  --color-info: #1d4ed8;
+  --color-inactive: #9ca3af;
+
+  /* --- Status Backgrounds (tinted) --- */
+  --color-success-bg: #f0fdf4;
+  --color-warning-bg: #fffbeb;
+  --color-error-bg: #fef2f2;
+  --color-info-bg: #f0f9ff;
+  --color-neutral-bg: #f9fafb;
+
+  /* --- Accent (amber/artisanal) --- */
+  --color-accent: #b45309;
+  --color-accent-hover: #92400e;
+  --color-accent-strong: #92400e;
+
+  /* --- Semantic Application Tokens --- */
+  --color-canvas: #fafaf9;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f5f4;
+  --color-surface-raised: #fffaf2;
+  --color-border: #e7e5e4;
+  --color-border-strong: #d6d3d1;
+  --color-text: #2c2b2a;
+  --color-text-muted: #57534e;
+  --color-text-soft: #78716f;
+  --color-success-strong: #065f46;
+  --color-warning-strong: #92400e;
+  --color-error-strong: #912018;
+  --color-info-strong: #1e40af;
+  --color-focus: #b45309;
+
+  /* --- Shadows (softer ambient + wider spread for premium depth) --- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-2: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 8px rgba(0, 0, 0, 0.08);
+  --shadow-3: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.1);
+  --shadow-4: 0 8px 16px rgba(0, 0, 0, 0.08), 0 24px 48px rgba(0, 0, 0, 0.12);
+
+  /* --- Border Radius --- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* --- Font Family --- */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ---- Global Styles ---- */
+
+body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+  background-color: var(--color-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular nums for financial data */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* Dialog/Modal — centrado perfecto en Electron */
+dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  border: none;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+dialog[open] {
+  animation: modal-enter 0.2s ease-out;
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Focus ring — amber accent on all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Electron custom scrollbar — visible only on hover */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 200ms;
+}
+*:hover > ::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neutral-300);
+}
+
+/* Hide scrollbar but keep scrollable (tabs, horizontal lists) */
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Kanban horizontal scroll fade indicators */
+.scroll-fade {
+  position: relative;
+}
+.scroll-fade::before,
+.scroll-fade::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+.scroll-fade::before {
+  left: 0;
+  background: linear-gradient(to right, var(--color-canvas), transparent);
+}
+.scroll-fade::after {
+  right: 0;
+  background: linear-gradient(to left, var(--color-canvas), transparent);
+}
+.scroll-fade--left::before {
+  opacity: 1;
+}
+.scroll-fade--right::after {
+  opacity: 1;
+}
+
+/* Prevent text selection on UI chrome */
+.select-none {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ============================================================ */
+/* Premium Micro-Animations                                      */
+/* ============================================================ */
+
+/* -- Buttons: subtle press effect -- */
+button:not(:disabled):active,
+[role='button']:not(:disabled):active {
+  transform: scale(0.98);
+  transition: transform 80ms ease-out;
+}
+
+/* -- All interactive elements: smooth transitions (specific props to avoid jank) -- */
+button,
+[role='button'],
+a,
+input,
+select,
+textarea {
+  transition:
+    color 150ms ease-out,
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    box-shadow 150ms ease-out,
+    opacity 150ms ease-out;
+}
+
+/* -- Cards: lift on hover -- */
+.card-hover {
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+}
+
+/* -- Slide-in panels (from right) -- */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.25s ease-out;
+}
+
+/* -- Fade in + slide up (for content appearing) -- */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s ease-out;
+}
+
+/* -- Toast slide in from right -- */
+@keyframes toast-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-toast-in {
+  animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* -- Pulse for badges/alerts -- */
+@keyframes badge-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.animate-badge-pulse {
+  animation: badge-pulse 0.6s ease-in-out 1;
+}
+
+/* -- Skeleton loading shimmer -- */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-neutral-100) 25%,
+    var(--color-neutral-50) 50%,
+    var(--color-neutral-100) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* -- Skeleton loading shapes -- */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-neutral-100) 25%,
+    var(--color-neutral-50) 50%,
+    var(--color-neutral-100) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+/* -- Price flash (yellow highlight when price updates) -- */
+@keyframes price-flash {
+  0% {
+    background-color: rgba(217, 119, 6, 0.15);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.animate-price-flash {
+  animation: price-flash 1s ease-out;
+}
+
+/* -- Smooth page transitions -- */
+main > * {
+  animation: fade-in-up 0.2s ease-out;
+}
+
+/* -- Spinner: smoother rotation -- */
+@keyframes spin-smooth {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin-smooth 0.8s linear infinite;
+}
+
+/* -- Progress bar: smooth width transitions -- */
+.progress-bar {
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

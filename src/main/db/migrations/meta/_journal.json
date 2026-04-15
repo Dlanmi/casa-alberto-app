@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1776047436801,
+      "tag": "0000_friendly_crusher_hogan",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1776209472154,
+      "tag": "0001_even_morlocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1776212305104,
+      "tag": "0002_marvelous_triathlon",
+      "breakpoints": true
+    }
+  ]
+}

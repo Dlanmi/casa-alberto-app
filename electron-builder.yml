@@ -1,0 +1,60 @@
+appId: com.casaalberto.app
+productName: Casa Alberto
+asar: true
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{AUDIT.md,AUDIT_CORRECTIONS.md,AGENT_NOTES_*.md,TESTER_*.md,SMOKE_TEST_MANUAL.md,FINAL_REPORT.md,CasaAlberto_Fase*.md,casa-alberto-source.tar.gz}'
+  - '!tests/**'
+asarUnpack:
+  - resources/**
+extraResources:
+  - from: src/main/db/migrations
+    to: drizzle
+    filter:
+      - '**/*'
+win:
+  executableName: Casa Alberto
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  artifactName: CasaAlberto-${version}-setup.${ext}
+  shortcutName: Casa Alberto
+  uninstallDisplayName: Casa Alberto
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  oneClick: true
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+dmg:
+  artifactName: ${name}-${version}.${ext}
+linux:
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: danielgamier1
+  category: Utility
+appImage:
+  artifactName: ${name}-${version}.${ext}
+npmRebuild: true
+publish:
+  provider: github
+  owner: Dlanmi
+  repo: casa-alberto-app
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
