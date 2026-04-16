@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useRef, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { DirectoryScreen } from '@renderer/components/layout/page-frame'
 import { useIpc } from '@renderer/hooks/use-ipc'
+import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useToast } from '@renderer/contexts/toast-context'
 import { SearchInput } from '@renderer/components/ui/search-input'
@@ -273,8 +274,8 @@ function ClienteCard({
         </div>
       </div>
 
-      {/* Hover overlay with quick actions */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-full items-center gap-2 border-t border-border bg-surface/95 px-3 py-2 opacity-0 backdrop-blur transition-all group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
+      {/* Quick actions — always visible for accessibility */}
+      <div className="border-t border-border px-3 py-2 flex items-center gap-2">
         <Button
           size="sm"
           variant="primary"
@@ -355,6 +356,8 @@ function DetailPanel({
 }): React.JSX.Element {
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const closeRef = useRef<HTMLButtonElement>(null)
+  useSlidePanel({ onClose, closeRef })
   const [showDeactivate, setShowDeactivate] = useState(false)
   const [deactivating, setDeactivating] = useState(false)
   const { data: stats, loading } = useIpc<ClienteEstadisticas>(
@@ -387,7 +390,11 @@ function DetailPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-40 flex justify-end"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/20" />
       <div
         role="dialog"
@@ -421,6 +428,7 @@ function DetailPanel({
                 <Pencil size={18} />
               </button>
               <button
+                ref={closeRef}
                 onClick={onClose}
                 className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
                 aria-label="Cerrar detalle"

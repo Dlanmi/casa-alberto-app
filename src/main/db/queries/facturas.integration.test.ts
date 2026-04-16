@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
 import { clientes, facturas, pedidos } from '../schema'
-import { anularFactura, registrarDevolucion, registrarPago } from './facturas'
+import { anularFactura, crearFactura, registrarDevolucion, registrarPago } from './facturas'
 
 describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
   let db: DB
@@ -135,24 +135,6 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
       ).toThrow(/excede lo cobrado/i)
     })
 
-    it('rechaza devolución sobre factura anulada', () => {
-      registrarPago(db, {
-        facturaId,
-        monto: 40000,
-        metodoPago: 'efectivo',
-        fecha: '2026-04-02'
-      })
-      anularFactura(db, facturaId)
-      expect(() =>
-        registrarDevolucion(db, {
-          facturaId,
-          monto: 10000,
-          motivo: 'Devolver al cliente',
-          fecha: '2026-04-03'
-        })
-      ).toThrow(/anulada/i)
-    })
-
     it('happy path: acepta devolución dentro del cobrado neto', () => {
       registrarPago(db, {
         facturaId,
@@ -167,6 +149,78 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
         fecha: '2026-04-03'
       })
       expect(dev.monto).toBe(20000)
+    })
+  })
+
+  describe('anularFactura (nueva defensa adversarial)', () => {
+    it('permite anular una factura sin pagos registrados', () => {
+      const result = anularFactura(db, facturaId)
+      expect(result?.estado).toBe('anulada')
+    })
+
+    it('rechaza anular una factura que ya tiene pagos registrados', () => {
+      registrarPago(db, {
+        facturaId,
+        monto: 40000,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-02'
+      })
+      expect(() => anularFactura(db, facturaId)).toThrow(/pagos registrados/i)
+    })
+
+    it('rechaza anular una factura que ya estaba anulada (idempotencia)', () => {
+      anularFactura(db, facturaId)
+      expect(() => anularFactura(db, facturaId)).toThrow(/ya está anulada/i)
+    })
+  })
+
+  describe('crearFactura — estado del pedido (Fase 2 §B.2)', () => {
+    it('rechaza facturar un pedido en estado "cotizado"', () => {
+      const cliente = db.insert(clientes).values({ nombre: 'Cliente Test' }).returning().get()
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: 'P-9001',
+          clienteId: cliente.id,
+          tipoTrabajo: 'enmarcacion_estandar',
+          precioTotal: 100000,
+          estado: 'cotizado',
+          fechaIngreso: '2026-04-01'
+        })
+        .returning()
+        .get()
+      expect(() =>
+        crearFactura(db, {
+          pedidoId: pedido.id,
+          clienteId: cliente.id,
+          fecha: '2026-04-01',
+          total: 100000
+        })
+      ).toThrow(/cotizado|estado/i)
+    })
+
+    it('rechaza facturar un pedido en estado "cancelado"', () => {
+      const cliente = db.insert(clientes).values({ nombre: 'Cliente Test' }).returning().get()
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: 'P-9002',
+          clienteId: cliente.id,
+          tipoTrabajo: 'enmarcacion_estandar',
+          precioTotal: 100000,
+          estado: 'cancelado',
+          fechaIngreso: '2026-04-01'
+        })
+        .returning()
+        .get()
+      expect(() =>
+        crearFactura(db, {
+          pedidoId: pedido.id,
+          clienteId: cliente.id,
+          fecha: '2026-04-01',
+          total: 100000
+        })
+      ).toThrow(/cancelado|estado/i)
     })
   })
 })

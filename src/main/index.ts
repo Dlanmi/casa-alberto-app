@@ -45,7 +45,15 @@ function createWindow(): void {
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      // `sandbox: false` es requerido por @electron-toolkit/preload (usa require()).
+      // Todo lo demás se fija explícitamente para blindar contra cambios
+      // accidentales de defaults en futuras versiones de Electron.
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      devTools: is.dev
     }
   })
 
@@ -54,7 +62,17 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // Solo abrir protocolos seguros en el navegador del sistema. Bloquea
+    // `file:`, `javascript:`, `vbscript:` y cualquier otro esquema que pueda
+    // ejecutar código o exponer el filesystem.
+    try {
+      const parsed = new URL(details.url)
+      if (['https:', 'http:', 'mailto:'].includes(parsed.protocol)) {
+        shell.openExternal(details.url)
+      }
+    } catch {
+      // URL malformada: ignorar silenciosamente
+    }
     return { action: 'deny' }
   })
 

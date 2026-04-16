@@ -30,9 +30,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           className={cn(
             'h-11 w-full rounded-md border border-border bg-surface px-3 text-sm text-text shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]',
             'placeholder:text-text-soft',
-            'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent',
+            // Halo sutil: el ring usa accent semi-transparente separado del
+            // border para evitar el "doble borde" visual que el dueño reportó.
+            'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20',
             'disabled:opacity-50 disabled:cursor-not-allowed',
-            error && 'border-error focus:border-error focus:ring-error',
+            error && 'border-error focus:border-error focus:ring-error/30',
             className
           )}
           aria-invalid={!!error}

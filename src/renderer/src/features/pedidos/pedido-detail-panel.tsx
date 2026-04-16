@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   X,
   CreditCard,
@@ -23,6 +23,7 @@ import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { cn } from '@renderer/lib/cn'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
 import { TIPO_TRABAJO_LABEL, ESTADO_PEDIDO_LABEL } from '@renderer/lib/constants'
 import type { LucideIcon } from 'lucide-react'
 import type { Pedido, Factura, EstadoPedido, IpcResult } from '@shared/types'
@@ -69,6 +70,8 @@ export function PedidoDetailPanel({
 }: Props): React.JSX.Element {
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const closeRef = useRef<HTMLButtonElement>(null)
+  useSlidePanel({ onClose, closeRef })
   const [pagandoMonto, setPagandoMonto] = useState<number | null>(null)
   const [editingFecha, setEditingFecha] = useState(false)
   const [fechaInput, setFechaInput] = useState(pedido.fechaEntrega ?? '')
@@ -146,13 +149,17 @@ export function PedidoDetailPanel({
   }
 
   return (
-    <div className="fixed right-0 top-0 bottom-0 w-105 max-w-[80vw] bg-surface border-l border-border shadow-4 z-40 flex flex-col animate-slide-in-right">
+    <div
+      className="fixed right-0 top-0 bottom-0 w-105 max-w-[80vw] bg-surface border-l border-border shadow-4 z-40 flex flex-col animate-slide-in-right"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+    >
       <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
         <div>
           <h2 className="text-lg font-semibold text-text">{pedido.numero}</h2>
           <p className="text-xs text-text-muted">{TIPO_TRABAJO_LABEL[pedido.tipoTrabajo]}</p>
         </div>
         <button
+          ref={closeRef}
           onClick={onClose}
           className="h-11 w-11 flex items-center justify-center rounded-md hover:bg-surface-muted text-text-muted hover:text-text cursor-pointer transition-colors"
           aria-label="Cerrar panel"
@@ -167,6 +174,16 @@ export function PedidoDetailPanel({
             tone="info"
             title="Siguiente paso sugerido"
             message={`Cuando termines esta revisión puedes mover el pedido a ${ESTADO_PEDIDO_LABEL[nextEstado].toLowerCase()}.`}
+          />
+        )}
+
+        {pedido.estado === 'listo' && facturasDelPedido.length === 0 && (
+          <GuidanceHint
+            tone="accent"
+            title="Pedido listo para facturar"
+            message="Crea la factura para poder cobrar al cliente y coordinar la entrega."
+            actionLabel="Ir a facturas"
+            onAction={() => navigate('/facturas')}
           />
         )}
 
@@ -307,7 +324,7 @@ export function PedidoDetailPanel({
                         setSavingFecha(false)
                       }
                     }}
-                    className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-white hover:bg-accent-hover cursor-pointer"
+                    className="flex h-10 w-10 items-center justify-center rounded-md bg-accent text-white hover:bg-accent-hover cursor-pointer"
                     aria-label="Guardar fecha"
                   >
                     {savingFecha ? <Spinner size="sm" /> : <Check size={14} />}
@@ -318,7 +335,7 @@ export function PedidoDetailPanel({
                       setEditingFecha(false)
                       setFechaInput(pedido.fechaEntrega ?? '')
                     }}
-                    className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-text-soft hover:bg-surface-muted cursor-pointer"
+                    className="flex h-10 w-10 items-center justify-center rounded-md border border-border text-text-soft hover:bg-surface-muted cursor-pointer"
                     aria-label="Cancelar"
                   >
                     <X size={14} />

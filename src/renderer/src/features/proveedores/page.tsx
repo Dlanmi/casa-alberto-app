@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useRef, useState, useMemo, useCallback } from 'react'
 import {
   Truck,
   Plus,
@@ -12,6 +12,7 @@ import {
   PackageCheck
 } from 'lucide-react'
 import { useIpc } from '@renderer/hooks/use-ipc'
+import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useToast } from '@renderer/contexts/toast-context'
 import { SearchInput } from '@renderer/components/ui/search-input'
@@ -224,8 +225,14 @@ function ProveedorDetailPanel({
   onClose: () => void
   onEdit: () => void
 }): React.JSX.Element {
+  const closeRef = useRef<HTMLButtonElement>(null)
+  useSlidePanel({ onClose, closeRef })
   return (
-    <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-40 flex justify-end"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/20" />
       <div
         role="dialog"
@@ -257,6 +264,7 @@ function ProveedorDetailPanel({
                 <Pencil size={18} />
               </button>
               <button
+                ref={closeRef}
                 onClick={onClose}
                 className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
                 aria-label="Cerrar detalle"

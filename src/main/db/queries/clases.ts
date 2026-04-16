@@ -191,6 +191,14 @@ export function listarPagosMes(db: DB, mes: string) {
   // Devolvemos el pago mensual enriquecido con `totalPagado` (suma de los
   // detalles) para que la UI pueda dibujar la barra de progreso real sin
   // tener que hacer N+1 round-trips.
+  //
+  // Implementación con LEFT JOIN + GROUP BY. La versión previa usaba un
+  // subquery correlacionado con `${pagosClases.id}` interpolado dentro del
+  // template `sql\`\``, pero Drizzle emitía el SQL sin propagar la
+  // correlación — el subquery sumaba TODOS los detalles históricos y
+  // devolvía el mismo valor a cada fila (ej: Ana paga $110k y la UI mostraba
+  // $380k "pagado" en las 3 tarjetas del mes). Este patrón con JOIN es más
+  // simple y Drizzle lo traduce correctamente.
   const rows = db
     .select({
       id: pagosClases.id,
@@ -200,14 +208,12 @@ export function listarPagosMes(db: DB, mes: string) {
       estado: pagosClases.estado,
       createdAt: pagosClases.createdAt,
       updatedAt: pagosClases.updatedAt,
-      totalPagado: sql<number>`coalesce((
-        select sum(${pagosClasesDetalle.monto})
-        from ${pagosClasesDetalle}
-        where ${pagosClasesDetalle.pagoClaseId} = ${pagosClases.id}
-      ), 0)`.as('total_pagado')
+      totalPagado: sql<number>`coalesce(sum(${pagosClasesDetalle.monto}), 0)`.as('total_pagado')
     })
     .from(pagosClases)
+    .leftJoin(pagosClasesDetalle, eq(pagosClasesDetalle.pagoClaseId, pagosClases.id))
     .where(eq(pagosClases.mes, mes))
+    .groupBy(pagosClases.id)
     .all()
   return rows
 }
@@ -341,6 +347,14 @@ export function registrarAsistencia(
     notas?: string | null
   }
 ) {
+  // Bloquear asistencias a clases inactivas: si el dueño desactivó la clase,
+  // ya no debería generar registros nuevos de asistencia.
+  const clase = db.select().from(clases).where(eq(clases.id, data.claseId)).get()
+  if (!clase) throw new Error(`Clase ${data.claseId} no encontrada`)
+  if (!clase.activo) {
+    throw new Error('No se puede registrar asistencia a una clase inactiva')
+  }
+
   const existing = db
     .select()
     .from(asistencias)

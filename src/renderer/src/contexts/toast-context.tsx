@@ -39,6 +39,10 @@ type ToastContextValue = {
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 const DEFAULT_DURATION = 10_000
+// Máximo de toasts simultáneos visibles. Si llega uno nuevo con la pila llena,
+// se descarta el más viejo para mantener la UI legible. El papá de 60 años no
+// debe ver una pila de 10 notificaciones solapadas.
+const MAX_TOASTS = 3
 
 export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext)
@@ -94,14 +98,32 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
         ...normalized
       }
 
-      setToasts((prev) => [...prev, toast])
+      setToasts((prev) => {
+        // Dedupe: si ya existe un toast con el mismo tono y mensaje, no agregamos
+        // uno nuevo. Esto evita pilas de errores idénticos cuando el usuario
+        // hace clics repetidos en un botón que falla.
+        const duplicado = prev.find((t) => t.tone === toast.tone && t.message === toast.message)
+        if (duplicado) {
+          // No agregar el nuevo; dejar que el existente siga su curso.
+          return prev
+        }
+
+        // Cap: si ya hay MAX_TOASTS, remover el más viejo para hacer espacio.
+        let next = prev
+        while (next.length >= MAX_TOASTS) {
+          const oldest = next[0]
+          clearTimer(oldest.id)
+          next = next.slice(1)
+        }
+        return [...next, toast]
+      })
 
       if (!toast.persistent) {
         const timer = setTimeout(() => removeToast(id), toast.durationMs ?? DEFAULT_DURATION)
         timersRef.current.set(id, timer)
       }
     },
-    [removeToast]
+    [clearTimer, removeToast]
   )
 
   const value = useMemo(() => ({ showToast }), [showToast])
@@ -157,7 +179,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
                 {toast.actionLabel && toast.onAction && (
                   <button
                     onClick={() => handleAction(toast)}
-                    className="mt-2 text-sm font-medium text-accent-strong hover:text-accent cursor-pointer"
+                    className="mt-2 text-sm font-medium text-accent-strong hover:text-accent cursor-pointer min-h-10 px-3 py-1 rounded-md hover:bg-accent/10 focus-visible:outline-2 focus-visible:outline-accent transition-colors inline-flex items-center"
                   >
                     {toast.actionLabel}
                   </button>
@@ -165,7 +187,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
               </div>
               <button
                 onClick={() => removeToast(toast.id)}
-                className="text-text-soft hover:text-text-muted cursor-pointer"
+                className="h-11 w-11 shrink-0 flex items-center justify-center rounded-md text-text-soft hover:text-text-muted hover:bg-black/5 transition-colors cursor-pointer"
                 aria-label="Cerrar"
               >
                 <X size={16} />

@@ -16,7 +16,10 @@ type StepDotsProps = {
 
 export function StepDots({ steps, current, onJump, className }: StepDotsProps): React.JSX.Element {
   return (
-    <ol className={cn('flex w-full items-center pt-3', className)} aria-label="Progreso del asistente">
+    <ol
+      className={cn('flex w-full items-center pt-3', className)}
+      aria-label="Progreso del asistente"
+    >
       {steps.map((step, index) => {
         const done = index < current
         const active = index === current

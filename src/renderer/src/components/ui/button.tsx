@@ -14,8 +14,8 @@ const buttonVariants = cva(
         outline: 'border border-border bg-surface text-text hover:bg-surface-muted rounded-md'
       },
       size: {
-        xs: 'h-8 px-2.5 text-xs gap-1',
-        sm: 'h-9 px-3 text-sm gap-1.5',
+        xs: 'h-10 px-2.5 text-xs gap-1',
+        sm: 'h-10 px-3 text-sm gap-1.5',
         default: 'h-11 px-5 text-sm gap-2',
         lg: 'h-12 px-6 text-base gap-2',
         icon: 'h-11 w-11'

@@ -283,12 +283,34 @@ export function registrarDevolucion(db: DB, data: NuevaDevolucion) {
 }
 
 export function anularFactura(db: DB, id: number) {
-  return (
-    db
-      .update(facturas)
-      .set({ estado: 'anulada', updatedAt: sql`(datetime('now'))` })
-      .where(eq(facturas.id, id))
-      .returning()
-      .get() ?? null
-  )
+  return db.transaction((tx) => {
+    const factura = tx.select().from(facturas).where(eq(facturas.id, id)).get()
+    if (!factura) throw new Error(`Factura ${id} no encontrada`)
+    if (factura.estado === 'anulada') {
+      throw new Error('La factura ya está anulada')
+    }
+    // Bloquear anulación si hay pagos o devoluciones registrados: anular
+    // dejaría el historial financiero inconsistente (plata recibida con
+    // factura anulada). El flujo correcto es registrar devoluciones primero
+    // hasta saldar, y luego anular.
+    const pagosRegistrados = tx
+      .select({ n: sql<number>`count(*)` })
+      .from(pagos)
+      .where(eq(pagos.facturaId, id))
+      .get()
+    if ((pagosRegistrados?.n ?? 0) > 0) {
+      throw new Error(
+        'No se puede anular una factura con pagos registrados. ' +
+          'Registra primero las devoluciones correspondientes.'
+      )
+    }
+    return (
+      tx
+        .update(facturas)
+        .set({ estado: 'anulada', updatedAt: sql`(datetime('now'))` })
+        .where(eq(facturas.id, id))
+        .returning()
+        .get() ?? null
+    )
+  })
 }

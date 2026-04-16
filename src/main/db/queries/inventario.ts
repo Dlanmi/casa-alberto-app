@@ -74,6 +74,13 @@ export function registrarMovimientoInventario(db: DB, data: NuevoMovimientoInven
     const item = tx.select().from(inventario).where(eq(inventario.id, data.inventarioId)).get()
     if (!item) throw new Error(`Inventario ${data.inventarioId} no encontrado`)
 
+    // Validación explícita en TS. El CHECK constraint de SQLite (schema.ts)
+    // también lo enforza, pero preferimos error claro en español antes de
+    // que SQLite tire un mensaje técnico ("CHECK constraint failed").
+    if (!Number.isInteger(data.cantidad) || data.cantidad <= 0) {
+      throw new Error('La cantidad debe ser un entero mayor a 0')
+    }
+
     const delta = data.tipo === 'entrada' ? data.cantidad : -data.cantidad
     const nuevoStock = item.stockActual + delta
     if (nuevoStock < 0) {

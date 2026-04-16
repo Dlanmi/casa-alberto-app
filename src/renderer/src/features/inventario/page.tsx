@@ -4,6 +4,7 @@ import { SearchInput } from '@renderer/components/ui/search-input'
 import { DirectoryScreen } from '@renderer/components/layout/page-frame'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
+import { useDirtyGuard } from '@renderer/hooks/use-dirty-guard'
 import { useToast } from '@renderer/contexts/toast-context'
 import { Button } from '@renderer/components/ui/button'
 import { Badge } from '@renderer/components/ui/badge'
@@ -15,6 +16,7 @@ import { EmptyState } from '@renderer/components/ui/empty-state'
 import { WorkshopIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
+import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
 import { cn } from '@renderer/lib/cn'
 import { formatNumber, hoyISO } from '@renderer/lib/format'
 import type { InventarioItem, IpcResult } from '@shared/types'
@@ -358,89 +360,112 @@ function NuevoItemModal({
     }
   }
 
+  // C1 — dirty "significativo": solo el nombre (>=3 chars) cuenta. Tipo,
+  // unidad y stock son dropdowns/defaults que se rellenan rapidísimo; no vale
+  // interrumpir por eso. La referencia también es corta.
+  const dirty = form.nombre.trim().length >= 3
+  const guard = useDirtyGuard(dirty, onClose)
+
   return (
-    <Modal open onClose={onClose} title="Nuevo material" size="md">
-      <GuidanceHint
-        tone="info"
-        title="Piensa en stock físico"
-        message="Solo registra materiales que realmente guardas en el taller. Los marcos se siguen gestionando por proveedor."
-        className="mb-4"
+    <>
+      <Modal
+        open
+        onClose={guard.handleClose}
+        onBeforeClose={guard.onBeforeClose}
+        title="Nuevo material"
+        size="md"
+      >
+        <GuidanceHint
+          tone="info"
+          title="Piensa en stock físico"
+          message="Solo registra materiales que realmente guardas en el taller. Los marcos se siguen gestionando por proveedor."
+          className="mb-4"
+        />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            label="Nombre del material"
+            value={form.nombre}
+            onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
+            placeholder={
+              form.tipo === 'vidrio'
+                ? 'Ej: Vidrio claro 2mm'
+                : form.tipo === 'mdf'
+                  ? 'Ej: MDF 3mm'
+                  : form.tipo === 'carton'
+                    ? 'Ej: Cartón para paspartú'
+                    : form.tipo === 'paspartu'
+                      ? 'Ej: Paspartú pintado blanco'
+                      : 'Ej: Nombre del material'
+            }
+            required
+          />
+          <Input
+            label="Referencia"
+            value={form.referencia}
+            onChange={(e) => setForm((p) => ({ ...p, referencia: e.target.value }))}
+            placeholder="Codigo o referencia (opcional)"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Tipo de material"
+              options={TIPO_OPTIONS}
+              value={form.tipo}
+              onChange={(e) => {
+                const tipo = e.target.value
+                const defaultUnidad =
+                  tipo === 'vidrio'
+                    ? 'm2'
+                    : tipo === 'mdf' || tipo === 'carton' || tipo === 'paspartu'
+                      ? 'laminas'
+                      : 'unidades'
+                setForm((p) => ({ ...p, tipo, unidad: defaultUnidad }))
+              }}
+            />
+            <Select
+              label="Unidad de medida"
+              options={UNIDAD_OPTIONS}
+              value={form.unidad}
+              onChange={(e) => setForm((p) => ({ ...p, unidad: e.target.value }))}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Cantidad actual"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.stockActual}
+              onChange={(e) => setForm((p) => ({ ...p, stockActual: e.target.value }))}
+            />
+            <Input
+              label="Mínimo para alerta"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.stockMinimo}
+              onChange={(e) => setForm((p) => ({ ...p, stockMinimo: e.target.value }))}
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" className="flex-1" disabled={loading || !form.nombre.trim()}>
+              {loading ? 'Creando...' : 'Crear material'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <ConfirmDialog
+        open={guard.confirmOpen}
+        onClose={guard.cancelClose}
+        onConfirm={guard.confirmClose}
+        title="¿Descartar el material?"
+        message="Aún no terminaste de crear el material. Si sales ahora se perderá el nombre que escribiste."
+        confirmLabel="Sí, descartar"
+        danger
       />
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Input
-          label="Nombre del material"
-          value={form.nombre}
-          onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
-          placeholder={
-            form.tipo === 'vidrio'
-              ? 'Ej: Vidrio claro 2mm'
-              : form.tipo === 'mdf'
-                ? 'Ej: MDF 3mm'
-                : form.tipo === 'carton'
-                  ? 'Ej: Cartón para paspartú'
-                  : form.tipo === 'paspartu'
-                    ? 'Ej: Paspartú pintado blanco'
-                    : 'Ej: Nombre del material'
-          }
-          required
-        />
-        <Input
-          label="Referencia"
-          value={form.referencia}
-          onChange={(e) => setForm((p) => ({ ...p, referencia: e.target.value }))}
-          placeholder="Codigo o referencia (opcional)"
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select
-            label="Tipo de material"
-            options={TIPO_OPTIONS}
-            value={form.tipo}
-            onChange={(e) => {
-              const tipo = e.target.value
-              const defaultUnidad =
-                tipo === 'vidrio'
-                  ? 'm2'
-                  : tipo === 'mdf' || tipo === 'carton' || tipo === 'paspartu'
-                    ? 'laminas'
-                    : 'unidades'
-              setForm((p) => ({ ...p, tipo, unidad: defaultUnidad }))
-            }}
-          />
-          <Select
-            label="Unidad de medida"
-            options={UNIDAD_OPTIONS}
-            value={form.unidad}
-            onChange={(e) => setForm((p) => ({ ...p, unidad: e.target.value }))}
-          />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Cantidad actual"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.stockActual}
-            onChange={(e) => setForm((p) => ({ ...p, stockActual: e.target.value }))}
-          />
-          <Input
-            label="Mínimo para alerta"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.stockMinimo}
-            onChange={(e) => setForm((p) => ({ ...p, stockMinimo: e.target.value }))}
-          />
-        </div>
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" className="flex-1" disabled={loading || !form.nombre.trim()}>
-            {loading ? 'Creando...' : 'Crear material'}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+    </>
   )
 }
 
@@ -523,72 +548,97 @@ function RegistrarMovimientoModal({
     }
   }
 
+  // C1 — dirty "significativo": cantidad ingresada o notas con texto real
+  // (>=3 chars). Tipo/motivo son dropdowns rellenables en segundos, no vale
+  // interrumpir solo por tocarlos. Material seleccionado SÍ importa porque
+  // requiere recordar cuál.
+  const dirty =
+    form.inventarioId !== '' || form.cantidad.trim().length > 0 || form.notas.trim().length >= 3
+  const guard = useDirtyGuard(dirty, onClose)
+
   return (
-    <Modal open onClose={onClose} title="Registrar movimiento" size="md">
-      <GuidanceHint
-        tone="accent"
-        title="Registra lo que entra y lo que sale"
-        message="Las entradas suelen venir del proveedor y las salidas del uso en pedidos o ajustes. Deja una nota si necesitas contexto para después."
-        className="mb-4"
+    <>
+      <Modal
+        open
+        onClose={guard.handleClose}
+        onBeforeClose={guard.onBeforeClose}
+        title="Registrar movimiento"
+        size="md"
+      >
+        <GuidanceHint
+          tone="accent"
+          title="Registra lo que entra y lo que sale"
+          message="Las entradas suelen venir del proveedor y las salidas del uso en pedidos o ajustes. Deja una nota si necesitas contexto para después."
+          className="mb-4"
+        />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Select
+            label="Material"
+            options={itemOptions}
+            value={form.inventarioId}
+            onChange={(e) => setForm((p) => ({ ...p, inventarioId: e.target.value }))}
+            placeholder="Seleccionar material"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Tipo"
+              options={TIPO_MOV_OPTIONS}
+              value={form.tipo}
+              onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
+            />
+            <Input
+              label="Cantidad"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={form.cantidad}
+              onChange={(e) => setForm((p) => ({ ...p, cantidad: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Motivo"
+              options={MOTIVO_OPTIONS}
+              value={form.motivo}
+              onChange={(e) => setForm((p) => ({ ...p, motivo: e.target.value }))}
+            />
+            <Input
+              label="Fecha"
+              type="date"
+              value={form.fecha}
+              onChange={(e) => setForm((p) => ({ ...p, fecha: e.target.value }))}
+            />
+          </div>
+          <Input
+            label="Notas"
+            value={form.notas}
+            onChange={(e) => setForm((p) => ({ ...p, notas: e.target.value }))}
+            placeholder="Notas opcionales"
+          />
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={loading || !form.inventarioId || !form.cantidad}
+            >
+              {loading ? 'Registrando...' : 'Registrar movimiento'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <ConfirmDialog
+        open={guard.confirmOpen}
+        onClose={guard.cancelClose}
+        onConfirm={guard.confirmClose}
+        title="¿Descartar el movimiento?"
+        message="Aún no terminaste de registrar el movimiento. Si sales ahora se perderán los datos que ingresaste."
+        confirmLabel="Sí, descartar"
+        danger
       />
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Select
-          label="Material"
-          options={itemOptions}
-          value={form.inventarioId}
-          onChange={(e) => setForm((p) => ({ ...p, inventarioId: e.target.value }))}
-          placeholder="Seleccionar material"
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select
-            label="Tipo"
-            options={TIPO_MOV_OPTIONS}
-            value={form.tipo}
-            onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
-          />
-          <Input
-            label="Cantidad"
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={form.cantidad}
-            onChange={(e) => setForm((p) => ({ ...p, cantidad: e.target.value }))}
-            required
-          />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select
-            label="Motivo"
-            options={MOTIVO_OPTIONS}
-            value={form.motivo}
-            onChange={(e) => setForm((p) => ({ ...p, motivo: e.target.value }))}
-          />
-          <Input
-            label="Fecha"
-            type="date"
-            value={form.fecha}
-            onChange={(e) => setForm((p) => ({ ...p, fecha: e.target.value }))}
-          />
-        </div>
-        <Input
-          label="Notas"
-          value={form.notas}
-          onChange={(e) => setForm((p) => ({ ...p, notas: e.target.value }))}
-          placeholder="Notas opcionales"
-        />
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            className="flex-1"
-            disabled={loading || !form.inventarioId || !form.cantidad}
-          >
-            {loading ? 'Registrando...' : 'Registrar movimiento'}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+    </>
   )
 }

@@ -1,7 +1,7 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { app } from 'electron'
 import { join } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 import type { DB } from './index'
 
 function resolveMigrationsFolder(): string {
@@ -18,11 +18,32 @@ function resolveMigrationsFolder(): string {
   return candidates[0]
 }
 
+function hayArchivosSQL(folder: string): boolean {
+  try {
+    return readdirSync(folder).some((f) => f.endsWith('.sql'))
+  } catch {
+    return false
+  }
+}
+
 export function runMigrations(db: DB): void {
   const migrationsFolder = resolveMigrationsFolder()
-  if (!existsSync(migrationsFolder)) {
+  const carpetaExiste = existsSync(migrationsFolder)
+  const tieneMigraciones = carpetaExiste && hayArchivosSQL(migrationsFolder)
+
+  if (!tieneMigraciones) {
+    // En producción esto es fatal: sin migraciones el esquema queda desalineado
+    // y cada operación sobre la DB crashea. Preferimos morir rápido con un
+    // mensaje claro que arrancar una app rota.
+    if (app.isPackaged) {
+      throw new Error(
+        `Instalación corrupta: no se encontraron archivos de migración en ${migrationsFolder}. ` +
+          `Reinstala la aplicación.`
+      )
+    }
+    // En dev, seguir con warn — útil para algunos tests que no necesitan schema
     console.warn(
-      `[db] migrations folder not found at ${migrationsFolder} — run 'npm run db:generate'`
+      `[db] migrations folder not found or empty at ${migrationsFolder} — run 'npm run db:generate'`
     )
     return
   }

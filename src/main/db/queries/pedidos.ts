@@ -1,4 +1,17 @@
-import { and, desc, eq, gte, inArray, isNull, lt, lte, not, or, sql, type SQL } from 'drizzle-orm'
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  lte,
+  not,
+  or,
+  sql,
+  type SQL
+} from 'drizzle-orm'
 import type { DB } from '../index'
 import { generarConsecutivo } from '../consecutivos'
 import {
@@ -213,10 +226,7 @@ export function pedidosEntregaProxima(db: DB, diasLimite = 2) {
     .innerJoin(clientes, eq(clientes.id, pedidos.clienteId))
     .where(
       and(
-        lte(
-          sql`julianday(${pedidos.fechaEntrega}) - julianday('now')`,
-          sql.raw(String(diasLimite))
-        ),
+        lte(sql`julianday(${pedidos.fechaEntrega}) - julianday('now')`, sql`${diasLimite}`),
         not(inArray(pedidos.estado, ESTADOS_TERMINALES))
       )
     )
@@ -241,7 +251,10 @@ export function pedidosPorRangoFecha(db: DB, desde: string, hasta: string) {
 }
 
 export function pedidosSinAbono(db: DB) {
-  // Pedidos con factura pero sin pagos registrados (saldo total = factura.total).
+  // Pedidos con factura ACTIVA (no anulada) pero sin pagos registrados.
+  // Filtrar facturas anuladas en el WHERE evita el edge case donde un pedido
+  // tiene una factura anulada + una activa — si no filtramos, el groupBy
+  // podría devolver la anulada según qué eligió SQLite.
   const rows = db
     .select({
       pedido: pedidos,
@@ -253,8 +266,10 @@ export function pedidosSinAbono(db: DB) {
     .innerJoin(clientes, eq(clientes.id, pedidos.clienteId))
     .innerJoin(facturas, eq(facturas.pedidoId, pedidos.id))
     .leftJoin(pagos, eq(pagos.facturaId, facturas.id))
-    .where(not(inArray(pedidos.estado, ESTADOS_NO_FACTURABLES)))
-    .groupBy(pedidos.id)
+    .where(
+      and(not(inArray(pedidos.estado, ESTADOS_NO_FACTURABLES)), not(eq(facturas.estado, 'anulada')))
+    )
+    .groupBy(pedidos.id, clientes.id, facturas.id)
     .having(sql`coalesce(sum(${pagos.monto}), 0) = 0`)
     .all()
   return rows
@@ -275,7 +290,7 @@ export function pedidosSinReclamar(db: DB, diasLimite = 15) {
         eq(pedidos.estado, 'sin_reclamar'),
         and(
           eq(pedidos.estado, 'listo'),
-          sql`julianday('now') - julianday(${pedidos.updatedAt}) > ${sql.raw(String(diasLimite))}`
+          sql`julianday('now') - julianday(${pedidos.updatedAt}) > ${diasLimite}`
         )
       )
     )
@@ -315,7 +330,7 @@ export function reclasificarPedidos(db: DB, diasLimite = 15): number {
       .where(
         and(
           eq(pedidos.estado, 'listo'),
-          sql`julianday('now') - julianday(${pedidos.updatedAt}) > ${sql.raw(String(diasLimite))}`
+          sql`julianday('now') - julianday(${pedidos.updatedAt}) > ${diasLimite}`
         )
       )
       .all()
@@ -372,20 +387,25 @@ export function obtenerMatrizUrgencia(db: DB, diasUrgencia = 2): MatrizUrgencia 
     .where(inArray(pedidos.estado, ['confirmado', 'en_proceso', 'listo']))
     .all()
 
-  // Conjunto de pedidoId que NO tienen pagos (sin_abono)
+  // Conjunto de pedidoId que SÍ tienen factura activa pero sin pagos.
+  // Bug previo: el `or(isNull(facturas.id), ...)` incluía pedidos sin factura
+  // todavía, inflando el contador del dashboard — el dueño veía "15 sin abono"
+  // cuando en realidad muchos apenas habían sido cotizados sin factura aún.
+  // Tras el fix del wizard (siempre crea factura al confirmar), este guard
+  // asegura que sólo contamos pedidos con deuda real y cobrable.
   const sinAbonoRows = db
     .select({ pedidoId: pedidos.id })
     .from(pedidos)
-    .leftJoin(facturas, eq(facturas.pedidoId, pedidos.id))
+    .innerJoin(facturas, eq(facturas.pedidoId, pedidos.id))
     .leftJoin(pagos, eq(pagos.facturaId, facturas.id))
     .where(
       and(
         inArray(pedidos.estado, ['confirmado', 'en_proceso', 'listo']),
-        // factura existe y no anulada, pero sin pagos registrados
-        or(isNull(facturas.id), not(eq(facturas.estado, 'anulada')))
+        not(eq(facturas.estado, 'anulada')),
+        isNotNull(facturas.id)
       )
     )
-    .groupBy(pedidos.id)
+    .groupBy(pedidos.id, facturas.id)
     .having(sql`coalesce(sum(${pagos.monto}), 0) = 0`)
     .all()
   const sinAbonoSet = new Set(sinAbonoRows.map((r) => r.pedidoId))

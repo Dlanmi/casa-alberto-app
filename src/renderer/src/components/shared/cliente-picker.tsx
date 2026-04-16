@@ -27,6 +27,7 @@ export function ClientePicker({
   const [results, setResults] = useState<Cliente[]>([])
   const [open, setOpen] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const [creatingMode, setCreatingMode] = useState(false)
   const [newNombre, setNewNombre] = useState('')
   const [newTelefono, setNewTelefono] = useState('')
@@ -49,7 +50,10 @@ export function ClientePicker({
       })
       .then((res) => {
         const r = res as IpcResult<Cliente[]>
-        if (r.ok) setResults(r.data)
+        if (r.ok) {
+          setResults(r.data)
+          setActiveIndex(-1)
+        }
       })
       .finally(() => setSearching(false))
   }, [debouncedQuery])
@@ -77,6 +81,23 @@ export function ClientePicker({
     onChange(null)
     setQuery('')
     setResults([])
+    setActiveIndex(-1)
+  }
+
+  function handleInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex((current) => Math.min(current + 1, results.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex((current) => Math.max(current - 1, 0))
+    } else if (e.key === 'Enter' && results[activeIndex]) {
+      e.preventDefault()
+      handleSelect(results[activeIndex])
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+      resetCreateForm()
+    }
   }
 
   function resetCreateForm(): void {
@@ -141,7 +162,7 @@ export function ClientePicker({
             <button
               type="button"
               onClick={handleClear}
-              className="flex h-9 w-9 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text cursor-pointer transition-colors"
+              className="flex h-10 w-10 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
               aria-label="Cambiar cliente"
             >
               <X size={16} />
@@ -174,12 +195,20 @@ export function ClientePicker({
             setQuery(e.target.value)
             if (e.target.value.trim().length < 2) {
               setResults([])
+              setActiveIndex(-1)
             }
             setOpen(true)
             if (creatingMode) resetCreateForm()
           }}
           onFocus={() => setOpen(true)}
+          onKeyDown={handleInputKeyDown}
           placeholder="Buscar cliente por nombre, cédula o teléfono..."
+          role="combobox"
+          aria-expanded={open && !creatingMode}
+          aria-controls="cliente-picker-listbox"
+          aria-activedescendant={
+            activeIndex >= 0 ? `cliente-option-${results[activeIndex]?.id}` : undefined
+          }
           className={cn(
             'h-12 w-full rounded-md border border-border bg-surface pl-10 pr-3 text-sm text-text',
             'placeholder:text-text-soft',
@@ -234,13 +263,24 @@ export function ClientePicker({
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
             </div>
           ) : results.length > 0 ? (
-            <div className="max-h-[min(16rem,60vh)] overflow-y-auto py-1">
-              {results.map((c) => (
+            <div
+              className="max-h-[min(16rem,60vh)] overflow-y-auto py-1"
+              role="listbox"
+              id="cliente-picker-listbox"
+              aria-label="Resultados de búsqueda"
+            >
+              {results.map((c, i) => (
                 <button
                   key={c.id}
+                  id={`cliente-option-${c.id}`}
                   type="button"
+                  role="option"
+                  aria-selected={i === activeIndex}
                   onClick={() => handleSelect(c)}
-                  className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-muted"
+                  className={cn(
+                    'flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-muted',
+                    i === activeIndex && 'bg-surface-muted'
+                  )}
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-xs font-semibold text-accent-strong">
                     {iniciales(c.nombre)}
@@ -257,7 +297,7 @@ export function ClientePicker({
                 <button
                   type="button"
                   onClick={enterCreateMode}
-                  className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-accent-strong hover:bg-surface-muted"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-accent-strong hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
                 >
                   <UserPlus size={16} />
                   Crear cliente nuevo
@@ -273,7 +313,7 @@ export function ClientePicker({
               <button
                 type="button"
                 onClick={enterCreateMode}
-                className="flex cursor-pointer items-center gap-2 rounded-md bg-accent/10 px-3 py-2.5 text-sm font-medium text-accent-strong hover:bg-accent/20"
+                className="flex cursor-pointer items-center gap-2 rounded-md bg-accent/10 px-3 py-2.5 text-sm font-medium text-accent-strong hover:bg-accent/20 focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
               >
                 <UserPlus size={16} />
                 Crear &ldquo;{query.trim()}&rdquo; como cliente nuevo

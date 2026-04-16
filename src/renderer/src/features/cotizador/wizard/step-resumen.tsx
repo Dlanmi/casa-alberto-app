@@ -62,7 +62,7 @@ export function StepResumen({
   const [createdPedido, setCreatedPedido] = useState<{ id: number; numero: string } | null>(null)
 
   // Campos adicionales para el pedido
-  const [conAbono, setConAbono] = useState(false)
+  const [conAbono, setConAbono] = useState(true)
   const [abono, setAbono] = useState<string>('')
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo')
   const [notas, setNotas] = useState('')
@@ -100,28 +100,28 @@ export function StepResumen({
       const pedido = result.data
       const abonoNum = conAbono ? parseFloat(abono) || 0 : 0
 
-      // 2. Si hay abono, confirmar pedido + crear factura + registrar pago
-      if (abonoNum > 0) {
-        // Cambiar estado a confirmado (el cliente está pagando)
-        await window.api.pedidos.cambiarEstado(pedido.id, 'confirmado')
+      // 2. Confirmar pedido + crear factura SIEMPRE que el dueño finalice el
+      //    wizard — el cliente ya comprometió el trabajo aunque aún no pague.
+      //    La factura queda en "pendiente" hasta que registre el primer pago.
+      //    Antes: sólo se creaba factura si había abono, por lo que los
+      //    trabajos "fiados" no aparecían en la sección Facturas.
+      await window.api.pedidos.cambiarEstado(pedido.id, 'confirmado')
 
-        // Crear factura
-        const factRes = (await window.api.facturas.crear({
-          pedidoId: pedido.id,
-          clienteId: cliente.id,
+      const factRes = (await window.api.facturas.crear({
+        pedidoId: pedido.id,
+        clienteId: cliente.id,
+        fecha: hoyISO(),
+        total: cotizacion.precioTotal
+      })) as IpcResult<Factura>
+
+      if (factRes.ok && abonoNum > 0) {
+        // Registrar el abono como primer pago si lo hay
+        await window.api.facturas.registrarPago({
+          facturaId: factRes.data.id,
+          monto: abonoNum,
           fecha: hoyISO(),
-          total: cotizacion.precioTotal
-        })) as IpcResult<Factura>
-
-        if (factRes.ok) {
-          // Registrar el abono como primer pago
-          await window.api.facturas.registrarPago({
-            facturaId: factRes.data.id,
-            monto: abonoNum,
-            fecha: hoyISO(),
-            metodoPago
-          })
-        }
+          metodoPago
+        })
       }
 
       setCreatedPedido({ id: pedido.id, numero: pedido.numero })
@@ -131,7 +131,7 @@ export function StepResumen({
         message:
           abonoNum > 0
             ? `Pedido ${pedido.numero} creado con abono de ${formatCOP(abonoNum)}. Factura generada.`
-            : `Pedido ${pedido.numero} creado. Entrega: ${new Date(fechaEntrega + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}.`,
+            : `Pedido ${pedido.numero} creado. Factura queda pendiente de cobro por ${formatCOP(cotizacion.precioTotal)}.`,
         actionLabel: 'Ir a pedidos',
         onAction: () => navigate('/pedidos')
       })

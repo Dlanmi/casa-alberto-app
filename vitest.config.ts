@@ -17,6 +17,6 @@ export default defineConfig({
     // se filtran a Windows vía tar.gz, OneDrive, USB, etc. Son binarios
     // basura con extensión .test.ts — Vitest los intentaba parsear y
     // reportaba 13 suites falsas como "failed" sin ningún test dentro.
-    exclude: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/._*']
+    exclude: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/._*', '**/.claude/worktrees/**']
   }
 })

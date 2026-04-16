@@ -82,7 +82,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
     }
     loadBadges()
     loadUltimoBackup()
-    const interval = setInterval(loadBadges, 30_000)
+    // Badges refrescan cada 10s: el dueño registra un pago y espera ver el
+    // contador de facturas bajar rápido. 30s se sentía lento en demos.
+    const interval = setInterval(loadBadges, 10_000)
     const backupInterval = setInterval(loadUltimoBackup, 5 * 60 * 1000)
     return () => {
       mounted = false
@@ -167,11 +169,17 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
                 {!collapsed && <span className="text-sm truncate flex-1">{item.label}</span>}
                 {badgeCount > 0 &&
                   (collapsed ? (
-                    <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold animate-badge-pulse">
+                    <span
+                      aria-live="polite"
+                      className="absolute -top-1 -right-1 h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold animate-badge-pulse"
+                    >
                       {badgeCount}
                     </span>
                   ) : (
-                    <span className="h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold animate-badge-pulse">
+                    <span
+                      aria-live="polite"
+                      className="h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold animate-badge-pulse"
+                    >
                       {badgeCount}
                     </span>
                   ))}
@@ -200,7 +208,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
             <button
               onClick={() => navigate('/configuracion')}
               className={cn(
-                'w-full h-9 flex items-center justify-center rounded-sm cursor-pointer',
+                'w-full h-10 flex items-center justify-center rounded-sm cursor-pointer focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2',
                 backupColorClasses
               )}
               aria-label={backupLabel}
@@ -212,7 +220,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
           <button
             onClick={() => navigate('/configuracion')}
             className={cn(
-              'w-full flex items-center gap-2 rounded-sm px-3 py-2 text-xs font-medium cursor-pointer transition-colors',
+              'w-full flex items-center gap-2 rounded-sm px-3 py-2 text-xs font-medium cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2',
               backupColorClasses
             )}
             title={backupTooltipLabel}
@@ -228,7 +236,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
               content={`v${updateStatus.version} lista — se instala al cerrar`}
               position="right"
             >
-              <div className="w-full h-9 flex items-center justify-center rounded-sm text-success-strong bg-success-bg">
+              <div className="w-full h-10 flex items-center justify-center rounded-sm text-success-strong bg-success-bg">
                 <Download size={14} />
               </div>
             </Tooltip>
@@ -240,7 +248,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
           ))}
         <button
           onClick={onToggle}
-          className="w-full h-11 flex items-center justify-center rounded-md text-text-soft hover:text-text-muted hover:bg-surface-muted cursor-pointer"
+          className="w-full h-11 flex items-center justify-center rounded-md text-text-soft hover:text-text-muted hover:bg-surface-muted cursor-pointer focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
           aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
         >
           {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}

@@ -125,6 +125,15 @@ export function crearCuentaCobro(db: DB, data: NuevaCuentaCobro) {
     const contrato = tx.select().from(contratos).where(eq(contratos.id, data.contratoId)).get()
     if (!contrato) throw new Error(`Contrato ${data.contratoId} no encontrado`)
 
+    // Solo se pueden generar cuentas de cobro sobre contratos aprobados.
+    // 'enviada' aún no está en firme; 'rechazada'/'cobrada' están cerrados.
+    if (contrato.estado !== 'aprobada') {
+      throw new Error(
+        `No se puede crear cuenta de cobro en contrato con estado "${contrato.estado}". ` +
+          `Debe estar aprobado.`
+      )
+    }
+
     if (!Number.isFinite(data.total) || data.total < 0) {
       throw new Error('El total de la cuenta de cobro no puede ser negativo')
     }
@@ -164,6 +173,12 @@ export function marcarCuentaCobroPagada(db: DB, id: number, fecha: string) {
   return db.transaction((tx) => {
     const cc = tx.select().from(cuentasCobro).where(eq(cuentasCobro.id, id)).get()
     if (!cc) throw new Error(`Cuenta de cobro ${id} no encontrada`)
+
+    // Idempotencia: si ya está pagada, rechazar. Evita doble ingreso en
+    // `movimientos_financieros` por doble click o doble procesamiento.
+    if (cc.estado === 'pagada') {
+      throw new Error('La cuenta de cobro ya estaba marcada como pagada')
+    }
 
     const updated = tx
       .update(cuentasCobro)

@@ -1,9 +1,10 @@
-import { useState, useMemo, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Receipt, CreditCard, FileText, Plus, Ban } from 'lucide-react'
 import { OperationalBoard } from '@renderer/components/layout/page-frame'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
+import { useDirtyGuard } from '@renderer/hooks/use-dirty-guard'
 import { useToast } from '@renderer/contexts/toast-context'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Button } from '@renderer/components/ui/button'
@@ -44,6 +45,7 @@ export default function FacturasPage(): React.JSX.Element {
   const [tab, setTab] = useState<TabKey>(() => parseTab(searchParams.get('focus')))
   const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null)
   const [showNuevaFactura, setShowNuevaFactura] = useState(false)
+  const navigate = useNavigate()
   const { showToast } = useToast()
 
   const {
@@ -196,9 +198,19 @@ export default function FacturasPage(): React.JSX.Element {
           factura={selectedFactura}
           clienteNombre={clienteMap.get(selectedFactura.clienteId) ?? ''}
           onClose={() => setSelectedFactura(null)}
-          onPagoRegistrado={() => {
+          onPagoRegistrado={(nuevoSaldo) => {
             refetch()
-            showToast('success', 'Pago registrado correctamente')
+            if (nuevoSaldo != null && nuevoSaldo <= 0) {
+              showToast({
+                tone: 'success',
+                title: 'Factura pagada en su totalidad',
+                message: 'El cliente puede recoger su pedido.',
+                actionLabel: 'Ver pedidos',
+                onAction: () => navigate('/pedidos')
+              })
+            } else {
+              showToast('success', 'Pago registrado correctamente')
+            }
           }}
         />
       )}
@@ -240,9 +252,10 @@ function FacturaDetailModal({
   factura: Factura
   clienteNombre: string
   onClose: () => void
-  onPagoRegistrado: () => void
+  onPagoRegistrado: (nuevoSaldo?: number) => void
 }): React.JSX.Element {
   const [showPayment, setShowPayment] = useState(false)
+  const [paymentDirty, setPaymentDirty] = useState(false)
   const [generatingPDF, setGeneratingPDF] = useState(false)
   const [showAnular, setShowAnular] = useState(false)
   const [anulando, setAnulando] = useState(false)
@@ -349,129 +362,161 @@ function FacturaDetailModal({
 
   const estadoActual = facturaDetalle?.estado ?? factura.estado
 
+  // C1 — protege el cierre si el usuario está registrando un pago con cambios
+  // reales (no solo abrió el form). Usa ConfirmDialog del design system en vez
+  // del window.confirm nativo.
+  const guard = useDirtyGuard(showPayment && paymentDirty, onClose)
+
   return (
-    <Modal open onClose={onClose} title={`Factura ${factura.numero}`} size="lg">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-text-muted">Cliente</p>
-            <p className="text-sm font-medium text-text">{clienteNombre}</p>
+    <>
+      <Modal
+        open
+        onClose={guard.handleClose}
+        onBeforeClose={guard.onBeforeClose}
+        title={`Factura ${factura.numero}`}
+        size="lg"
+      >
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-text-muted">Cliente</p>
+              <p className="text-sm font-medium text-text">{clienteNombre}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-text-muted">Fecha</p>
+              <FechaDisplay fecha={factura.fecha} />
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-text-muted">Fecha</p>
-            <FechaDisplay fecha={factura.fecha} />
-          </div>
-        </div>
 
-        <GuidanceHint
-          tone={(saldo ?? 0) > 0 ? 'warning' : 'success'}
-          title={(saldo ?? 0) > 0 ? 'Aún hay saldo pendiente' : 'Factura al día'}
-          message={
-            (saldo ?? 0) > 0
-              ? 'Registra aquí el próximo abono para que el saldo y el estado se actualicen automáticamente.'
-              : 'Esta factura ya no requiere más pagos. Puedes generar el PDF o revisar su historial.'
-          }
-        />
+          <GuidanceHint
+            tone={(saldo ?? 0) > 0 ? 'warning' : 'success'}
+            title={(saldo ?? 0) > 0 ? 'Aún hay saldo pendiente' : 'Factura al día'}
+            message={
+              (saldo ?? 0) > 0
+                ? 'Registra aquí el próximo abono para que el saldo y el estado se actualicen automáticamente.'
+                : 'Esta factura ya no requiere más pagos. Puedes generar el PDF o revisar su historial.'
+            }
+          />
 
-        <div className="bg-surface-muted rounded-lg p-4 space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-text-muted">Total</span>
-            <PrecioDisplay value={factura.total} size="md" />
+          <div className="bg-surface-muted rounded-lg p-4 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-text-muted">Total</span>
+              <PrecioDisplay value={factura.total} size="md" />
+            </div>
+            <PagoBar total={factura.total} pagado={totalPagado} showLabels />
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-text-muted">Saldo pendiente</span>
+              <span
+                className={cn(
+                  'text-sm font-semibold tabular-nums',
+                  (saldo ?? 0) > 0 ? 'text-warning-strong' : 'text-success-strong'
+                )}
+              >
+                {formatCOP(saldo ?? 0)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-text-muted">Estado</span>
+              <EstadoFacturaBadge estado={estadoActual} />
+            </div>
           </div>
-          <PagoBar total={factura.total} pagado={totalPagado} showLabels />
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-text-muted">Saldo pendiente</span>
-            <span
-              className={cn(
-                'text-sm font-semibold tabular-nums',
-                (saldo ?? 0) > 0 ? 'text-warning-strong' : 'text-success-strong'
-              )}
+
+          <div className="flex gap-3">
+            {estadoActual === 'pendiente' && (saldo ?? 0) > 0 && (
+              <Button onClick={() => setShowPayment(true)} className="flex-1">
+                <CreditCard size={18} />
+                Registrar pago
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={handlePDF}
+              className="flex-1"
+              disabled={generatingPDF}
             >
-              {formatCOP(saldo ?? 0)}
-            </span>
+              <FileText size={18} />
+              {generatingPDF ? 'Generando...' : 'Generar PDF'}
+            </Button>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-text-muted">Estado</span>
-            <EstadoFacturaBadge estado={estadoActual} />
-          </div>
-        </div>
 
-        <div className="flex gap-3">
-          {estadoActual === 'pendiente' && (saldo ?? 0) > 0 && (
-            <Button onClick={() => setShowPayment(true)} className="flex-1">
-              <CreditCard size={18} />
-              Registrar pago
+          {/* SPEC-008 — selector de formato de impresión */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-text-soft">Formato:</span>
+            {[
+              { key: 'carta' as const, label: 'Carta' },
+              { key: 'a4' as const, label: 'A4' },
+              { key: 'termico80' as const, label: 'Térmico 80mm' }
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setFormatoPDF(opt.key)}
+                className={cn(
+                  'min-h-9 rounded-sm border px-3 py-1 cursor-pointer transition-colors',
+                  formatoPDF === opt.key
+                    ? 'border-accent bg-accent/10 text-accent-strong font-medium'
+                    : 'border-border text-text-soft hover:border-border-strong'
+                )}
+                aria-pressed={formatoPDF === opt.key}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {estadoActual !== 'anulada' && (
+            <Button
+              variant="danger"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowAnular(true)}
+            >
+              <Ban size={16} />
+              Anular factura
             </Button>
           )}
-          <Button
-            variant="secondary"
-            onClick={handlePDF}
-            className="flex-1"
-            disabled={generatingPDF}
-          >
-            <FileText size={18} />
-            {generatingPDF ? 'Generando...' : 'Generar PDF'}
-          </Button>
-        </div>
 
-        {/* SPEC-008 — selector de formato de impresión */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-text-soft">Formato:</span>
-          {[
-            { key: 'carta' as const, label: 'Carta' },
-            { key: 'a4' as const, label: 'A4' },
-            { key: 'termico80' as const, label: 'Térmico 80mm' }
-          ].map((opt) => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => setFormatoPDF(opt.key)}
-              className={cn(
-                'min-h-9 rounded-sm border px-3 py-1 cursor-pointer transition-colors',
-                formatoPDF === opt.key
-                  ? 'border-accent bg-accent/10 text-accent-strong font-medium'
-                  : 'border-border text-text-soft hover:border-border-strong'
-              )}
-              aria-pressed={formatoPDF === opt.key}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+          {showPayment && (
+            <PaymentForm
+              facturaId={factura.id}
+              saldo={saldo ?? 0}
+              onDirtyChange={setPaymentDirty}
+              onCancel={() => {
+                setPaymentDirty(false)
+                setShowPayment(false)
+              }}
+              onSuccess={() => {
+                setPaymentDirty(false)
+                setShowPayment(false)
+                refetchSaldo()
+                refetchDetalle()
+                onPagoRegistrado()
+              }}
+            />
+          )}
 
-        {estadoActual !== 'anulada' && (
-          <Button variant="danger" size="sm" className="w-full" onClick={() => setShowAnular(true)}>
-            <Ban size={16} />
-            Anular factura
-          </Button>
-        )}
-
-        {showPayment && (
-          <PaymentForm
-            facturaId={factura.id}
-            saldo={saldo ?? 0}
-            onCancel={() => setShowPayment(false)}
-            onSuccess={() => {
-              setShowPayment(false)
-              refetchSaldo()
-              refetchDetalle()
-              onPagoRegistrado()
-            }}
+          <ConfirmDialog
+            open={showAnular}
+            onClose={() => setShowAnular(false)}
+            onConfirm={handleAnular}
+            title="Anular factura"
+            message={`La factura ${factura.numero} quedará marcada como anulada. El pedido asociado podrá facturarse nuevamente si es necesario.`}
+            confirmLabel="Anular factura"
+            danger
+            loading={anulando}
           />
-        )}
-
-        <ConfirmDialog
-          open={showAnular}
-          onClose={() => setShowAnular(false)}
-          onConfirm={handleAnular}
-          title="Anular factura"
-          message={`La factura ${factura.numero} quedará marcada como anulada. El pedido asociado podrá facturarse nuevamente si es necesario.`}
-          confirmLabel="Anular factura"
-          danger
-          loading={anulando}
-        />
-      </div>
-    </Modal>
+        </div>
+      </Modal>
+      <ConfirmDialog
+        open={guard.confirmOpen}
+        onClose={guard.cancelClose}
+        onConfirm={guard.confirmClose}
+        title="¿Descartar el pago?"
+        message="Aún no terminaste de registrar el pago. Si sales ahora se perderán los datos que ingresaste."
+        confirmLabel="Sí, descartar"
+        danger
+      />
+    </>
   )
 }
 
@@ -545,117 +590,140 @@ function NuevaFacturaModal({
     }
   }
 
-  return (
-    <Modal open onClose={onClose} title="Nueva factura" size="md">
-      {step === 1 && (
-        <div className="space-y-4">
-          <GuidanceHint
-            tone="accent"
-            title="Primero elige el pedido"
-            message="Solo aparecen pedidos listos para seguir el flujo de cobro. Si no ves uno aquí, revísalo en el tablero de pedidos."
-          />
-          {pedidosLoading ? (
-            <PageLoader />
-          ) : pedidosElegibles.length === 0 ? (
-            <EmptyState
-              icon={Receipt}
-              title="Sin pedidos elegibles"
-              description="No hay pedidos confirmados, en proceso o listos para facturar."
-            />
-          ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {pedidosElegibles.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSelectedPedido(p)}
-                  className={cn(
-                    'w-full text-left p-3 rounded-md border transition-colors cursor-pointer',
-                    selectedPedido?.id === p.id
-                      ? 'border-accent bg-accent/5'
-                      : 'border-border hover:bg-surface-muted'
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text">
-                        {p.numero} · {clienteMap.get(p.clienteId) ?? 'Cliente sin nombre'}
-                      </p>
-                      <p className="truncate text-sm text-text-muted">
-                        {p.descripcion || 'Sin descripción'}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm font-medium tabular-nums text-text">
-                      {formatCOP(p.precioTotal)}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button className="flex-1" disabled={!selectedPedido} onClick={() => setStep(2)}>
-              Continuar
-            </Button>
-          </div>
-        </div>
-      )}
+  // C1 — dirty real: eligió pedido (paso 1) o ya escribió un abono. Avanzar al
+  // paso 2 sin pedido es imposible por la UI, así que basta con selectedPedido.
+  const dirty = selectedPedido !== null || abono.trim().length > 0
+  const guard = useDirtyGuard(dirty, onClose)
 
-      {step === 2 && selectedPedido && (
-        <div className="space-y-4">
-          <GuidanceHint
-            tone="info"
-            title="Confirma y decide si habrá abono"
-            message="Puedes emitir la factura sin pago inicial o registrar de una vez el primer adelanto del cliente."
-          />
-          <div className="bg-surface-muted rounded-lg p-4 space-y-3">
-            <div className="flex justify-between">
-              <span className="text-sm text-text-muted">Pedido</span>
-              <span className="text-sm font-medium text-text">{selectedPedido.numero}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-text-muted">Cliente</span>
-              <span className="text-sm font-medium text-text">
-                {clienteMap.get(selectedPedido.clienteId) ?? `Cliente #${selectedPedido.clienteId}`}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-text-muted">Fecha</span>
-              <span className="text-sm font-medium text-text">{hoyISO()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-text-muted">Total</span>
-              <PrecioDisplay value={selectedPedido.precioTotal} size="md" />
+  return (
+    <>
+      <Modal
+        open
+        onClose={guard.handleClose}
+        onBeforeClose={guard.onBeforeClose}
+        title="Nueva factura"
+        size="md"
+      >
+        {step === 1 && (
+          <div className="space-y-4">
+            <GuidanceHint
+              tone="accent"
+              title="Primero elige el pedido"
+              message="Solo aparecen pedidos listos para seguir el flujo de cobro. Si no ves uno aquí, revísalo en el tablero de pedidos."
+            />
+            {pedidosLoading ? (
+              <PageLoader />
+            ) : pedidosElegibles.length === 0 ? (
+              <EmptyState
+                icon={Receipt}
+                title="Sin pedidos elegibles"
+                description="No hay pedidos confirmados, en proceso o listos para facturar."
+              />
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {pedidosElegibles.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedPedido(p)}
+                    className={cn(
+                      'w-full text-left p-3 rounded-md border transition-colors cursor-pointer',
+                      selectedPedido?.id === p.id
+                        ? 'border-accent bg-accent/5'
+                        : 'border-border hover:bg-surface-muted'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-text">
+                          {p.numero} · {clienteMap.get(p.clienteId) ?? 'Cliente sin nombre'}
+                        </p>
+                        <p className="truncate text-sm text-text-muted">
+                          {p.descripcion || 'Sin descripción'}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm font-medium tabular-nums text-text">
+                        {formatCOP(p.precioTotal)}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-3 pt-2">
+              <Button variant="secondary" className="flex-1" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button className="flex-1" disabled={!selectedPedido} onClick={() => setStep(2)}>
+                Continuar
+              </Button>
             </div>
           </div>
-          <Input
-            label="Abono inicial (opcional)"
-            type="number"
-            min={0}
-            max={selectedPedido.precioTotal}
-            value={abono}
-            onChange={(e) => setAbono(e.target.value)}
-            placeholder="Ej: 50000"
-            hint={
-              Number(abono) > 0
-                ? `Saldo pendiente: ${formatCOP(selectedPedido.precioTotal - Number(abono))}`
-                : 'Si el cliente paga un adelanto, ingrésalo aquí.'
-            }
-          />
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setStep(1)}>
-              Atrás
-            </Button>
-            <Button className="flex-1" onClick={handleCrear} disabled={creating}>
-              {creating ? 'Creando...' : 'Crear factura'}
-            </Button>
+        )}
+
+        {step === 2 && selectedPedido && (
+          <div className="space-y-4">
+            <GuidanceHint
+              tone="info"
+              title="Confirma y decide si habrá abono"
+              message="Puedes emitir la factura sin pago inicial o registrar de una vez el primer adelanto del cliente."
+            />
+            <div className="bg-surface-muted rounded-lg p-4 space-y-3">
+              <div className="flex justify-between">
+                <span className="text-sm text-text-muted">Pedido</span>
+                <span className="text-sm font-medium text-text">{selectedPedido.numero}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-text-muted">Cliente</span>
+                <span className="text-sm font-medium text-text">
+                  {clienteMap.get(selectedPedido.clienteId) ??
+                    `Cliente #${selectedPedido.clienteId}`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-text-muted">Fecha</span>
+                <span className="text-sm font-medium text-text">{hoyISO()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-text-muted">Total</span>
+                <PrecioDisplay value={selectedPedido.precioTotal} size="md" />
+              </div>
+            </div>
+            <Input
+              label="Abono inicial (opcional)"
+              type="number"
+              min={0}
+              max={selectedPedido.precioTotal}
+              value={abono}
+              onChange={(e) => setAbono(e.target.value)}
+              placeholder="Ej: 50000"
+              hint={
+                Number(abono) > 0
+                  ? `Saldo pendiente: ${formatCOP(selectedPedido.precioTotal - Number(abono))}`
+                  : 'Si el cliente paga un adelanto, ingrésalo aquí.'
+              }
+            />
+            <div className="flex gap-3 pt-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setStep(1)}>
+                Atrás
+              </Button>
+              <Button className="flex-1" onClick={handleCrear} disabled={creating}>
+                {creating ? 'Creando...' : 'Crear factura'}
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
-    </Modal>
+        )}
+      </Modal>
+      <ConfirmDialog
+        open={guard.confirmOpen}
+        onClose={guard.cancelClose}
+        onConfirm={guard.confirmClose}
+        title="¿Descartar la factura?"
+        message="Aún no terminaste de crear la factura. Si sales ahora se perderá el pedido elegido."
+        confirmLabel="Sí, descartar"
+        danger
+      />
+    </>
   )
 }
 
@@ -667,19 +735,32 @@ function PaymentForm({
   facturaId,
   saldo,
   onCancel,
-  onSuccess
+  onSuccess,
+  onDirtyChange
 }: {
   facturaId: number
   saldo: number
   onCancel: () => void
   onSuccess: () => void
+  onDirtyChange?: (dirty: boolean) => void
 }): React.JSX.Element {
+  const initialMonto = String(saldo)
+  const initialFecha = hoyISO()
   const [form, setForm] = useState({
-    monto: String(saldo),
+    monto: initialMonto,
     metodoPago: 'efectivo' as MetodoPago,
-    fecha: hoyISO(),
+    fecha: initialFecha,
     notas: ''
   })
+
+  // C1 — dirty "significativo": ignora tocar fecha (date picker auto-rellena)
+  // y notas cortas (< 3 chars) que son fácilmente reescribibles. Prioriza el
+  // monto y método de pago, que son los datos costosos de perder.
+  const dirty =
+    form.monto !== initialMonto || form.metodoPago !== 'efectivo' || form.notas.trim().length >= 3
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
 
   const { execute, loading } = useIpcMutation(
     useCallback(

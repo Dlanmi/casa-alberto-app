@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, Building2, FileSpreadsheet, Rocket, Check, ArrowRight } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
@@ -17,10 +17,16 @@ const STEPS = [
   { key: 'tour', label: 'Listo', icon: Rocket }
 ] as const
 
+// Clave usada para persistir el paso actual del wizard. Así si el papá cierra
+// la app a mitad (o se reinicia por otra razón) retomamos donde dejó en vez
+// de empezar desde "Bienvenida". Se limpia al completar el onboarding.
+const STEP_CONFIG_KEY = 'onboarding_step'
+
 export default function OnboardingPage(): React.JSX.Element {
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const [step, setStep] = useState(0)
+  const [step, setStepState] = useState(0)
+  const [hydrated, setHydrated] = useState(false)
   const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
   const [loadingDemo, setLoadingDemo] = useState(false)
@@ -35,13 +41,83 @@ export default function OnboardingPage(): React.JSX.Element {
     correo: ''
   })
 
+  // Hidrata el wizard con lo que ya guardó el dueño antes de cerrar:
+  //   - Paso actual (`onboarding_step`): evita empezar en "Bienvenida" cada vez
+  //   - Datos del negocio (nombre_negocio, rut, etc.): pre-rellena el form
+  // Si es la primera vez, los GETs devuelven vacío y el wizard se ve idéntico
+  // al original. Sólo bloqueamos el render hasta terminar para evitar que el
+  // usuario vea un flash del paso 0 antes de saltar al paso correcto.
+  useEffect(() => {
+    let cancelled = false
+    async function hidratar(): Promise<void> {
+      try {
+        const stepResult = (await window.api.configuracion.get(STEP_CONFIG_KEY)) as IpcResult<
+          string | null
+        >
+        if (!cancelled && stepResult.ok && stepResult.data) {
+          const parsed = parseInt(stepResult.data, 10)
+          if (Number.isInteger(parsed) && parsed >= 0 && parsed < STEPS.length) {
+            setStepState(parsed)
+          }
+        }
+        const claves = ['nombre_negocio', 'rut', 'telefono', 'direccion', 'correo'] as const
+        const pares = await Promise.all(
+          claves.map(
+            (clave) => window.api.configuracion.get(clave) as Promise<IpcResult<string | null>>
+          )
+        )
+        if (cancelled) return
+        setDatos({
+          nombre: pares[0]?.ok ? (pares[0].data ?? '') : '',
+          rut: pares[1]?.ok ? (pares[1].data ?? '') : '',
+          telefono: pares[2]?.ok ? (pares[2].data ?? '') : '',
+          direccion: pares[3]?.ok ? (pares[3].data ?? '') : '',
+          correo: pares[4]?.ok ? (pares[4].data ?? '') : ''
+        })
+      } catch (err) {
+        // Si algo falla, arrancamos el wizard "limpio" (no bloqueamos al papá).
+        console.error('[onboarding] hidratación falló, arranco desde cero', err)
+      } finally {
+        if (!cancelled) setHydrated(true)
+      }
+    }
+    hidratar()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Wrapper de setStep que además persiste el nuevo valor en config. Acepta
+  // value o updater igual que useState. La escritura es fire-and-forget: si
+  // falla, loguea pero no bloquea la navegación del wizard.
+  const setStep = useCallback((next: number | ((prev: number) => number)) => {
+    setStepState((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next
+      window.api.configuracion
+        .guardar({
+          clave: STEP_CONFIG_KEY,
+          valor: String(resolved),
+          descripcion: 'Paso actual del wizard de onboarding'
+        })
+        .catch((err) => console.error('[onboarding] no se pudo persistir el step', err))
+      return resolved
+    })
+  }, [])
+
   /**
    * C-01 — Marca el flag y navega a la ruta destino. Se llama tanto al
    * terminar el wizard normal como al elegir "Explorar con datos de ejemplo".
+   * También limpia el paso persistido para que si el flag se resetea (soporte,
+   * reinstalación) el wizard arranque limpio en "Bienvenida".
    */
   async function completarOnboarding(destino: string): Promise<void> {
     try {
       await window.api.configuracion.marcarOnboardingCompleto()
+      await window.api.configuracion.guardar({
+        clave: STEP_CONFIG_KEY,
+        valor: '0',
+        descripcion: 'Paso actual del wizard de onboarding'
+      })
     } catch (err) {
       // Si esto falla el usuario va a volver al onboarding al reabrir,
       // no es catastrófico pero sí raro. Logueamos y navegamos igual.
@@ -155,6 +231,12 @@ export default function OnboardingPage(): React.JSX.Element {
 
   async function finishToCotizador(): Promise<void> {
     await completarOnboarding('/cotizador')
+  }
+
+  // Evita el flash del paso 0 antes de saltar al paso persistido. Menos de
+  // 50ms típicos — el papá no percibe el loader, pero no ve un salto extraño.
+  if (!hydrated) {
+    return <div className="min-h-screen bg-canvas" />
   }
 
   return (

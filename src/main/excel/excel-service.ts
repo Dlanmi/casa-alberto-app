@@ -1,8 +1,33 @@
-import * as XLSX from 'xlsx'
+import * as XLSX from '@e965/xlsx'
 import { app, dialog } from 'electron'
 import { join } from 'path'
+import { statSync } from 'fs'
 import { eq } from 'drizzle-orm'
 import type { DB } from '../db'
+
+// Límites defensivos para importación de Excel. Un xlsx malicioso puede causar
+// DoS (RAM, CPU) o prototype pollution si se pasa sin sanear.
+const MAX_XLSX_BYTES = 10 * 1024 * 1024 // 10 MB
+const MAX_XLSX_ROWS = 10_000
+const MAX_STR_LEN = 200
+const MAX_COLILLA_CM = 500
+const MAX_PRECIO_METRO = 1_000_000_000 // 1000M COP como tope defensivo
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+function sanitizeRow(raw: Record<string, unknown>): Record<string, unknown> {
+  // Defiende contra prototype pollution via __proto__/constructor/prototype.
+  // xlsx convierte celdas a keys de objeto plano; si una celda se llama
+  // `__proto__`, afectaría a Object.prototype.
+  const out: Record<string, unknown> = Object.create(null)
+  for (const [k, v] of Object.entries(raw)) {
+    if (!FORBIDDEN_KEYS.has(k)) out[k] = v
+  }
+  return out
+}
+
+function truncar(s: unknown, max = MAX_STR_LEN): string {
+  return String(s ?? '').slice(0, max)
+}
 import {
   muestrasMarcos,
   preciosVidrios,
@@ -159,42 +184,68 @@ export function importarMarcosDesdeExcel(db: DB): { imported: number; updated: n
   })
   if (!result || result.length === 0) return { imported: 0, updated: 0 }
 
-  const wb = XLSX.readFile(result[0])
+  return importarMarcosDesdeRuta(db, result[0])
+}
+
+// Exportado para tests — la validación vive acá para poder probarla sin el
+// diálogo del sistema operativo.
+export function importarMarcosDesdeRuta(
+  db: DB,
+  ruta: string
+): { imported: number; updated: number } {
+  // Tamaño máximo: bloquea xlsx maliciosos enormes que causarían DoS de RAM.
+  const stats = statSync(ruta)
+  if (stats.size > MAX_XLSX_BYTES) {
+    const mb = Math.round(stats.size / 1024 / 1024)
+    throw new Error(`El archivo Excel supera 10 MB (pesa ${mb} MB). Divídelo en varios archivos.`)
+  }
+
+  const wb = XLSX.readFile(ruta)
   const ws = wb.Sheets[wb.SheetNames[0]]
+  if (!ws) {
+    throw new Error('El archivo Excel no contiene hojas válidas.')
+  }
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws)
+
+  if (rows.length > MAX_XLSX_ROWS) {
+    throw new Error(`El archivo tiene ${rows.length} filas. Máximo permitido: ${MAX_XLSX_ROWS}.`)
+  }
 
   return db.transaction((tx) => {
     let inserted = 0
     let updated = 0
-    for (const row of rows) {
-      const referencia = String(row['Referencia'] ?? row['referencia'] ?? '')
+    for (const rawRow of rows) {
+      const row = sanitizeRow(rawRow)
+      const referencia = truncar(row['Referencia'] ?? row['referencia'] ?? '')
       const colilla = Number(row['Colilla cm'] ?? row['colillaCm'] ?? row['colilla_cm'] ?? 0)
       const precio = Number(row['Precio/m'] ?? row['precioMetro'] ?? row['precio_metro'] ?? 0)
-      const desc = String(row['Descripcion'] ?? row['descripcion'] ?? '')
+      const desc = truncar(row['Descripcion'] ?? row['descripcion'] ?? '')
 
-      if (referencia && precio > 0) {
-        const existing = tx
-          .select()
-          .from(muestrasMarcos)
-          .where(eq(muestrasMarcos.referencia, referencia))
-          .get()
+      if (!referencia) continue
+      if (!Number.isFinite(colilla) || colilla < 0 || colilla > MAX_COLILLA_CM) continue
+      if (!Number.isFinite(precio) || precio <= 0 || precio > MAX_PRECIO_METRO) continue
 
-        tx.insert(muestrasMarcos)
-          .values({
-            referencia,
-            colillaCm: colilla,
-            precioMetro: precio,
-            descripcion: desc || null
-          })
-          .onConflictDoUpdate({
-            target: muestrasMarcos.referencia,
-            set: { colillaCm: colilla, precioMetro: precio, descripcion: desc || null }
-          })
-          .run()
+      const existing = tx
+        .select()
+        .from(muestrasMarcos)
+        .where(eq(muestrasMarcos.referencia, referencia))
+        .get()
 
-        if (existing) updated++
-        else inserted++
-      }
+      tx.insert(muestrasMarcos)
+        .values({
+          referencia,
+          colillaCm: colilla,
+          precioMetro: precio,
+          descripcion: desc || null
+        })
+        .onConflictDoUpdate({
+          target: muestrasMarcos.referencia,
+          set: { colillaCm: colilla, precioMetro: precio, descripcion: desc || null }
+        })
+        .run()
+
+      if (existing) updated++
+      else inserted++
     }
     return { imported: inserted, updated }
   })

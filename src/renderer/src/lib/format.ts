@@ -7,11 +7,16 @@ const copFormatter = new Intl.NumberFormat('es-CO', {
   maximumFractionDigits: 0
 })
 
-export function formatCOP(value: number): string {
+// Defensivo contra NaN/Infinity/null/undefined: cualquier valor no finito se
+// muestra como "$0" en lugar de "$NaN" (que se veía feo en PDFs y cards).
+// Alguien confiando en cálculos upstream podría pasar valores corruptos.
+export function formatCOP(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return copFormatter.format(0)
   return copFormatter.format(value)
 }
 
-export function formatNumber(value: number): string {
+export function formatNumber(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '0'
   return new Intl.NumberFormat('es-CO').format(value)
 }
 
@@ -28,12 +33,22 @@ const dateShort = new Intl.DateTimeFormat('es-CO', {
   month: 'short'
 })
 
-export function formatFechaLarga(iso: string): string {
-  return dateLong.format(new Date(iso + 'T12:00:00'))
+// Guard común: si el string no es una fecha ISO válida (null, "", "Invalid"),
+// retorna "—" en lugar de "Invalid Date" feo.
+function parseISO(iso: string | null | undefined): Date | null {
+  if (!iso) return null
+  const d = new Date(iso + 'T12:00:00')
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
-export function formatFechaCorta(iso: string): string {
-  return dateShort.format(new Date(iso + 'T12:00:00'))
+export function formatFechaLarga(iso: string | null | undefined): string {
+  const d = parseISO(iso)
+  return d ? dateLong.format(d) : '—'
+}
+
+export function formatFechaCorta(iso: string | null | undefined): string {
+  const d = parseISO(iso)
+  return d ? dateShort.format(d) : '—'
 }
 
 export function formatFechaRelativa(iso: string): string {
@@ -86,11 +101,13 @@ export function formatTelefono(tel: string | null | undefined): string {
 
 // ---- Initials (for avatars) ----
 
-export function iniciales(nombre: string): string {
-  return nombre
+export function iniciales(nombre: string | null | undefined): string {
+  if (!nombre || !nombre.trim()) return '?'
+  const result = nombre
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
+    .map((w) => w[0]?.toUpperCase() ?? '')
     .join('')
+  return result || '?'
 }

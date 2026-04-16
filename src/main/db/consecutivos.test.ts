@@ -51,4 +51,34 @@ describe.runIf(nativeAbiAvailable)('generarConsecutivo', () => {
     expect(generarConsecutivo(db, 'pedido')).toBe('P-0002')
     expect(generarConsecutivo(db, 'cuenta_cobro')).toBe('CC-0002')
   })
+
+  it('genera 100 consecutivos sin duplicados ni huecos (B1)', () => {
+    // Regresión del race condition. Aunque better-sqlite3 serializa las
+    // transacciones en un mismo proceso, probamos que la nueva implementación
+    // con UPDATE...RETURNING mantiene la secuencia exacta bajo carga.
+    const emitidos = new Set<string>()
+    for (let i = 1; i <= 100; i++) {
+      const num = generarConsecutivo(db, 'pedido')
+      expect(num).toBe(`P-${String(i).padStart(4, '0')}`)
+      emitidos.add(num)
+    }
+    expect(emitidos.size).toBe(100)
+  })
+
+  it('alterna pedidos y facturas sin cruzar contadores', () => {
+    const secuencia: string[] = []
+    for (let i = 0; i < 20; i++) {
+      secuencia.push(generarConsecutivo(db, 'pedido'))
+      secuencia.push(generarConsecutivo(db, 'factura'))
+    }
+    // Pedidos: P-0001 .. P-0020 ; Facturas: F-0001 .. F-0020
+    const pedidos = secuencia.filter((s) => s.startsWith('P-'))
+    const facturas = secuencia.filter((s) => s.startsWith('F-'))
+    expect(pedidos).toEqual(
+      Array.from({ length: 20 }, (_, i) => `P-${String(i + 1).padStart(4, '0')}`)
+    )
+    expect(facturas).toEqual(
+      Array.from({ length: 20 }, (_, i) => `F-${String(i + 1).padStart(4, '0')}`)
+    )
+  })
 })

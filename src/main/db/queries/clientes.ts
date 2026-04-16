@@ -46,16 +46,28 @@ export function obtenerClienteConAcudiente(db: DB, id: number) {
   return { ...cliente, acudiente }
 }
 
+function validarNombreCliente(nombre: string | undefined | null): string {
+  const limpio = (nombre ?? '').trim()
+  if (limpio.length < 2) {
+    throw new Error('El nombre del cliente debe tener al menos 2 caracteres')
+  }
+  if (limpio.length > 200) {
+    throw new Error('El nombre del cliente supera 200 caracteres')
+  }
+  return limpio
+}
+
 export function crearCliente(db: DB, data: NuevoCliente) {
+  const nombre = validarNombreCliente(data.nombre)
   const result = db
     .insert(clientes)
     .values({
-      nombre: data.nombre,
-      telefono: data.telefono ?? null,
-      cedula: data.cedula ?? null,
-      correo: data.correo ?? null,
-      direccion: data.direccion ?? null,
-      notas: data.notas ?? null,
+      nombre,
+      telefono: data.telefono?.trim() || null,
+      cedula: data.cedula?.trim() || null,
+      correo: data.correo?.trim() || null,
+      direccion: data.direccion?.trim() || null,
+      notas: data.notas?.trim() || null,
       esMenor: data.esMenor ?? false,
       activo: true
     })
@@ -65,15 +77,12 @@ export function crearCliente(db: DB, data: NuevoCliente) {
 }
 
 export function actualizarCliente(db: DB, id: number, data: ActualizarCliente) {
-  const result = db
-    .update(clientes)
-    .set({
-      ...data,
-      updatedAt: sql`(datetime('now'))`
-    })
-    .where(eq(clientes.id, id))
-    .returning()
-    .get()
+  // Si viene un nombre en el update, validarlo. Si no viene, dejar el actual.
+  const payload: Record<string, unknown> = { ...data, updatedAt: sql`(datetime('now'))` }
+  if (data.nombre !== undefined) {
+    payload.nombre = validarNombreCliente(data.nombre)
+  }
+  const result = db.update(clientes).set(payload).where(eq(clientes.id, id)).returning().get()
   return result ?? null
 }
 
@@ -85,6 +94,16 @@ export function desactivarCliente(db: DB, id: number) {
     .get()
   if ((pedidosActivos?.n ?? 0) > 0) {
     throw new Error('No se puede desactivar un cliente con pedidos activos')
+  }
+  // Además bloquear si hay facturas con saldo pendiente: sería inconsistente
+  // marcar al cliente como "inactivo" cuando aún tenemos que cobrarle.
+  const facturasPendientes = db
+    .select({ n: sql<number>`count(*)` })
+    .from(facturas)
+    .where(and(eq(facturas.clienteId, id), not(inArray(facturas.estado, ['pagada', 'anulada']))))
+    .get()
+  if ((facturasPendientes?.n ?? 0) > 0) {
+    throw new Error('No se puede desactivar un cliente con facturas pendientes de cobro')
   }
   return actualizarCliente(db, id, { activo: false })
 }

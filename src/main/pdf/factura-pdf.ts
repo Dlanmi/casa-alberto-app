@@ -1,11 +1,25 @@
 import PDFDocument from 'pdfkit'
 import { app, shell } from 'electron'
-import { join } from 'path'
-import { createWriteStream, existsSync, mkdirSync } from 'fs'
+import { join, resolve, sep } from 'path'
+import { createWriteStream, existsSync, mkdirSync, lstatSync, realpathSync } from 'fs'
 import type { DB } from '../db'
 import { configuracion } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import type { PdfFormato } from '../../shared/types'
+
+// Formato de consecutivo esperado: prefijo de 1-3 mayúsculas + guión + 1-8 dígitos.
+// Defensa en profundidad ante un consecutivo corrupto que pudiera escapar del
+// directorio de PDFs vía `../../`.
+const NUMERO_REGEX = /^[A-Z]{1,3}-\d{1,8}$/
+
+// Caracteres de control (0x00-0x08, 0x0b-0x0c, 0x0e-0x1f, 0x7f) pueden
+// corromper el render del PDF o inyectar operadores al stream. Se permiten
+// \t (0x09), \n (0x0a) y \r (0x0d) porque pdfkit los maneja correctamente.
+function sanitizePdfText(s: string | null | undefined): string {
+  if (!s) return ''
+  // eslint-disable-next-line no-control-regex
+  return String(s).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+}
 
 type FacturaData = {
   numero: string
@@ -287,16 +301,36 @@ function renderFormatoTermico(doc: PDFKit.PDFDocument, data: FacturaData, negoci
 // ---------------------------------------------------------------------------
 
 export function generarFacturaPDF(db: DB, data: FacturaData): string {
+  // Defensa en profundidad contra path traversal: aunque `data.numero` viene
+  // de `generarConsecutivo()` (controlado), validamos el formato antes de
+  // construir el path del archivo.
+  if (!NUMERO_REGEX.test(data.numero)) {
+    throw new Error('Número de factura con formato inválido')
+  }
+
+  // Sanear strings de dominio que terminan en el PDF. Protege contra:
+  //  - Caracteres de control pegados accidentalmente (\x00 rompe el stream)
+  //  - Contenido copiado de fuentes externas con metadata invisible
+  const safeData: FacturaData = {
+    ...data,
+    clienteNombre: sanitizePdfText(data.clienteNombre),
+    clienteCedula: sanitizePdfText(data.clienteCedula),
+    clienteTelefono: sanitizePdfText(data.clienteTelefono),
+    clienteDireccion: sanitizePdfText(data.clienteDireccion),
+    notas: sanitizePdfText(data.notas),
+    items: data.items.map((it) => ({ ...it, descripcion: sanitizePdfText(it.descripcion) }))
+  }
+
   const pdfDir = join(app.getPath('userData'), 'pdfs')
   if (!existsSync(pdfDir)) mkdirSync(pdfDir, { recursive: true })
-  const formato: PdfFormato = data.formato ?? 'carta'
-  const filePath = join(pdfDir, `factura-${data.numero}-${formato}.pdf`)
+  const formato: PdfFormato = safeData.formato ?? 'carta'
+  const filePath = join(pdfDir, `factura-${safeData.numero}-${formato}.pdf`)
 
   const negocio: Negocio = {
-    nombre: getConfig(db, 'nombre_negocio'),
-    rut: getConfig(db, 'rut'),
-    tel: getConfig(db, 'telefono'),
-    dir: getConfig(db, 'direccion')
+    nombre: sanitizePdfText(getConfig(db, 'nombre_negocio')),
+    rut: sanitizePdfText(getConfig(db, 'rut')),
+    tel: sanitizePdfText(getConfig(db, 'telefono')),
+    dir: sanitizePdfText(getConfig(db, 'direccion'))
   }
 
   // SPEC-008 — tres formatos:
@@ -317,9 +351,9 @@ export function generarFacturaPDF(db: DB, data: FacturaData): string {
   doc.pipe(stream)
 
   if (formato === 'termico80') {
-    renderFormatoTermico(doc, data, negocio)
+    renderFormatoTermico(doc, safeData, negocio)
   } else {
-    renderFormatoPagina(doc, data, negocio)
+    renderFormatoPagina(doc, safeData, negocio)
   }
 
   doc.end()
@@ -327,5 +361,74 @@ export function generarFacturaPDF(db: DB, data: FacturaData): string {
 }
 
 export function abrirPDF(filePath: string): void {
-  shell.openPath(filePath)
+  const pdfDir = join(app.getPath('userData'), 'pdfs')
+  const realPath = validarPathSeguro(filePath, pdfDir, 'PDF')
+  shell.openPath(realPath)
 }
+
+/**
+ * Valida que `rawPath` apunta a un archivo regular dentro de `allowedDirRaw`,
+ * bloqueando path traversal Y symlinks. Retorna la ruta canonicalizada.
+ *
+ * Por qué rechazamos symlinks: resolve() normaliza '..' pero NO sigue
+ * symlinks, mientras que shell.openPath SÍ los sigue. Un attacker que
+ * controle el renderer podría crear un symlink dentro del directorio de
+ * PDFs apuntando a /etc/passwd y abrirlo a través del Finder/Explorer.
+ *
+ * Al usuario siempre se le muestra el mismo mensaje ("Ruta de X inválida")
+ * para no filtrar detalles técnicos. El motivo real queda en console.warn
+ * para debugging.
+ *
+ * Copia idéntica de este helper existe en src/main/db/backup.ts. Si
+ * modificás uno, actualizá el otro — los tests cubren ambos paths.
+ */
+function validarPathSeguro(rawPath: string, allowedDirRaw: string, recurso: string): string {
+  const mensajeUsuario = `Ruta de ${recurso} inválida`
+  const allowedDir = resolve(allowedDirRaw)
+  const resolvedTextual = resolve(rawPath)
+
+  // Guard 1 (textual): resolve() normaliza '..' pero no sigue symlinks.
+  if (!resolvedTextual.startsWith(allowedDir + sep)) {
+    console.warn(`[security] ${recurso} fuera de directorio permitido:`, resolvedTextual)
+    throw new Error(mensajeUsuario)
+  }
+
+  // Guard 2: existencia + tipo en una sola syscall. lstat NO sigue symlinks
+  // (a diferencia de stat), así que detecta el link mismo.
+  let linkStat
+  try {
+    linkStat = lstatSync(resolvedTextual)
+  } catch {
+    throw new Error(`Archivo ${recurso} no encontrado`)
+  }
+  if (linkStat.isSymbolicLink()) {
+    console.warn(`[security] ${recurso} es un symlink, rechazado:`, resolvedTextual)
+    throw new Error(mensajeUsuario)
+  }
+  if (!linkStat.isFile()) {
+    console.warn(`[security] ${recurso} no es archivo regular:`, resolvedTextual)
+    throw new Error(mensajeUsuario)
+  }
+
+  // Guard 3: canonicalizar ambos lados con realpathSync. Necesario en macOS
+  // porque `/var` es symlink a `/private/var` — sin canonicalizar ambos
+  // lados, archivos válidos se rechazarían en macOS. Si `allowedDir` no
+  // existe aún, caemos a la comparación textual del guard 1 ya validada.
+  try {
+    const realAllowed = realpathSync(allowedDir)
+    const realPath = realpathSync(resolvedTextual)
+    if (!realPath.startsWith(realAllowed + sep)) {
+      console.warn(`[security] ${recurso} apunta fuera tras resolver symlinks:`, realPath)
+      throw new Error(mensajeUsuario)
+    }
+    return realPath
+  } catch (err) {
+    if (err instanceof Error && err.message === mensajeUsuario) throw err
+    // allowedDir no existe aún — el guard 1 ya validó textualmente y el
+    // guard 2 confirmó que no hay symlink. Seguro usar la ruta resuelta.
+    return resolvedTextual
+  }
+}
+
+// Exportado solo para tests — defensa en profundidad contra control chars en strings de dominio.
+export { sanitizePdfText, NUMERO_REGEX }

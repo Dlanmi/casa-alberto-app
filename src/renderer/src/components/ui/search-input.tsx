@@ -31,7 +31,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           <button
             type="button"
             onClick={onClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-text-soft hover:text-text-muted cursor-pointer"
+            className="absolute right-0 top-0 h-full w-11 flex items-center justify-center text-text-soft hover:text-text-muted hover:bg-surface-muted rounded-r-md transition-colors cursor-pointer"
             aria-label="Limpiar búsqueda"
           >
             <X size={16} />

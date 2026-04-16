@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useRef, useState, useMemo, useCallback } from 'react'
 import {
   FileSignature,
   AlertCircle,
@@ -10,7 +10,9 @@ import {
   Receipt
 } from 'lucide-react'
 import { useIpc } from '@renderer/hooks/use-ipc'
+import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
+import { useDirtyGuard } from '@renderer/hooks/use-dirty-guard'
 import { useToast } from '@renderer/contexts/toast-context'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Card } from '@renderer/components/ui/card'
@@ -23,8 +25,10 @@ import { EmptyState } from '@renderer/components/ui/empty-state'
 import { FrameIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { ClientePicker } from '@renderer/components/shared/cliente-picker'
+import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
+import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { DirectoryScreen, MetricCard, PageSection } from '@renderer/components/layout/page-frame'
 import { cn } from '@renderer/lib/cn'
 import { formatCOP, hoyISO } from '@renderer/lib/format'
@@ -306,6 +310,8 @@ function DetailPanel({
   onChanged: () => void
 }): React.JSX.Element {
   const { showToast } = useToast()
+  const closeRef = useRef<HTMLButtonElement>(null)
+  useSlidePanel({ onClose, closeRef })
   const [changingEstado, setChangingEstado] = useState(false)
   const [creandoCuenta, setCreandoCuenta] = useState(false)
 
@@ -390,7 +396,11 @@ function DetailPanel({
   const items = fullContrato?.items ?? []
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-40 flex justify-end"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/20" />
       <div
         role="dialog"
@@ -406,6 +416,7 @@ function DetailPanel({
               <p className="text-sm text-text-muted">{clienteNombre}</p>
             </div>
             <button
+              ref={closeRef}
               onClick={onClose}
               className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
               aria-label="Cerrar detalle"
@@ -569,6 +580,13 @@ function DetailPanel({
                 {changingEstado ? 'Actualizando...' : 'Rechazar contrato'}
               </Button>
             )}
+            {contrato.estado === 'aprobada' && (!cuentas || cuentas.length === 0) && (
+              <GuidanceHint
+                tone="info"
+                title="Contrato aprobado"
+                message="Ya puedes crear la primera cuenta de cobro para formalizar el cobro al cliente."
+              />
+            )}
             {(contrato.estado === 'aprobada' || contrato.estado === 'cobrada') && (
               <Button
                 variant="secondary"
@@ -697,163 +715,190 @@ function CreateContratoModal({
     }
   }
 
+  // C1 — dirty "significativo": cliente elegido, o cualquier item con
+  // descripción o valor, o descripción/condiciones con texto real (>=3 chars).
+  // Ignora cambios triviales en retención (campo numérico con default).
+  const dirty =
+    cliente !== null ||
+    descripcion.trim().length >= 3 ||
+    condiciones.trim().length >= 3 ||
+    items.some((it) => it.descripcion.trim().length >= 3 || it.valorUnitario.trim().length > 0)
+  const guard = useDirtyGuard(dirty, onClose)
+
   return (
-    <Modal open onClose={onClose} title="Nuevo contrato" size="lg">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <ClientePicker
-          label="Cliente *"
-          value={cliente}
-          onChange={(c) => {
-            setCliente(c)
-            if (errors.cliente) setErrors((prev) => ({ ...prev, cliente: '' }))
-          }}
-          error={errors.cliente}
-        />
+    <>
+      <Modal
+        open
+        onClose={guard.handleClose}
+        onBeforeClose={guard.onBeforeClose}
+        title="Nuevo contrato"
+        size="lg"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <ClientePicker
+            label="Cliente *"
+            value={cliente}
+            onChange={(c) => {
+              setCliente(c)
+              if (errors.cliente) setErrors((prev) => ({ ...prev, cliente: '' }))
+            }}
+            error={errors.cliente}
+          />
 
-        <Input
-          label="Descripción"
-          value={descripcion}
-          onChange={(e) => setDescripcion(e.target.value)}
-          placeholder="Descripción general del contrato (opcional)"
-        />
+          <Input
+            label="Descripción"
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            placeholder="Descripción general del contrato (opcional)"
+          />
 
-        {/* Items */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-text">Items *</label>
-          {errors.items && <p className="text-xs text-error">{errors.items}</p>}
+          {/* Items */}
           <div className="space-y-2">
-            {items.map((item, idx) => (
-              <div key={item.key} className="flex items-start gap-2">
-                <div className="flex-1 min-w-0">
-                  <input
-                    type="text"
-                    placeholder="Descripción del item"
-                    value={item.descripcion}
-                    onChange={(e) => updateItem(item.key, 'descripcion', e.target.value)}
+            <label className="text-sm font-medium text-text">Items *</label>
+            {errors.items && <p className="text-xs text-error">{errors.items}</p>}
+            <div className="space-y-2">
+              {items.map((item, idx) => (
+                <div key={item.key} className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      placeholder="Descripción del item"
+                      value={item.descripcion}
+                      onChange={(e) => updateItem(item.key, 'descripcion', e.target.value)}
+                      className={cn(
+                        'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text',
+                        'placeholder:text-text-soft',
+                        'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
+                      )}
+                    />
+                  </div>
+                  <div className="w-20">
+                    <input
+                      type="number"
+                      placeholder="Cant."
+                      value={item.cantidad}
+                      onChange={(e) => updateItem(item.key, 'cantidad', e.target.value)}
+                      min="0"
+                      step="1"
+                      className={cn(
+                        'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text tabular-nums',
+                        'placeholder:text-text-soft',
+                        'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
+                      )}
+                    />
+                  </div>
+                  <div className="w-32">
+                    <input
+                      type="number"
+                      placeholder="Valor unit."
+                      value={item.valorUnitario}
+                      onChange={(e) => updateItem(item.key, 'valorUnitario', e.target.value)}
+                      min="0"
+                      step="100"
+                      className={cn(
+                        'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text tabular-nums',
+                        'placeholder:text-text-soft',
+                        'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
+                      )}
+                    />
+                  </div>
+                  <div className="flex h-10 w-28 items-center justify-end text-sm text-text-muted tabular-nums">
+                    {formatCOP(parsedItems[idx]?.subtotal ?? 0)}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(item.key)}
                     className={cn(
-                      'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text',
-                      'placeholder:text-text-soft',
-                      'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
+                      'flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-error-bg hover:text-error transition-colors',
+                      items.length <= 1 && 'opacity-30 pointer-events-none'
                     )}
-                  />
+                    aria-label="Eliminar item"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-                <div className="w-20">
-                  <input
-                    type="number"
-                    placeholder="Cant."
-                    value={item.cantidad}
-                    onChange={(e) => updateItem(item.key, 'cantidad', e.target.value)}
-                    min="0"
-                    step="1"
-                    className={cn(
-                      'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text tabular-nums',
-                      'placeholder:text-text-soft',
-                      'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
-                    )}
-                  />
-                </div>
-                <div className="w-32">
-                  <input
-                    type="number"
-                    placeholder="Valor unit."
-                    value={item.valorUnitario}
-                    onChange={(e) => updateItem(item.key, 'valorUnitario', e.target.value)}
-                    min="0"
-                    step="100"
-                    className={cn(
-                      'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text tabular-nums',
-                      'placeholder:text-text-soft',
-                      'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
-                    )}
-                  />
-                </div>
-                <div className="flex h-10 w-28 items-center justify-end text-sm text-text-muted tabular-nums">
-                  {formatCOP(parsedItems[idx]?.subtotal ?? 0)}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeItem(item.key)}
-                  className={cn(
-                    'flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-error-bg hover:text-error transition-colors',
-                    items.length <= 1 && 'opacity-30 pointer-events-none'
-                  )}
-                  aria-label="Eliminar item"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <Button type="button" variant="secondary" size="sm" onClick={addItem}>
-            <Plus size={14} />
-            Agregar item
-          </Button>
+              ))}
+            </div>
+            <Button type="button" variant="secondary" size="sm" onClick={addItem}>
+              <Plus size={14} />
+              Agregar item
+            </Button>
 
-          {/* Totals */}
-          <div className="flex justify-end pt-2">
-            <div className="text-right space-y-1">
-              <div className="flex items-center gap-4 text-sm">
-                <span className="text-text-muted">Total:</span>
-                <span className="font-semibold text-text tabular-nums">{formatCOP(total)}</span>
+            {/* Totals */}
+            <div className="flex justify-end pt-2">
+              <div className="text-right space-y-1">
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-text-muted">Total:</span>
+                  <span className="font-semibold text-text tabular-nums">{formatCOP(total)}</span>
+                </div>
+                {retencion > 0 && (
+                  <>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="text-text-muted">Retención ({retencionPorcentaje}%):</span>
+                      <span className="tabular-nums text-text-muted">-{formatCOP(retencion)}</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm font-medium">
+                      <span className="text-text-muted">Neto:</span>
+                      <span className="tabular-nums text-text">{formatCOP(total - retencion)}</span>
+                    </div>
+                  </>
+                )}
               </div>
-              {retencion > 0 && (
-                <>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-text-muted">Retención ({retencionPorcentaje}%):</span>
-                    <span className="tabular-nums text-text-muted">-{formatCOP(retencion)}</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm font-medium">
-                    <span className="text-text-muted">Neto:</span>
-                    <span className="tabular-nums text-text">{formatCOP(total - retencion)}</span>
-                  </div>
-                </>
-              )}
             </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Retención %"
+              type="number"
+              value={retencionPorcentaje}
+              onChange={(e) => setRetencionPorcentaje(e.target.value)}
+              placeholder="0"
+              min={0}
+              max={100}
+            />
+            <Input
+              label="Fecha *"
+              type="date"
+              value={fecha}
+              onChange={(e) => {
+                setFecha(e.target.value)
+                if (errors.fecha) setErrors((prev) => ({ ...prev, fecha: '' }))
+              }}
+              error={errors.fecha}
+            />
+          </div>
+
           <Input
-            label="Retención %"
-            type="number"
-            value={retencionPorcentaje}
-            onChange={(e) => setRetencionPorcentaje(e.target.value)}
-            placeholder="0"
-            min={0}
-            max={100}
+            label="Condiciones"
+            value={condiciones}
+            onChange={(e) => setCondiciones(e.target.value)}
+            placeholder="Condiciones de pago o entrega (opcional)"
           />
-          <Input
-            label="Fecha *"
-            type="date"
-            value={fecha}
-            onChange={(e) => {
-              setFecha(e.target.value)
-              if (errors.fecha) setErrors((prev) => ({ ...prev, fecha: '' }))
-            }}
-            error={errors.fecha}
-          />
-        </div>
 
-        <Input
-          label="Condiciones"
-          value={condiciones}
-          onChange={(e) => setCondiciones(e.target.value)}
-          placeholder="Condiciones de pago o entrega (opcional)"
-        />
+          <p className="text-xs text-text-muted">
+            La retención es para clientes empresa. Déjalo en 0 para personas naturales.
+          </p>
 
-        <p className="text-xs text-text-muted">
-          La retención es para clientes empresa. Déjalo en 0 para personas naturales.
-        </p>
-
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" className="flex-1" disabled={loading}>
-            {loading ? 'Creando...' : 'Crear contrato'}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" className="flex-1" disabled={loading}>
+              {loading ? 'Creando...' : 'Crear contrato'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <ConfirmDialog
+        open={guard.confirmOpen}
+        onClose={guard.cancelClose}
+        onConfirm={guard.confirmClose}
+        title="¿Descartar el contrato?"
+        message="Aún no terminaste de crear el contrato. Si sales ahora se perderán los datos que ingresaste."
+        confirmLabel="Sí, descartar"
+        danger
+      />
+    </>
   )
 }

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Calculator,
@@ -45,8 +46,22 @@ function normalizeText(value: string | null | undefined): string {
 
 export default function DashboardPage(): React.JSX.Element {
   const navigate = useNavigate()
-  const mes = mesActualISO()
-  const hoy = hoyISO()
+  // `mes` y `hoy` como state para que las queries se refetcheen automáticamente
+  // cuando el día cambia (medianoche). Antes se calculaban en cada render pero
+  // como no eran state, los useIpc no detectaban el cambio y el dashboard
+  // seguía mostrando el mes/día anterior si la app quedaba abierta.
+  const [mes, setMes] = useState(mesActualISO())
+  const [hoy, setHoy] = useState(hoyISO())
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const nuevoMes = mesActualISO()
+      const nuevoHoy = hoyISO()
+      setMes((prev) => (prev === nuevoMes ? prev : nuevoMes))
+      setHoy((prev) => (prev === nuevoHoy ? prev : nuevoHoy))
+    }, 60_000) // chequeo cada minuto
+    return () => clearInterval(interval)
+  }, [])
 
   const { data: pedidos, loading: loadingPedidos } = useIpc<Pedido[]>(
     () => window.api.pedidos.listar({}),
@@ -175,6 +190,16 @@ export default function DashboardPage(): React.JSX.Element {
           Registrar gasto
         </Button>
       </div>
+
+      {safePedidos.length === 0 && (
+        <GuidanceHint
+          tone="accent"
+          title="Bienvenido a Casa Alberto"
+          message="Empieza creando tu primera cotización para generar un pedido."
+          actionLabel="Crear cotización"
+          onAction={() => navigate('/cotizador')}
+        />
+      )}
 
       <PageSection
         title="Prioridades"

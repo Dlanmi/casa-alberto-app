@@ -12,11 +12,15 @@ import type { Pedido } from '@shared/types'
 type KanbanCardProps = {
   pedido: Pedido
   clienteNombre?: string
+  // Saldo pagado. Si es undefined, la tarjeta NO muestra PagoBar (evita
+  // el bug visual previo donde siempre se mostraba 0% aunque hubiera pagos
+  // — el detail panel es quien muestra el dato real). Pasar 0 explícito
+  // solo cuando realmente sepamos que no hay pagos.
   pagado?: number
   onClick: () => void
 }
 
-export function KanbanCard({ pedido, clienteNombre, pagado = 0, onClick }: KanbanCardProps) {
+export function KanbanCard({ pedido, clienteNombre, pagado, onClick }: KanbanCardProps) {
   const [dragging, setDragging] = useState(false)
   const dias = pedido.fechaEntrega ? diasRestantes(pedido.fechaEntrega) : null
   const atrasado = dias !== null && dias < 0
@@ -90,8 +94,8 @@ export function KanbanCard({ pedido, clienteNombre, pagado = 0, onClick }: Kanba
         </div>
       )}
 
-      {/* Payment progress */}
-      <PagoBar total={pedido.precioTotal} pagado={pagado} />
+      {/* Payment progress — solo si tenemos data real de pagos cargada */}
+      {pagado !== undefined && <PagoBar total={pedido.precioTotal} pagado={pagado} />}
 
       {/* Footer: state badge */}
       <div className="mt-3 flex items-center justify-end">

@@ -1,5 +1,14 @@
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync, copyFileSync } from 'fs'
-import { join } from 'path'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  copyFileSync,
+  lstatSync,
+  realpathSync
+} from 'fs'
+import { join, resolve, sep } from 'path'
 import { getBackupsDir, getSqlite, getDbPath, closeDb, initDb } from './index'
 
 /**
@@ -107,19 +116,86 @@ export function listarBackups(): BackupInfo[] {
  * refrescar cualquier estado cacheado en renderer.
  */
 export function restaurarDesdeBackup(backupPath: string): void {
-  if (!existsSync(backupPath)) {
-    throw new Error(`Backup no encontrado: ${backupPath}`)
-  }
+  const realPath = validarPathSeguro(backupPath, getBackupsDir(), 'backup')
   const dbPath = getDbPath()
-  // Crear backup de seguridad de la DB actual ANTES de sobrescribirla, por si
-  // el usuario se arrepiente. Guardado con sufijo `.pre-restore`.
   if (existsSync(dbPath)) {
     copyFileSync(dbPath, `${dbPath}.pre-restore`)
   }
   closeDb()
-  copyFileSync(backupPath, dbPath)
+  copyFileSync(realPath, dbPath)
   initDb()
-  console.log(`[backup] restaurado desde ${backupPath}`)
+  console.log(`[backup] restaurado desde ${realPath}`)
+}
+
+/**
+ * Valida que `rawPath` apunta a un archivo regular dentro de `allowedDirRaw`,
+ * bloqueando path traversal Y symlinks. Retorna la ruta canonicalizada
+ * (symlinks resueltos) lista para usarse en I/O.
+ *
+ * Por qué rechazamos symlinks: resolve() normaliza '..' pero NO sigue
+ * symlinks, mientras que copyFileSync y shell.openPath SÍ los siguen. Un
+ * attacker que controle el renderer podría crear un symlink dentro del
+ * directorio permitido apuntando a /etc/passwd (u otro archivo sensible)
+ * y burlaría la comparación textual.
+ *
+ * El dueño de una marquetería no tiene caso de uso legítimo para symlinks
+ * dentro de la carpeta de backups o PDFs, así que rechazarlos no bloquea
+ * nada real.
+ *
+ * Al usuario siempre se le muestra el mismo mensaje ("Ruta de X inválida")
+ * para no filtrar detalles técnicos. El motivo real queda en console.warn
+ * para que yo pueda debuggear si aparece algún falso positivo.
+ *
+ * Copia idéntica de este helper existe en src/main/pdf/factura-pdf.ts. Si
+ * modificás uno, actualizá el otro — los tests cubren ambos paths.
+ */
+function validarPathSeguro(rawPath: string, allowedDirRaw: string, recurso: string): string {
+  const mensajeUsuario = `Ruta de ${recurso} inválida`
+  const allowedDir = resolve(allowedDirRaw)
+  const resolvedTextual = resolve(rawPath)
+
+  // Guard 1 (textual): resolve() normaliza '..' pero no sigue symlinks.
+  if (!resolvedTextual.startsWith(allowedDir + sep)) {
+    console.warn(`[security] ${recurso} fuera de directorio permitido:`, resolvedTextual)
+    throw new Error(mensajeUsuario)
+  }
+
+  // Guard 2: existencia + tipo en una sola syscall. lstat NO sigue symlinks
+  // (a diferencia de stat), así que detecta el link mismo.
+  let linkStat
+  try {
+    linkStat = lstatSync(resolvedTextual)
+  } catch {
+    throw new Error(`Archivo de ${recurso} no encontrado`)
+  }
+  if (linkStat.isSymbolicLink()) {
+    console.warn(`[security] ${recurso} es un symlink, rechazado:`, resolvedTextual)
+    throw new Error(mensajeUsuario)
+  }
+  if (!linkStat.isFile()) {
+    console.warn(`[security] ${recurso} no es archivo regular:`, resolvedTextual)
+    throw new Error(mensajeUsuario)
+  }
+
+  // Guard 3: canonicalizar ambos lados con realpathSync. Necesario en macOS
+  // porque `/var` es symlink a `/private/var` — sin canonicalizar ambos
+  // lados, archivos válidos se rechazarían en macOS. Si `allowedDir` no
+  // existe aún (caso raro: primera ejecución antes de crear backup),
+  // caemos a la comparación textual del guard 1 que ya pasó.
+  try {
+    const realAllowed = realpathSync(allowedDir)
+    const realPath = realpathSync(resolvedTextual)
+    if (!realPath.startsWith(realAllowed + sep)) {
+      console.warn(`[security] ${recurso} apunta fuera tras resolver symlinks:`, realPath)
+      throw new Error(mensajeUsuario)
+    }
+    return realPath
+  } catch (err) {
+    if (err instanceof Error && err.message === mensajeUsuario) throw err
+    // allowedDir no existe aún — el guard 1 ya validó textualmente y el
+    // guard 2 confirmó que no hay symlink. Seguro usar la ruta resuelta.
+    return resolvedTextual
+  }
 }
 
 /**

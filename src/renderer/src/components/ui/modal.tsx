@@ -10,6 +10,16 @@ type ModalProps = {
   className?: string
   size?: 'sm' | 'md' | 'lg'
   initialFocusRef?: RefObject<HTMLElement | null>
+  /**
+   * Callback opcional que se ejecuta ANTES de cerrar. Si retorna `false`, el
+   * cierre se bloquea (útil para formularios con cambios sin guardar que
+   * necesitan confirmación). Si retorna `true` o nada, el cierre procede.
+   *
+   * Se consulta en: click en backdrop, tecla Escape, y click en el botón X.
+   * NO afecta a los llamados a `onClose` hechos desde el propio contenido
+   * (ej. "Guardar" que luego llama onClose manualmente).
+   */
+  onBeforeClose?: () => boolean
 }
 
 export function Modal({
@@ -19,12 +29,23 @@ export function Modal({
   children,
   className,
   size = 'md',
-  initialFocusRef
+  initialFocusRef,
+  onBeforeClose
 }: ModalProps): React.JSX.Element {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   const lastFocusedRef = useRef<HTMLElement | null>(null)
+  const onBeforeCloseRef = useRef<typeof onBeforeClose>(onBeforeClose)
+  // useEffect (no durante render) mantiene el ref alineado con la prop más
+  // reciente — los handlers de click/Escape se ejecutan después del commit,
+  // así que ven siempre la versión actualizada.
+  useEffect(() => {
+    onBeforeCloseRef.current = onBeforeClose
+  }, [onBeforeClose])
+
+  // Consulta al callback si existe; retorna true si se permite cerrar.
+  const canClose = (): boolean => onBeforeCloseRef.current?.() !== false
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -55,7 +76,9 @@ export function Modal({
     }
 
     function handleCancel(event: Event): void {
+      // Escape dispara 'cancel'. Bloqueamos el cierre si onBeforeClose lo niega.
       event.preventDefault()
+      if (!canClose()) return
       onClose()
     }
 
@@ -70,8 +93,14 @@ export function Modal({
 
   function handleBackdropClick(event: React.MouseEvent): void {
     if (event.target === dialogRef.current) {
+      if (!canClose()) return
       onClose()
     }
+  }
+
+  function handleCloseButton(): void {
+    if (!canClose()) return
+    onClose()
   }
 
   return (
@@ -80,6 +109,7 @@ export function Modal({
       tabIndex={-1}
       aria-labelledby={title ? titleId : undefined}
       aria-modal="true"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       className={cn(
         'rounded-xl shadow-4 bg-surface p-0 border border-border',
         'max-h-[85vh] overflow-y-auto',
@@ -98,7 +128,7 @@ export function Modal({
             </h2>
             <button
               ref={closeButtonRef}
-              onClick={onClose}
+              onClick={handleCloseButton}
               className="h-11 w-11 flex items-center justify-center rounded-md hover:bg-surface-muted text-text-muted hover:text-text cursor-pointer transition-colors"
               aria-label="Cerrar"
             >

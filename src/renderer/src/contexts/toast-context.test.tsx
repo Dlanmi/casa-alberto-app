@@ -108,4 +108,54 @@ describe('ToastProvider', () => {
 
     expect(screen.queryByText('Este mensaje se cierra solo.')).toBeNull()
   })
+
+  it('dedupe: no muestra dos toasts idénticos simultáneamente (C2)', () => {
+    const onAction = vi.fn()
+    const onUndo = vi.fn()
+
+    render(
+      <ToastProvider>
+        <ToastHarness onAction={onAction} onUndo={onUndo} />
+      </ToastProvider>
+    )
+
+    // Dispara el mismo toast 3 veces — debería quedar solo uno.
+    fireEvent.click(screen.getByRole('button', { name: /mostrar toast legado/i }))
+    fireEvent.click(screen.getByRole('button', { name: /mostrar toast legado/i }))
+    fireEvent.click(screen.getByRole('button', { name: /mostrar toast legado/i }))
+
+    expect(screen.getAllByText('Guardado').length).toBe(1)
+  })
+
+  it('cap: máximo 3 toasts simultáneos, el más viejo se descarta (C2)', () => {
+    function FourToasts(): React.JSX.Element {
+      const { showToast } = useToast()
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            showToast({ tone: 'info', message: 'M1', persistent: true })
+            showToast({ tone: 'info', message: 'M2', persistent: true })
+            showToast({ tone: 'info', message: 'M3', persistent: true })
+            showToast({ tone: 'info', message: 'M4', persistent: true })
+          }}
+        >
+          Disparar 4
+        </button>
+      )
+    }
+
+    render(
+      <ToastProvider>
+        <FourToasts />
+      </ToastProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /disparar 4/i }))
+
+    expect(screen.queryByText('M1')).toBeNull() // el más viejo se sacó
+    expect(screen.getByText('M2')).toBeTruthy()
+    expect(screen.getByText('M3')).toBeTruthy()
+    expect(screen.getByText('M4')).toBeTruthy()
+  })
 })

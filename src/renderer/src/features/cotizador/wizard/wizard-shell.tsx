@@ -337,7 +337,11 @@ export function WizardShell({
       )}
 
       <div className="flex gap-6 lg:gap-8">
-        <div className="flex-1 min-w-0 overflow-hidden">
+        {/* min-w-0 permite el truncation del flex; el overflow-hidden previo
+            recortaba los focus rings de los inputs y las sombras de las cards
+            cerca del borde. Lo removemos porque los únicos scrolls internos
+            (step-marco) ya tienen su propio overflow-y-auto. */}
+        <div className="flex-1 min-w-0">
           <div className="mb-6 px-2">
             <StepDots steps={[...visibleSteps]} current={step} onJump={(index) => setStep(index)} />
           </div>

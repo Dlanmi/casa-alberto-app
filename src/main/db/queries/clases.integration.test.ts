@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
 import { acudientes, clientes, configuracion, estudiantes } from '../schema'
-import { crearEstudiante, registrarPagoClase, venderKit } from './clases'
+import { crearEstudiante, listarPagosMes, registrarPagoClase, venderKit } from './clases'
 
 describe.runIf(nativeAbiAvailable)('clases guards (Fase 2 §C, §D)', () => {
   let db: DB
@@ -148,6 +148,93 @@ describe.runIf(nativeAbiAvailable)('clases guards (Fase 2 §C, §D)', () => {
         fecha: '2026-04-05'
       })
       expect(result.pagoClase.estado).toBe('pagado')
+    })
+  })
+
+  describe('listarPagosMes — totalPagado por-estudiante (regresión)', () => {
+    // Bug real en producción (v1.1.1): al cobrar a un estudiante, la UI
+    // mostraba las 3 tarjetas con el MISMO totalPagado (suma histórica de
+    // todos los detalles) porque el subquery correlacionado `${pagosClases.id}`
+    // dentro de un template `sql\`\`` no se correlacionaba. Fix: LEFT JOIN +
+    // GROUP BY, cuyo SQL Drizzle traduce correctamente.
+    it('el totalPagado es independiente por estudiante', () => {
+      // 3 estudiantes activos con pagos generados automáticamente.
+      const c1 = db.insert(clientes).values({ nombre: 'Ana' }).returning().get()
+      const c2 = db.insert(clientes).values({ nombre: 'Carlos' }).returning().get()
+      const c3 = db.insert(clientes).values({ nombre: 'María' }).returning().get()
+      const e1 = db
+        .insert(estudiantes)
+        .values({ clienteId: c1.id, fechaIngreso: '2026-04-01' })
+        .returning()
+        .get()
+      const e2 = db
+        .insert(estudiantes)
+        .values({ clienteId: c2.id, fechaIngreso: '2026-04-01' })
+        .returning()
+        .get()
+      const e3 = db
+        .insert(estudiantes)
+        .values({ clienteId: c3.id, fechaIngreso: '2026-04-01' })
+        .returning()
+        .get()
+
+      // Ana paga completo, Carlos y María no pagan nada.
+      registrarPagoClase(db, {
+        estudianteId: e1.id,
+        mes: '2026-04',
+        monto: 100000,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-05'
+      })
+
+      const rows = listarPagosMes(db, '2026-04')
+      expect(rows.length).toBe(3)
+
+      const anaRow = rows.find((r) => r.estudianteId === e1.id)
+      const carlosRow = rows.find((r) => r.estudianteId === e2.id)
+      const mariaRow = rows.find((r) => r.estudianteId === e3.id)
+
+      expect(anaRow?.totalPagado).toBe(100000)
+      expect(carlosRow?.totalPagado).toBe(0)
+      expect(mariaRow?.totalPagado).toBe(0)
+    })
+
+    it('no cuenta detalles de otros meses', () => {
+      const c = db.insert(clientes).values({ nombre: 'Estudiante mensual' }).returning().get()
+      const e = db
+        .insert(estudiantes)
+        .values({ clienteId: c.id, fechaIngreso: '2026-01-01' })
+        .returning()
+        .get()
+      // Pagos en enero, febrero y marzo.
+      registrarPagoClase(db, {
+        estudianteId: e.id,
+        mes: '2026-01',
+        monto: 100000,
+        metodoPago: 'efectivo',
+        fecha: '2026-01-05'
+      })
+      registrarPagoClase(db, {
+        estudianteId: e.id,
+        mes: '2026-02',
+        monto: 100000,
+        metodoPago: 'efectivo',
+        fecha: '2026-02-05'
+      })
+      registrarPagoClase(db, {
+        estudianteId: e.id,
+        mes: '2026-03',
+        monto: 50000,
+        metodoPago: 'efectivo',
+        fecha: '2026-03-05'
+      })
+
+      const abril = listarPagosMes(db, '2026-04')
+      // En abril no hay pago registrado aún — el row si existe debe tener
+      // totalPagado = 0, nunca la suma histórica de enero+febrero+marzo.
+      for (const row of abril) {
+        expect(row.totalPagado).toBe(0)
+      }
     })
   })
 

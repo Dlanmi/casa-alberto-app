@@ -7,10 +7,13 @@
       name="description"
       content="Casa Alberto — Gestión integral de marquetería: cotizaciones, pedidos, facturación, clientes, clases y finanzas."
     />
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
+         'unsafe-inline' en style-src es necesario para Tailwind JIT / CSS-in-JS.
+         object-src/frame-ancestors/base-uri/form-action bloquean vectores
+         adicionales (plugins, iframe embedding, base tag hijack, form leak). -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'none'"
     />
   </head>
 
