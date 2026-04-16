@@ -83,17 +83,18 @@ app.whenReady().then(() => {
 
     // Backup pre-migración: si la versión de la app cambió (update),
     // respaldar la DB ANTES de aplicar migraciones nuevas.
-    const lastVersion = getConfig(db, 'app_version')
+    // En primera instalación la tabla no existe aún — skip silencioso.
     const currentVersion = app.getVersion()
-    if (lastVersion !== currentVersion) {
-      try {
+    try {
+      const lastVersion = getConfig(db, 'app_version')
+      if (lastVersion !== currentVersion) {
         const info = crearBackupAhora()
         console.log(
           `[boot] backup pre-migración (v${lastVersion ?? '?'} → v${currentVersion}): ${info.nombre}`
         )
-      } catch (err) {
-        console.error('[boot] backup pre-migración falló:', err)
       }
+    } catch {
+      // Primera instalación: no hay tablas aún, nada que respaldar
     }
 
     runMigrations(db)
