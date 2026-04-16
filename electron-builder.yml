@@ -56,5 +56,12 @@ publish:
   provider: github
   owner: Dlanmi
   repo: casa-alberto-app
+  # IMPORTANTE — sin esta línea electron-builder publica como DRAFT por
+  # default, y los drafts son invisibles para electron-updater. Resultado:
+  # el workflow dice "success" pero la app del papá nunca ve la nueva
+  # versión. v1.1.0, v1.1.1 y v1.2.0 quedaron como drafts huérfanos por
+  # esta razón. Con `release`, se publica directo y el auto-updater la
+  # detecta en el siguiente check (cada 4h).
+  releaseType: release
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
