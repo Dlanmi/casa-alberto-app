@@ -1,7 +1,7 @@
 {
   "name": "casa-alberto-app",
   "productName": "Casa Alberto",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Casa Alberto — Arte, Diseño, Decoración. Gestión integral de marquetería: cotizaciones, pedidos, facturación, clientes, clases y finanzas.",
   "main": "./out/main/index.js",
   "author": "Casa Alberto",
