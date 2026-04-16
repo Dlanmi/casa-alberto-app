@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus,
   Calculator,
   ClipboardList,
   ArrowUpFromLine,
@@ -8,7 +7,6 @@ import {
   CircleDollarSign,
   CalendarClock,
   TrendingUp,
-  CheckCircle2,
   Truck
 } from 'lucide-react'
 import { OperationalBoard, PageSection } from '@renderer/components/layout/page-frame'
@@ -22,6 +20,8 @@ import { mesActualISO, hoyISO, formatCOP } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/cn'
 import { normalizePedidoAlertas, type PedidoAlertaRow } from '@renderer/lib/pedidos-alertas'
 import { UrgencyMatrix } from './urgency-matrix'
+import { BarChartMini } from '@renderer/components/charts/bar-chart-mini'
+import { WorkshopIllustration } from '@renderer/components/illustrations'
 import type { Pedido, Proveedor } from '@shared/types'
 
 type ResumenMensual = {
@@ -159,13 +159,9 @@ export default function DashboardPage(): React.JSX.Element {
     >
       {/* AGENT_UX: Acciones rápidas prominentes. Buttons grandes (48px alto)
           con icono + texto para que el dueño de 60 años pueda escanear y
-          actuar sin leer. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Button size="lg" onClick={() => navigate('/cotizador')}>
-          <Plus size={18} />
-          <Calculator size={18} />
-          Nueva cotización
-        </Button>
+          actuar sin leer. Nueva cotización vive en el header (primaryAction)
+          para no duplicar el mismo CTA dos veces en la pantalla. */}
+      <div className="grid gap-3 sm:grid-cols-3">
         <Button size="lg" variant="outline" onClick={() => goPedidos('requiere_accion')}>
           <ClipboardList size={18} />
           Gestionar pedidos
@@ -194,8 +190,8 @@ export default function DashboardPage(): React.JSX.Element {
           <div className="space-y-4 lg:col-span-2">
             {totalAlertas === 0 ? (
               <Card padding="md" className="flex flex-col items-center py-10 text-center">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success-bg">
-                  <CheckCircle2 size={32} className="text-success-strong" />
+                <div className="mb-4">
+                  <WorkshopIllustration size={120} />
                 </div>
                 <p className="mb-2 text-base font-semibold text-text">Todo en orden</p>
                 <p className="max-w-xs text-sm text-text-muted">
@@ -219,81 +215,59 @@ export default function DashboardPage(): React.JSX.Element {
                   </Badge>
                 </div>
                 <div className="space-y-2">
-                  {safeAtrasados.map((alerta, index) => (
-                    <div
-                      key={`atrasado-${alerta.pedido?.id ?? index}`}
-                      className="flex items-center gap-3 rounded-lg border-l-3 border-error bg-surface px-4 py-4 shadow-1"
+                  {safeAtrasados.length > 0 && (
+                    <button
+                      onClick={() => goPedidos('atrasados')}
+                      className="flex w-full items-center gap-3 rounded-lg border-l-[3px] border-error bg-surface px-4 py-4 shadow-1 cursor-pointer transition-colors hover:bg-error-bg/40"
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-error-bg">
                         <Clock size={16} className="text-error-strong" />
                       </div>
-                      <Badge color="error" size="sm">
-                        Atrasado
-                      </Badge>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-text">
-                          Pedido {alerta.pedido?.numero} — {alerta.cliente?.nombre}
-                        </p>
-                        <p className="truncate text-xs text-text-muted">
-                          {alerta.pedido?.descripcion}
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="text-sm font-semibold text-text">
+                          {safeAtrasados.length} pedido{safeAtrasados.length > 1 ? 's' : ''}{' '}
+                          atrasado{safeAtrasados.length > 1 ? 's' : ''}
                         </p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => goPedidos('atrasados')}>
-                        Ver &gt;
-                      </Button>
-                    </div>
-                  ))}
+                      <span className="text-sm font-medium text-error-strong">Resolver &gt;</span>
+                    </button>
+                  )}
 
-                  {safeSinAbono.slice(0, 3).map((alerta, index) => (
-                    <div
-                      key={`sinabono-${alerta.pedido?.id ?? index}`}
-                      className="flex items-center gap-3 rounded-lg border-l-3 border-warning bg-surface px-4 py-4 shadow-1"
+                  {safeSinAbono.length > 0 && (
+                    <button
+                      onClick={() => goFacturas('pendientes')}
+                      className="flex w-full items-center gap-3 rounded-lg border-l-[3px] border-warning bg-surface px-4 py-4 shadow-1 cursor-pointer transition-colors hover:bg-warning-bg/40"
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-bg">
                         <CircleDollarSign size={16} className="text-warning-strong" />
                       </div>
-                      <Badge color="warning" size="sm">
-                        Sin pago
-                      </Badge>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-text">
-                          Pedido {alerta.pedido?.numero} ·{' '}
-                          {formatCOP(alerta.pedido?.precioTotal ?? 0)} — {alerta.cliente?.nombre}
-                        </p>
-                        <p className="truncate text-xs text-text-muted">
-                          {alerta.pedido?.descripcion}
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="text-sm font-semibold text-text">
+                          {safeSinAbono.length} pedido{safeSinAbono.length > 1 ? 's' : ''} sin
+                          cobrar
                         </p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => goFacturas('pendientes')}>
-                        Cobrar &gt;
-                      </Button>
-                    </div>
-                  ))}
+                      <span className="text-sm font-medium text-warning-strong">Cobrar &gt;</span>
+                    </button>
+                  )}
 
-                  {safeProximos.slice(0, 3).map((alerta, index) => (
-                    <div
-                      key={`proximo-${alerta.pedido?.id ?? index}`}
-                      className="flex items-center gap-3 rounded-lg border-l-3 border-info bg-surface px-4 py-4 shadow-1"
+                  {safeProximos.length > 0 && (
+                    <button
+                      onClick={() => goPedidos('proximos')}
+                      className="flex w-full items-center gap-3 rounded-lg border-l-[3px] border-info bg-surface px-4 py-4 shadow-1 cursor-pointer transition-colors hover:bg-info-bg/40"
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-info-bg">
                         <CalendarClock size={16} className="text-info-strong" />
                       </div>
-                      <Badge color="info" size="sm">
-                        Próximo
-                      </Badge>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-text">
-                          Pedido {alerta.pedido?.numero} — {alerta.cliente?.nombre}
-                        </p>
-                        <p className="truncate text-xs text-text-muted">
-                          {alerta.pedido?.descripcion}
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="text-sm font-semibold text-text">
+                          {safeProximos.length} entrega{safeProximos.length > 1 ? 's' : ''} próxima
+                          {safeProximos.length > 1 ? 's' : ''}
                         </p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => goPedidos('proximos')}>
-                        Ver &gt;
-                      </Button>
-                    </div>
-                  ))}
+                      <span className="text-sm font-medium text-info-strong">Ver &gt;</span>
+                    </button>
+                  )}
                 </div>
               </Card>
             )}
@@ -348,7 +322,14 @@ export default function DashboardPage(): React.JSX.Element {
                 <p className="text-xs font-medium uppercase tracking-widest text-text-soft">
                   Balance del mes
                 </p>
-                <p className="mt-1 text-sm text-text">
+                <div className="mt-2">
+                  <BarChartMini
+                    ingresos={resumenMensual.ingresos}
+                    gastos={resumenMensual.gastos}
+                    height={120}
+                  />
+                </div>
+                <p className="mt-1 text-center text-sm text-text">
                   {resumenMensual.balance >= 0 ? 'Vas positivo' : 'Vas por debajo'} con{' '}
                   <span className="font-semibold tabular-nums">
                     {formatCOP(resumenMensual.balance)}

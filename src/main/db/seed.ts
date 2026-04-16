@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import type { DB } from './index'
 import {
+  acudientes,
   clases,
   clientes,
   configuracion,
@@ -39,6 +40,11 @@ const CONFIG_INICIAL: { clave: string; valor: string; descripcion: string }[] = 
   { clave: 'consecutivo_facturas', valor: '1', descripcion: 'Siguiente número de factura' },
   { clave: 'consecutivo_pedidos', valor: '1', descripcion: 'Siguiente número de pedido' },
   { clave: 'consecutivo_contratos', valor: '1', descripcion: 'Siguiente número de contrato' },
+  {
+    clave: 'consecutivo_cuentas_cobro',
+    valor: '1',
+    descripcion: 'Siguiente número de cuenta de cobro'
+  },
   {
     clave: 'porcentaje_materiales_default',
     valor: '10',
@@ -278,6 +284,17 @@ function seedClasesYEstudiantes(db: DB, clienteIds: number[]): void {
     fechaIngreso: '2026-02-01',
     esMenor: false
   })
+  // Fase 2 §C.1 — para estudiantes menores registramos el acudiente antes
+  // de crear el estudiante (crearEstudiante ahora exige la presencia del
+  // acudiente cuando esMenor=true).
+  db.insert(acudientes)
+    .values({
+      clienteId: clienteIds[2],
+      nombre: 'Luisa Gómez',
+      telefono: '3201234567',
+      parentesco: 'Madre'
+    })
+    .run()
   const est3 = crearEstudiante(db, {
     clienteId: clienteIds[2],
     claseId: clase.id,

@@ -1,8 +1,20 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, ClipboardList, CheckCircle, ShoppingCart, Receipt } from 'lucide-react'
+import {
+  FileText,
+  ClipboardList,
+  CheckCircle,
+  ShoppingCart,
+  Receipt,
+  UserPlus,
+  Banknote,
+  StickyNote,
+  CreditCard,
+  Wallet
+} from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
+import { Input } from '@renderer/components/ui/input'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { ClientePicker } from '@renderer/components/shared/cliente-picker'
@@ -10,8 +22,16 @@ import { useToast } from '@renderer/contexts/toast-context'
 import { formatCOP, hoyISO } from '@renderer/lib/format'
 import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { conceptoIcon, TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
+import { cn } from '@renderer/lib/cn'
 import type { WizardData } from './wizard-shell'
-import type { TipoTrabajo, Cliente, Pedido, IpcResult, ResultadoCotizacion } from '@shared/types'
+import type {
+  TipoTrabajo,
+  Cliente,
+  Pedido,
+  Factura,
+  IpcResult,
+  ResultadoCotizacion
+} from '@shared/types'
 
 type Props = {
   data: WizardData
@@ -19,6 +39,14 @@ type Props = {
   tipoTrabajo: TipoTrabajo
   cliente: Cliente | null
   onClienteChange: (cliente: Cliente | null) => void
+}
+
+type MetodoPago = 'efectivo' | 'transferencia'
+
+function calcFechaEntrega(diasHabiles = 8): string {
+  const d = new Date()
+  d.setDate(d.getDate() + diasHabiles)
+  return d.toISOString().slice(0, 10)
 }
 
 export function StepResumen({
@@ -33,10 +61,19 @@ export function StepResumen({
   const [creating, setCreating] = useState(false)
   const [createdPedido, setCreatedPedido] = useState<{ id: number; numero: string } | null>(null)
 
+  // Campos adicionales para el pedido
+  const [conAbono, setConAbono] = useState(false)
+  const [abono, setAbono] = useState<string>('')
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo')
+  const [notas, setNotas] = useState('')
+  // Fecha de entrega: siempre hoy + 8 días por defecto (se ajusta en Pedidos si es urgente)
+  const fechaEntrega = calcFechaEntrega(8)
+
   async function handleCrearPedido(): Promise<void> {
     if (!cliente || !cotizacion) return
     setCreating(true)
     try {
+      // 1. Crear el pedido con fecha de entrega y notas
       const result = (await window.api.pedidos.crear(
         {
           clienteId: cliente.id,
@@ -48,23 +85,56 @@ export function StepResumen({
           tipoPaspartu: data.conPaspartu ? data.tipoPaspartu : undefined,
           tipoVidrio: data.conVidrio ? data.tipoVidrio : 'ninguno',
           porcentajeMateriales: data.porcentajeMateriales,
-          fechaIngreso: hoyISO()
+          fechaIngreso: hoyISO(),
+          fechaEntrega: fechaEntrega || undefined,
+          notas: notas.trim() || undefined
         },
         cotizacion
       )) as IpcResult<Pedido>
 
-      if (result.ok) {
-        setCreatedPedido({ id: result.data.id, numero: result.data.numero })
-        showToast({
-          tone: 'success',
-          title: 'Pedido creado',
-          message: `El pedido ${result.data.numero} ya quedó listo para continuar con facturación o seguimiento.`,
-          actionLabel: 'Ir a pedidos',
-          onAction: () => navigate('/pedidos')
-        })
-      } else {
+      if (!result.ok) {
         showToast({ tone: 'error', title: 'No se pudo crear el pedido', message: result.error })
+        return
       }
+
+      const pedido = result.data
+      const abonoNum = conAbono ? parseFloat(abono) || 0 : 0
+
+      // 2. Si hay abono, confirmar pedido + crear factura + registrar pago
+      if (abonoNum > 0) {
+        // Cambiar estado a confirmado (el cliente está pagando)
+        await window.api.pedidos.cambiarEstado(pedido.id, 'confirmado')
+
+        // Crear factura
+        const factRes = (await window.api.facturas.crear({
+          pedidoId: pedido.id,
+          clienteId: cliente.id,
+          fecha: hoyISO(),
+          total: cotizacion.precioTotal
+        })) as IpcResult<Factura>
+
+        if (factRes.ok) {
+          // Registrar el abono como primer pago
+          await window.api.facturas.registrarPago({
+            facturaId: factRes.data.id,
+            monto: abonoNum,
+            fecha: hoyISO(),
+            metodoPago
+          })
+        }
+      }
+
+      setCreatedPedido({ id: pedido.id, numero: pedido.numero })
+      showToast({
+        tone: 'success',
+        title: 'Pedido creado',
+        message:
+          abonoNum > 0
+            ? `Pedido ${pedido.numero} creado con abono de ${formatCOP(abonoNum)}. Factura generada.`
+            : `Pedido ${pedido.numero} creado. Entrega: ${new Date(fechaEntrega + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}.`,
+        actionLabel: 'Ir a pedidos',
+        onAction: () => navigate('/pedidos')
+      })
     } catch (err) {
       console.error('Create order failed:', err)
       showToast({
@@ -90,30 +160,24 @@ export function StepResumen({
   }
 
   const TipoIcon = TIPO_TRABAJO_ICON[tipoTrabajo] ?? FileText
+  const abonoNum = conAbono ? parseFloat(abono) || 0 : 0
+  const saldo = cotizacion.precioTotal - abonoNum
+  const porcentajePagado =
+    cotizacion.precioTotal > 0
+      ? Math.min(100, Math.round((abonoNum / cotizacion.precioTotal) * 100))
+      : 0
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text mb-1">Resumen de cotización</h2>
-      <p className="text-sm text-text-muted mb-6 flex items-center gap-2">
+      <h2 className="mb-1 text-lg font-semibold text-text">Resumen de cotización</h2>
+      <p className="mb-6 flex items-center gap-2 text-sm text-text-muted">
         <TipoIcon size={16} className="text-accent-strong" />
         <span>
           {TIPO_TRABAJO_LABEL[tipoTrabajo]} — {data.anchoCm} x {data.altoCm} cm
         </span>
       </p>
 
-      <GuidanceHint
-        tone={cliente ? 'success' : 'accent'}
-        title={cliente ? 'Listo para cerrar' : 'Falta vincular el cliente'}
-        message={
-          cliente
-            ? 'Con el cliente seleccionado ya puedes crear el pedido o generar un PDF para compartir la cotización.'
-            : 'Selecciona el cliente antes de crear el pedido. Si solo vas a compartir la cotización, también puedes generar el PDF desde aquí.'
-        }
-        className="mb-6"
-      />
-
-      {/* AGENT_UX: Breakdown visual — cada concepto con icono, descripción y
-          subtotal alineado. El total final es visualmente dominante. */}
+      {/* Desglose del precio */}
       <Card padding="md" className="mb-6">
         <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-soft">
           Desglose del precio
@@ -142,7 +206,7 @@ export function StepResumen({
         <div className="mt-4 space-y-2 border-t border-border pt-3">
           <div className="flex items-center justify-between text-sm">
             <span className="text-text-muted">Subtotal</span>
-            <span className="tabular-nums font-medium text-text">
+            <span className="font-medium tabular-nums text-text">
               {formatCOP(cotizacion.subtotal)}
             </span>
           </div>
@@ -152,7 +216,7 @@ export function StepResumen({
                 <ShoppingCart size={14} />
                 Materiales ({data.porcentajeMateriales}%)
               </span>
-              <span className="tabular-nums font-medium text-text">
+              <span className="font-medium tabular-nums text-text">
                 {formatCOP(cotizacion.totalMateriales)}
               </span>
             </div>
@@ -171,93 +235,276 @@ export function StepResumen({
         </div>
       </Card>
 
-      <div className="space-y-4">
-        <ClientePicker value={cliente} onChange={onClienteChange} label="Cliente" />
-        {!cliente && (
-          <p className="text-xs text-error-strong -mt-2">
-            Selecciona un cliente para crear el pedido.
-          </p>
-        )}
+      {/* ─── Datos del pedido — flujo guiado ─── */}
+      <Card padding="md" className="mb-6">
+        <p className="mb-5 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-soft">
+          Datos del pedido
+        </p>
+        <div className="space-y-6">
+          {/* ── 1. Cliente ── */}
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-white">
+                1
+              </span>
+              <span className="text-sm font-semibold text-text">Cliente</span>
+            </div>
 
-        {!createdPedido && (
-          <div className="flex flex-wrap gap-3">
-            <Button onClick={handleCrearPedido} disabled={!cliente || creating}>
-              <ClipboardList size={18} />
-              {creating ? 'Creando pedido...' : 'Crear Pedido'}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                try {
-                  const now = new Date()
-                  const fecha = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-                  const seq = String(now.getTime()).slice(-4)
-                  const numero = `COT-${fecha}-${seq}`
-                  const result = (await window.api.pdf.generarFactura({
-                    numero,
-                    fecha: hoyISO(),
-                    clienteNombre: cliente?.nombre ?? 'Sin cliente',
-                    items: cotizacion.items.map((it) => ({
-                      descripcion: it.descripcion,
-                      cantidad: 1,
-                      precioUnitario: it.subtotal,
-                      subtotal: it.subtotal
-                    })),
-                    subtotal: cotizacion.subtotal,
-                    totalMateriales: cotizacion.totalMateriales,
-                    total: cotizacion.precioTotal,
-                    pagos: [],
-                    saldo: cotizacion.precioTotal,
-                    notas: `${TIPO_TRABAJO_LABEL[tipoTrabajo]} ${data.anchoCm}x${data.altoCm}cm`
-                  })) as IpcResult<string>
-                  if (result.ok) {
-                    showToast({
-                      tone: 'success',
-                      title: 'PDF generado',
-                      message: 'La cotización se abrió en PDF para revisión o envío al cliente.'
-                    })
-                    await window.api.pdf.abrir(result.data)
-                  } else {
-                    showToast({
-                      tone: 'error',
-                      title: 'No se pudo generar el PDF',
-                      message: result.error
-                    })
-                  }
-                } catch (err) {
-                  console.error('PDF generation failed:', err)
+            {!cliente ? (
+              <div className="space-y-3">
+                <ClientePicker value={cliente} onChange={onClienteChange} />
+                <div className="flex items-start gap-2 rounded-md border border-accent/20 bg-accent/5 px-3 py-2.5">
+                  <UserPlus size={16} className="mt-0.5 shrink-0 text-accent-strong" />
+                  <p className="text-xs leading-relaxed text-text-muted">
+                    Escribe el nombre del cliente para buscarlo. Si no existe, podrás{' '}
+                    <strong className="text-text">crearlo ahí mismo</strong> con nombre y teléfono.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <ClientePicker value={cliente} onChange={onClienteChange} />
+            )}
+          </div>
+
+          {/* ── 2. Abono ── */}
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-white">
+                2
+              </span>
+              <span className="text-sm font-semibold text-text">Abono</span>
+              <span className="text-xs text-text-muted">(opcional)</span>
+            </div>
+
+            {/* Toggle */}
+            <div className="rounded-lg border border-border bg-surface p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-medium text-text">
+                    ¿El cliente deja un abono ahora?
+                  </span>
+                  <p className="mt-0.5 text-xs text-text-muted">
+                    Se creará la factura y se registrará el pago automáticamente.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setConAbono(!conAbono)
+                    if (conAbono) setAbono('')
+                  }}
+                  className={cn(
+                    'relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0',
+                    conAbono ? 'bg-success' : 'bg-border'
+                  )}
+                  aria-label={conAbono ? 'Desactivar abono' : 'Activar abono'}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow-1 transition-all duration-200',
+                      conAbono ? 'left-[23px]' : 'left-[3px]'
+                    )}
+                  />
+                </button>
+              </div>
+
+              {conAbono && (
+                <div className="mt-4 space-y-4 border-t border-border pt-4">
+                  {/* Monto */}
+                  <Input
+                    label="Monto del abono"
+                    type="number"
+                    min={0}
+                    max={cotizacion.precioTotal}
+                    placeholder="Ej: 50000"
+                    value={abono}
+                    onChange={(e) => setAbono(e.target.value)}
+                  />
+
+                  {/* Método de pago */}
+                  <div>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wider text-text-muted">
+                      Método de pago
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(
+                        [
+                          { key: 'efectivo', label: 'Efectivo', icon: Wallet },
+                          { key: 'transferencia', label: 'Transferencia', icon: CreditCard }
+                        ] as const
+                      ).map((method) => (
+                        <button
+                          key={method.key}
+                          onClick={() => setMetodoPago(method.key)}
+                          className={cn(
+                            'flex items-center justify-center gap-2 rounded-lg border-2 px-3 py-2.5 text-sm font-medium transition-all cursor-pointer',
+                            metodoPago === method.key
+                              ? 'border-accent bg-accent/10 text-accent-strong'
+                              : 'border-border text-text-muted hover:border-border-strong'
+                          )}
+                        >
+                          <method.icon size={16} />
+                          {method.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Desglose visual del abono */}
+                  {abonoNum > 0 && (
+                    <div className="space-y-3 rounded-lg bg-surface-muted p-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-text-muted">Total del trabajo</span>
+                        <span className="font-medium tabular-nums text-text">
+                          {formatCOP(cotizacion.precioTotal)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-1.5 text-success-strong">
+                          <Banknote size={14} />
+                          Abono
+                        </span>
+                        <span className="font-semibold tabular-nums text-success-strong">
+                          − {formatCOP(abonoNum)}
+                        </span>
+                      </div>
+                      <div className="border-t border-border pt-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-semibold text-text">Saldo pendiente</span>
+                          <span className="font-semibold tabular-nums text-text">
+                            {formatCOP(saldo > 0 ? saldo : 0)}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Barra de progreso */}
+                      <div className="space-y-1">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-border">
+                          <div
+                            className="h-full rounded-full bg-success transition-all duration-300"
+                            style={{ width: `${porcentajePagado}%` }}
+                          />
+                        </div>
+                        <p className="text-right text-xs tabular-nums text-text-muted">
+                          {porcentajePagado}% pagado
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── 3. Notas ── */}
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-white">
+                3
+              </span>
+              <span className="text-sm font-semibold text-text">Notas</span>
+              <span className="text-xs text-text-muted">(opcional)</span>
+            </div>
+            <div className="flex items-start gap-3">
+              <StickyNote size={18} className="mt-2.5 shrink-0 text-text-soft" />
+              <textarea
+                id="notas"
+                value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+                rows={2}
+                placeholder="Instrucciones especiales, preferencias del cliente..."
+                className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder-text-soft focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
+              />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Acciones */}
+      {!createdPedido && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={handleCrearPedido} disabled={!cliente || creating} size="lg">
+            <ClipboardList size={18} />
+            {creating ? 'Creando...' : 'Crear Pedido'}
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={async () => {
+              try {
+                const now = new Date()
+                const fecha = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+                const seq = String(now.getTime()).slice(-4)
+                const numero = `COT-${fecha}-${seq}`
+                const result = (await window.api.pdf.generarFactura({
+                  numero,
+                  fecha: hoyISO(),
+                  clienteNombre: cliente?.nombre ?? 'Sin cliente',
+                  items: cotizacion.items.map((it) => ({
+                    descripcion: it.descripcion,
+                    cantidad: 1,
+                    precioUnitario: it.subtotal,
+                    subtotal: it.subtotal
+                  })),
+                  subtotal: cotizacion.subtotal,
+                  totalMateriales: cotizacion.totalMateriales,
+                  total: cotizacion.precioTotal,
+                  pagos: [],
+                  saldo: cotizacion.precioTotal,
+                  notas: `${TIPO_TRABAJO_LABEL[tipoTrabajo]} ${data.anchoCm}x${data.altoCm}cm`
+                })) as IpcResult<string>
+                if (result.ok) {
+                  showToast({
+                    tone: 'success',
+                    title: 'PDF generado',
+                    message: 'La cotización se abrió en PDF para revisión o envío al cliente.'
+                  })
+                  await window.api.pdf.abrir(result.data)
+                } else {
                   showToast({
                     tone: 'error',
                     title: 'No se pudo generar el PDF',
-                    message: 'Revisa los datos de la cotización y vuelve a intentarlo.'
+                    message: result.error
                   })
                 }
-              }}
-            >
-              <FileText size={18} />
-              Generar PDF
+              } catch (err) {
+                console.error('PDF generation failed:', err)
+                showToast({
+                  tone: 'error',
+                  title: 'No se pudo generar el PDF',
+                  message: 'Revisa los datos de la cotización y vuelve a intentarlo.'
+                })
+              }
+            }}
+          >
+            <FileText size={18} />
+            Generar PDF
+          </Button>
+          {!cliente && (
+            <p className="w-full text-xs text-text-muted">
+              Vincula un cliente en el paso 1 para habilitar la creación del pedido.
+            </p>
+          )}
+        </div>
+      )}
+
+      {createdPedido && (
+        <Card padding="md" className="mt-6 text-center">
+          <CheckCircle size={32} className="mx-auto mb-3 text-success-strong" />
+          <p className="mb-1 text-base font-semibold text-text">
+            Pedido {createdPedido.numero} creado
+          </p>
+          <p className="mb-4 text-sm text-text-muted">
+            {abonoNum > 0
+              ? `Factura generada con abono de ${formatCOP(abonoNum)}. Saldo: ${formatCOP(saldo > 0 ? saldo : 0)}.`
+              : 'El siguiente paso es facturar cuando el cliente confirme.'}
+          </p>
+          <div className="flex justify-center gap-3">
+            <Button onClick={() => navigate('/pedidos')}>Ir a pedidos</Button>
+            <Button variant="secondary" onClick={() => navigate('/facturas')}>
+              Ver facturas
             </Button>
           </div>
-        )}
-
-        {createdPedido && (
-          <Card padding="md" className="mt-6 text-center">
-            <CheckCircle size={32} className="text-success-strong mx-auto mb-3" />
-            <p className="text-base font-semibold text-text mb-1">
-              Pedido {createdPedido.numero} creado
-            </p>
-            <p className="text-sm text-text-muted mb-4">
-              El siguiente paso natural es facturar o revisar el pedido en el tablero.
-            </p>
-            <div className="flex gap-3 justify-center">
-              <Button onClick={() => navigate('/facturas')}>Generar factura</Button>
-              <Button variant="secondary" onClick={() => navigate('/pedidos')}>
-                Ir a pedidos
-              </Button>
-            </div>
-          </Card>
-        )}
-      </div>
+        </Card>
+      )}
     </div>
   )
 }

@@ -18,3 +18,22 @@ SMOKE_TEST_MANUAL.md
 FINAL_REPORT.md
 CasaAlberto_Fase*.md
 .claude/
+
+# Build artifacts
+release/
+coverage/
+
+# Installer files
+*.dmg
+*.exe
+*.AppImage
+*.snap
+*.deb
+
+# Certificate/key files (preemptive)
+*.pem
+*.p12
+
+# Windows
+Thumbs.db
+Desktop.ini

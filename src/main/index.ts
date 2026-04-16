@@ -88,7 +88,9 @@ app.whenReady().then(() => {
     if (lastVersion !== currentVersion) {
       try {
         const info = crearBackupAhora()
-        console.log(`[boot] backup pre-migración (v${lastVersion ?? '?'} → v${currentVersion}): ${info.nombre}`)
+        console.log(
+          `[boot] backup pre-migración (v${lastVersion ?? '?'} → v${currentVersion}): ${info.nombre}`
+        )
       } catch (err) {
         console.error('[boot] backup pre-migración falló:', err)
       }

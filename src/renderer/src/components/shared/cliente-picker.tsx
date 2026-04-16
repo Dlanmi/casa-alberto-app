@@ -3,6 +3,7 @@ import { Search, Sparkles, X, UserPlus } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
+import { Modal } from '@renderer/components/ui/modal'
 import { useDebounce } from '@renderer/hooks/use-debounce'
 import { formatTelefono, iniciales } from '@renderer/lib/format'
 import type { Cliente, IpcResult } from '@shared/types'
@@ -140,7 +141,7 @@ export function ClientePicker({
             <button
               type="button"
               onClick={handleClear}
-              className="text-text-soft hover:text-text-muted cursor-pointer"
+              className="flex h-9 w-9 items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text cursor-pointer transition-colors"
               aria-label="Cambiar cliente"
             >
               <X size={16} />
@@ -187,48 +188,48 @@ export function ClientePicker({
           )}
         />
       </div>
-      {open && (
+      {/* Modal para crear cliente nuevo — separado del dropdown para evitar
+          que el formulario tape el contenido debajo del picker */}
+      <Modal open={creatingMode} onClose={resetCreateForm} title="Crear cliente nuevo" size="sm">
+        <div className="space-y-4">
+          <Input
+            label="Nombre"
+            value={newNombre}
+            onChange={(e) => {
+              setNewNombre(e.target.value)
+              if (createError) setCreateError(null)
+            }}
+            placeholder="Nombre del cliente"
+            error={createError && !newNombre.trim() ? createError : undefined}
+          />
+          <Input
+            label="Teléfono (opcional)"
+            value={newTelefono}
+            onChange={(e) => setNewTelefono(e.target.value)}
+            placeholder="Ej: 3101234567"
+          />
+          {createError && newNombre.trim() && (
+            <p className="text-xs text-error-strong">{createError}</p>
+          )}
+          <div className="flex gap-3 pt-2">
+            <Button
+              size="lg"
+              onClick={handleQuickCreate}
+              disabled={createLoading}
+              className="flex-1"
+            >
+              {createLoading ? 'Creando...' : 'Crear y seleccionar'}
+            </Button>
+            <Button variant="outline" size="lg" onClick={resetCreateForm} disabled={createLoading}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {open && !creatingMode && (
         <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-lg border border-border bg-surface shadow-3">
-          {creatingMode ? (
-            <div className="px-4 py-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <UserPlus size={16} className="text-accent-strong" />
-                <p className="text-sm font-semibold text-text">Crear cliente nuevo</p>
-              </div>
-              <Input
-                label="Nombre"
-                value={newNombre}
-                onChange={(e) => {
-                  setNewNombre(e.target.value)
-                  if (createError) setCreateError(null)
-                }}
-                placeholder="Nombre del cliente"
-                error={createError && !newNombre.trim() ? createError : undefined}
-              />
-              <Input
-                label="Teléfono (opcional)"
-                value={newTelefono}
-                onChange={(e) => setNewTelefono(e.target.value)}
-                placeholder="Ej: 3101234567"
-              />
-              {createError && newNombre.trim() && (
-                <p className="text-xs text-error-strong">{createError}</p>
-              )}
-              <div className="flex gap-2 pt-1">
-                <Button size="sm" onClick={handleQuickCreate} disabled={createLoading}>
-                  {createLoading ? 'Creando...' : 'Crear y seleccionar'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetCreateForm}
-                  disabled={createLoading}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          ) : searching ? (
+          {searching ? (
             <div className="flex items-center justify-center py-6">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
             </div>

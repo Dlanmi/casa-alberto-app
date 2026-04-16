@@ -95,7 +95,7 @@ function Header({
 }: Omit<PageFrameProps, 'children' | 'className'>): React.JSX.Element {
   return (
     <div className="pb-6 border-b border-border">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
         <div className="max-w-3xl space-y-3">
           {eyebrow && (
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-text-soft">
@@ -244,7 +244,7 @@ export function WorkflowScreen({
 }: WorkflowScreenProps): React.JSX.Element {
   return (
     <PageFrame {...headerProps}>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className={cn('min-w-0 space-y-6', mainClassName)}>{main}</div>
         {aside ? <div className={cn('space-y-6', asideClassName)}>{aside}</div> : null}
       </div>

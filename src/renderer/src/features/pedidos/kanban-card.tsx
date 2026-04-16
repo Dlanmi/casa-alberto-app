@@ -36,7 +36,7 @@ export function KanbanCard({ pedido, clienteNombre, pagado = 0, onClick }: Kanba
       onDragStart={() => setDragging(true)}
       onDragEnd={() => setDragging(false)}
       className={cn(
-        'w-full text-left p-4 bg-white rounded-lg shadow-1',
+        'w-full text-left p-4 bg-surface rounded-lg shadow-1',
         'transition-all hover:shadow-2 cursor-pointer card-hover',
         'border-2 border-transparent',
         atrasado && 'border-error/40',
@@ -49,9 +49,7 @@ export function KanbanCard({ pedido, clienteNombre, pagado = 0, onClick }: Kanba
         <InitialsAvatar nombre={displayName} id={pedido.clienteId} size="sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-text">{displayName}</p>
-          <p className="mt-0.5 text-[11px] font-medium tabular-nums text-text-soft">
-            {pedido.numero}
-          </p>
+          <p className="mt-0.5 text-xs font-medium tabular-nums text-text-muted">{pedido.numero}</p>
         </div>
       </div>
 

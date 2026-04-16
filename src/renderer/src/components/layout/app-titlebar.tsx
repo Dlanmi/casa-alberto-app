@@ -73,10 +73,7 @@ export function AppTitleBar(): React.JSX.Element {
           CA
         </div>
         <span className="text-[14px] font-semibold tracking-tight text-text">Casa Alberto</span>
-        <span
-          aria-hidden
-          className="hidden h-4 w-px bg-border sm:inline-block"
-        />
+        <span aria-hidden className="hidden h-4 w-px bg-border sm:inline-block" />
         <span className="hidden text-[10px] font-semibold uppercase tracking-[0.22em] text-text-soft sm:inline">
           Marquetería
         </span>

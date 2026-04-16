@@ -1,0 +1,5 @@
+export { FrameIllustration } from './frame-illustration'
+export { WorkshopIllustration } from './workshop-illustration'
+export { CashRegisterIllustration } from './cash-register-illustration'
+export { PaletteBrushIllustration } from './palette-brush-illustration'
+export { PeopleIllustration } from './people-illustration'

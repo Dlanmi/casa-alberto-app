@@ -30,11 +30,16 @@ export function crearContrato(db: DB, data: NuevoContrato) {
 
     const subtotales = data.items.map((it) => ({
       ...it,
-      subtotal: it.cantidad * it.valorUnitario
+      subtotal: Math.round(it.cantidad * it.valorUnitario)
     }))
     const total = subtotales.reduce((acc, it) => acc + it.subtotal, 0)
     const retencionPorcentaje = data.retencionPorcentaje ?? 0
-    const retencionMonto = total * (retencionPorcentaje / 100)
+    if (retencionPorcentaje < 0 || retencionPorcentaje > 100) {
+      throw new Error('El porcentaje de retención debe estar entre 0 y 100')
+    }
+    // Retención en la fuente (Fase 2 §F.3). Se redondea a pesos enteros para
+    // evitar arrastrar decimales en la cuenta de cobro.
+    const retencionMonto = Math.round(total * (retencionPorcentaje / 100))
 
     const contrato = tx
       .insert(contratos)
@@ -120,25 +125,31 @@ export function crearCuentaCobro(db: DB, data: NuevaCuentaCobro) {
     const contrato = tx.select().from(contratos).where(eq(contratos.id, data.contratoId)).get()
     if (!contrato) throw new Error(`Contrato ${data.contratoId} no encontrado`)
 
-    // Consecutivo propio para cuentas de cobro: CC-0001
-    const ultima = tx
-      .select({ numero: cuentasCobro.numero })
-      .from(cuentasCobro)
-      .orderBy(desc(cuentasCobro.id))
-      .limit(1)
-      .get()
-    const n = ultima ? parseInt(ultima.numero.replace(/[^0-9]/g, ''), 10) + 1 : 1
-    const numero = `CC-${String(n).padStart(4, '0')}`
+    if (!Number.isFinite(data.total) || data.total < 0) {
+      throw new Error('El total de la cuenta de cobro no puede ser negativo')
+    }
+    const retencion = Math.round(data.retencion ?? 0)
+    if (retencion < 0) {
+      throw new Error('La retención no puede ser negativa')
+    }
+    if (retencion > data.total) {
+      throw new Error('La retención no puede superar el total de la cuenta de cobro')
+    }
 
-    const retencion = data.retencion ?? 0
-    const totalNeto = data.total - retencion
+    // Consecutivo central para cuentas de cobro (CC-0001, atómico vía
+    // generarConsecutivo en vez del parseo del último número, que era racy
+    // si se pre-existían registros con numeración irregular).
+    const numero = generarConsecutivo(tx as unknown as DB, 'cuenta_cobro')
+
+    const total = Math.round(data.total)
+    const totalNeto = total - retencion
 
     return tx
       .insert(cuentasCobro)
       .values({
         numero,
         contratoId: data.contratoId,
-        total: data.total,
+        total,
         retencion,
         totalNeto,
         estado: 'pendiente',

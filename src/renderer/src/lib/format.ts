@@ -45,10 +45,10 @@ export function formatFechaRelativa(iso: string): string {
   const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24))
 
   if (diffDias === 0) return 'Hoy'
-  if (diffDias === 1) return 'Manana'
+  if (diffDias === 1) return 'Mañana'
   if (diffDias === -1) return 'Ayer'
-  if (diffDias > 1 && diffDias <= 7) return `En ${diffDias} dias`
-  if (diffDias < -1 && diffDias >= -7) return `Hace ${Math.abs(diffDias)} dias`
+  if (diffDias > 1 && diffDias <= 7) return `En ${diffDias} días`
+  if (diffDias < -1 && diffDias >= -7) return `Hace ${Math.abs(diffDias)} días`
   return formatFechaCorta(iso)
 }
 
@@ -61,11 +61,13 @@ export function diasRestantes(iso: string): number {
 }
 
 export function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export function mesActualISO(): string {
-  return new Date().toISOString().slice(0, 7)
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 // ---- Phone ----

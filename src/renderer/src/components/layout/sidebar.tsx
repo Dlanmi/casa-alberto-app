@@ -212,12 +212,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
           <button
             onClick={() => navigate('/configuracion')}
             className={cn(
-              'w-full flex items-center gap-2 rounded-sm px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-colors',
+              'w-full flex items-center gap-2 rounded-sm px-3 py-2 text-xs font-medium cursor-pointer transition-colors',
               backupColorClasses
             )}
             title={backupTooltipLabel}
           >
-            <HardDrive size={12} className="shrink-0" />
+            <HardDrive size={13} className="shrink-0" />
             <span className="truncate">{backupLabel}</span>
           </button>
         )}
@@ -233,8 +233,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
               </div>
             </Tooltip>
           ) : (
-            <div className="w-full flex items-center gap-2 rounded-sm px-3 py-1.5 text-[11px] font-medium text-success-strong bg-success-bg">
-              <Download size={12} className="shrink-0" />
+            <div className="w-full flex items-center gap-2 rounded-sm px-3 py-2 text-xs font-medium text-success-strong bg-success-bg">
+              <Download size={13} className="shrink-0" />
               <span className="truncate">v{updateStatus.version} lista</span>
             </div>
           ))}

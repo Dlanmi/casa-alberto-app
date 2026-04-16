@@ -116,7 +116,12 @@ export type Pago = typeof pagos.$inferSelect
 export type Devolucion = typeof devoluciones.$inferSelect
 export type Clase = typeof clases.$inferSelect
 export type Estudiante = typeof estudiantes.$inferSelect
-export type PagoClase = typeof pagosClases.$inferSelect
+export type PagoClase = typeof pagosClases.$inferSelect & {
+  // Añadido por `listarPagosMes`: suma de los detalles de pago del mes.
+  // Opcional porque `obtenerPagoClaseConDetalles` devuelve el pago sin esta
+  // proyección (ya trae la lista completa de detalles).
+  totalPagado?: number
+}
 export type PagoClaseDetalle = typeof pagosClasesDetalle.$inferSelect
 export type VentaKit = typeof ventasKits.$inferSelect
 export type Asistencia = typeof asistencias.$inferSelect

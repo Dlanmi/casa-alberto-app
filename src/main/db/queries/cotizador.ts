@@ -114,6 +114,11 @@ export function calcularPrecioVidrio(
   altoCm: number,
   precioM2: number
 ): { anchoRedondeado: number; altoRedondeado: number; areaM2: number; precio: number } {
+  validarMedida(anchoCm, 'El ancho')
+  validarMedida(altoCm, 'El alto')
+  if (!Number.isFinite(precioM2) || precioM2 < 0) {
+    throw new Error('El precio por m² debe ser un valor no negativo')
+  }
   const anchoRedondeado = redondearArriba10(anchoCm)
   const altoRedondeado = redondearArriba10(altoCm)
   const areaM2 = (anchoRedondeado * altoRedondeado) / 10000
@@ -412,10 +417,11 @@ export function cotizarEnmarcacionPaspartu(
 export type InputAcolchado = {
   anchoCm: number
   altoCm: number
+  muestraMarcoId?: number | null
   porcentajeMateriales?: number
 }
 
-export function cotizarAcolchado(_db: DB, input: InputAcolchado): ResultadoCotizacion {
+export function cotizarAcolchado(db: DB, input: InputAcolchado): ResultadoCotizacion {
   const precio = calcularPrecioAcolchado(input.anchoCm, input.altoCm)
   const items: CotizacionItem[] = [
     {
@@ -426,6 +432,35 @@ export function cotizarAcolchado(_db: DB, input: InputAcolchado): ResultadoCotiz
       subtotal: precio
     }
   ]
+
+  // Fase 2 §A.5 — combinaciones posibles: acolchado + marco opcional.
+  // Cuando hay marco, agregamos el ítem calculado con la fórmula oficial
+  // para que el acolchado combinado use la MISMA lógica del backend
+  // (sin duplicar cálculos en el renderer).
+  if (input.muestraMarcoId) {
+    const marco = obtenerMuestraMarco(db, input.muestraMarcoId)
+    if (!marco) throw new Error(`Muestra de marco ${input.muestraMarcoId} no encontrada`)
+    const calcMarco = calcularPrecioMarco(
+      input.anchoCm,
+      input.altoCm,
+      marco.colillaCm,
+      marco.precioMetro
+    )
+    items.push({
+      tipoItem: 'marco',
+      descripcion: `Marco ${marco.referencia}`,
+      referencia: marco.referencia,
+      cantidad: 1,
+      precioUnitario: marco.precioMetro,
+      subtotal: calcMarco.precio,
+      metadata: {
+        perimetroCm: calcMarco.perimetroCm,
+        colillaCm: marco.colillaCm,
+        metros: calcMarco.metros
+      }
+    })
+  }
+
   return finalizarCotizacion(items, input.porcentajeMateriales ?? 10)
 }
 
@@ -436,6 +471,8 @@ export type InputLookupMedida = {
 }
 
 export function cotizarRetablo(db: DB, input: InputLookupMedida): ResultadoCotizacion {
+  validarMedida(input.anchoCm, 'El ancho')
+  validarMedida(input.altoCm, 'El alto')
   const p = obtenerPrecioRetablo(db, input.anchoCm, input.altoCm)
   if (!p) throw new Error(`Sin precio de retablo para ${input.anchoCm}x${input.altoCm}cm`)
   return finalizarCotizacion(
@@ -453,6 +490,8 @@ export function cotizarRetablo(db: DB, input: InputLookupMedida): ResultadoCotiz
 }
 
 export function cotizarBastidor(db: DB, input: InputLookupMedida): ResultadoCotizacion {
+  validarMedida(input.anchoCm, 'El ancho')
+  validarMedida(input.altoCm, 'El alto')
   const p = obtenerPrecioBastidor(db, input.anchoCm, input.altoCm)
   if (!p) throw new Error(`Sin precio de bastidor para ${input.anchoCm}x${input.altoCm}cm`)
   return finalizarCotizacion(
@@ -469,7 +508,62 @@ export function cotizarBastidor(db: DB, input: InputLookupMedida): ResultadoCoti
   )
 }
 
+// Fase 2 §A.8 — Vidrios y espejos a domicilio.
+// Mismo cálculo que calcularPrecioVidrio (redondeo a múltiplos de 10)
+// + costo de instalación opcional. NO suma materiales adicionales: los
+// contratos de vidrio/espejo no los llevan según Fase 2.
+export type InputVidrioEspejo = {
+  anchoCm: number
+  altoCm: number
+  tipoVidrio: TipoVidrioLista
+  precioInstalacion?: number
+  descripcion?: string | null
+}
+
+export function cotizarVidrioEspejo(db: DB, input: InputVidrioEspejo): ResultadoCotizacion {
+  const pv = obtenerPrecioVidrio(db, input.tipoVidrio)
+  if (!pv) throw new Error(`Precio de vidrio '${input.tipoVidrio}' no configurado`)
+  const calc = calcularPrecioVidrio(input.anchoCm, input.altoCm, pv.precioM2)
+
+  const items: CotizacionItem[] = [
+    {
+      tipoItem: 'vidrio',
+      descripcion:
+        input.descripcion || `Vidrio ${input.tipoVidrio} ${input.anchoCm}x${input.altoCm}cm`,
+      cantidad: 1,
+      precioUnitario: pv.precioM2,
+      subtotal: calc.precio,
+      metadata: {
+        anchoRedondeado: calc.anchoRedondeado,
+        altoRedondeado: calc.altoRedondeado,
+        areaM2: calc.areaM2
+      }
+    }
+  ]
+
+  const instalacion = Math.max(0, Math.round(input.precioInstalacion ?? 0))
+  if (instalacion > 0) {
+    items.push({
+      tipoItem: 'instalacion',
+      descripcion: 'Instalación a domicilio',
+      cantidad: 1,
+      precioUnitario: instalacion,
+      subtotal: instalacion
+    })
+  }
+
+  const subtotal = items.reduce((acc, it) => acc + it.subtotal, 0)
+  return {
+    items,
+    subtotal,
+    totalMateriales: 0,
+    precioTotal: subtotal
+  }
+}
+
 export function cotizarTapa(db: DB, input: InputLookupMedida): ResultadoCotizacion {
+  validarMedida(input.anchoCm, 'El ancho')
+  validarMedida(input.altoCm, 'El alto')
   const p = obtenerPrecioTapa(db, input.anchoCm, input.altoCm)
   if (!p) throw new Error(`Sin precio de tapa para ${input.anchoCm}x${input.altoCm}cm`)
   return finalizarCotizacion(

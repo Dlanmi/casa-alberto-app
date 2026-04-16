@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm'
 import type { DB } from '../index'
 import {
+  acudientes,
   asistencias,
   clases,
   estudiantes,
@@ -57,6 +58,17 @@ export function obtenerEstudiante(db: DB, id: number) {
 }
 
 export function crearEstudiante(db: DB, data: NuevoEstudiante) {
+  // Fase 2 §C.1 / §D — si el estudiante es menor de edad, exigimos que el
+  // cliente asociado tenga un acudiente con nombre y teléfono. Así evitamos
+  // registros incompletos de clases con menores.
+  if (data.esMenor) {
+    const acu = db.select().from(acudientes).where(eq(acudientes.clienteId, data.clienteId)).get()
+    if (!acu || !acu.nombre.trim() || !acu.telefono.trim()) {
+      throw new Error(
+        'Para registrar un estudiante menor de edad primero debes añadir el acudiente (nombre y teléfono) en el cliente.'
+      )
+    }
+  }
   return db
     .insert(estudiantes)
     .values({
@@ -94,6 +106,9 @@ export type NuevoPagoClase = {
 
 export function registrarPagoClase(db: DB, data: NuevoPagoClase) {
   return db.transaction((tx) => {
+    if (!Number.isFinite(data.monto) || data.monto <= 0) {
+      throw new Error('El monto del pago debe ser mayor a 0')
+    }
     const precioMensual = getConfigNumber(tx as unknown as DB, 'precio_clase_mensual', 0)
 
     let pagoClase = tx
@@ -113,6 +128,17 @@ export function registrarPagoClase(db: DB, data: NuevoPagoClase) {
         })
         .returning()
         .get()
+    }
+
+    // Validar que el pago no exceda el saldo pendiente del mes.
+    const yaPagado = tx
+      .select({ sum: sql<number>`coalesce(sum(${pagosClasesDetalle.monto}), 0)` })
+      .from(pagosClasesDetalle)
+      .where(eq(pagosClasesDetalle.pagoClaseId, pagoClase.id))
+      .get()
+    const saldo = pagoClase.valorTotal - (yaPagado?.sum ?? 0)
+    if (data.monto > saldo) {
+      throw new Error(`El monto (${data.monto}) excede el saldo pendiente del mes (${saldo}).`)
     }
 
     const detalle = tx
@@ -162,7 +188,28 @@ export function registrarPagoClase(db: DB, data: NuevoPagoClase) {
 }
 
 export function listarPagosMes(db: DB, mes: string) {
-  return db.select().from(pagosClases).where(eq(pagosClases.mes, mes)).all()
+  // Devolvemos el pago mensual enriquecido con `totalPagado` (suma de los
+  // detalles) para que la UI pueda dibujar la barra de progreso real sin
+  // tener que hacer N+1 round-trips.
+  const rows = db
+    .select({
+      id: pagosClases.id,
+      estudianteId: pagosClases.estudianteId,
+      mes: pagosClases.mes,
+      valorTotal: pagosClases.valorTotal,
+      estado: pagosClases.estado,
+      createdAt: pagosClases.createdAt,
+      updatedAt: pagosClases.updatedAt,
+      totalPagado: sql<number>`coalesce((
+        select sum(${pagosClasesDetalle.monto})
+        from ${pagosClasesDetalle}
+        where ${pagosClasesDetalle.pagoClaseId} = ${pagosClases.id}
+      ), 0)`.as('total_pagado')
+    })
+    .from(pagosClases)
+    .where(eq(pagosClases.mes, mes))
+    .all()
+  return rows
 }
 
 /**
@@ -233,7 +280,13 @@ export type NuevaVentaKit = {
 
 export function venderKit(db: DB, data: NuevaVentaKit) {
   return db.transaction((tx) => {
+    if (!data.estudianteId && !data.clienteId) {
+      throw new Error('Selecciona el estudiante o el cliente que recibe el kit')
+    }
     const precio = data.precio ?? getConfigNumber(tx as unknown as DB, 'precio_kit_dibujo', 0)
+    if (!Number.isFinite(precio) || precio < 0) {
+      throw new Error('El precio del kit no puede ser negativo')
+    }
     const venta = tx
       .insert(ventasKits)
       .values({

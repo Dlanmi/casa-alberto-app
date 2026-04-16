@@ -6,6 +6,7 @@ import { Input } from '@renderer/components/ui/input'
 import { StepDots } from '@renderer/components/ui/step-dots'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
+import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { PrecioPanel } from '../precio-panel'
 import { StepMedidas } from './step-medidas'
 import { StepMarco } from './step-marco'
@@ -194,52 +195,15 @@ export function WizardShell({
             porcentajeMateriales: data.porcentajeMateriales
           })) as IpcResult<ResultadoCotizacion>
         } else if (tipoTrabajo === 'acolchado') {
-          const acolchadoResult = (await window.api.cotizador.acolchado({
+          // Fase 2 §A.5 — acolchado puede combinarse con marco opcional.
+          // El backend hace la suma y aplica materiales adicionales con la
+          // misma lógica que el resto del cotizador (clamp 5-10% + redondeo).
+          result = (await window.api.cotizador.acolchado({
             anchoCm: data.anchoCm,
             altoCm: data.altoCm,
+            muestraMarcoId: data.muestraMarcoId,
             porcentajeMateriales: data.porcentajeMateriales
           })) as IpcResult<ResultadoCotizacion>
-
-          if (data.muestraMarcoId) {
-            const marcoResult = (await window.api.cotizador.enmarcacionEstandar({
-              anchoCm: data.anchoCm,
-              altoCm: data.altoCm,
-              muestraMarcoId: data.muestraMarcoId,
-              tipoVidrio: 'ninguno',
-              porcentajeMateriales: 0
-            })) as IpcResult<ResultadoCotizacion>
-
-            if (acolchadoResult.ok && marcoResult.ok) {
-              const allItems = [
-                ...acolchadoResult.data.items.filter(
-                  (item) => item.tipoItem !== 'materiales_adicionales'
-                ),
-                ...marcoResult.data.items.filter(
-                  (item) => item.tipoItem !== 'materiales_adicionales'
-                )
-              ]
-              const subtotal = allItems.reduce((sum, item) => sum + item.subtotal, 0)
-              const materiales = subtotal * (data.porcentajeMateriales / 100)
-
-              allItems.push({
-                tipoItem: 'materiales_adicionales',
-                descripcion: `Materiales adicionales (${data.porcentajeMateriales}%)`,
-                subtotal: materiales,
-                cantidad: 1,
-                precioUnitario: null
-              })
-
-              setCotizacion({
-                items: allItems,
-                subtotal,
-                totalMateriales: materiales,
-                precioTotal: subtotal + materiales
-              })
-              return
-            }
-          }
-
-          result = acolchadoResult
         } else if (tipoTrabajo === 'retablo') {
           result = (await window.api.cotizador.retablo({
             anchoCm: data.anchoCm,
@@ -259,45 +223,16 @@ export function WizardShell({
             porcentajeMateriales: data.porcentajeMateriales
           })) as IpcResult<ResultadoCotizacion>
         } else if (tipoTrabajo === 'vidrio_espejo') {
-          const vidrioResult = (await window.api.cotizador.enmarcacionEstandar({
+          // Fase 2 §A.8 — vidrio/espejo a domicilio usa el mismo redondeo 10→10
+          // + instalación opcional. Endpoint dedicado para evitar depender de
+          // una muestra de marco inexistente.
+          result = (await window.api.cotizador.vidrioEspejo({
             anchoCm: data.anchoCm,
             altoCm: data.altoCm,
-            muestraMarcoId: 1,
             tipoVidrio: data.tipoVidrioEspejo,
-            porcentajeMateriales: 0
+            precioInstalacion: data.precioInstalacion,
+            descripcion: data.descripcionManual || null
           })) as IpcResult<ResultadoCotizacion>
-
-          if (vidrioResult.ok) {
-            const vidrioItem = vidrioResult.data.items.find((item) => item.tipoItem === 'vidrio')
-
-            if (vidrioItem) {
-              const items: ResultadoCotizacion['items'] = [
-                {
-                  ...vidrioItem,
-                  descripcion:
-                    data.descripcionManual ||
-                    `Vidrio ${data.tipoVidrioEspejo} ${data.anchoCm}x${data.altoCm}`
-                }
-              ]
-              let total = vidrioItem.subtotal
-
-              if (data.precioInstalacion > 0) {
-                items.push({
-                  tipoItem: 'instalacion',
-                  descripcion: 'Instalación a domicilio',
-                  subtotal: data.precioInstalacion,
-                  precioUnitario: data.precioInstalacion,
-                  cantidad: 1
-                })
-                total += data.precioInstalacion
-              }
-
-              setCotizacion({ items, subtotal: total, totalMateriales: 0, precioTotal: total })
-              return
-            }
-          }
-
-          return
         } else {
           return
         }
@@ -392,11 +327,17 @@ export function WizardShell({
         </div>
       </div>
 
-      <div className="flex gap-6">
-        <div className="flex-1 min-w-0">
-          {/* AGENT_UX: Indicador de pasos como dots conectados. Reemplaza
-              las pills por un stepper lineal con números, check verde al
-              completar, y líneas color accent entre pasos traversados. */}
+      {/* Barra compacta de precio — visible solo cuando el panel lateral
+          está oculto (pantallas < xl). Muestra el total en una línea. */}
+      {(cotizacion?.precioTotal ?? 0) > 0 && (
+        <div className="lg:hidden flex items-center justify-between rounded-lg border border-border bg-surface-muted px-4 py-3">
+          <span className="text-sm font-medium text-text">Total sugerido</span>
+          <PrecioDisplay value={cotizacion?.precioTotal ?? 0} size="lg" className="text-accent" />
+        </div>
+      )}
+
+      <div className="flex gap-6 lg:gap-8">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className="mb-6 px-2">
             <StepDots steps={[...visibleSteps]} current={step} onJump={(index) => setStep(index)} />
           </div>
@@ -462,7 +403,10 @@ export function WizardShell({
           </div>
         </div>
 
-        <div className="w-80 shrink-0 hidden xl:block">
+        {/* Panel de precio lateral — solo visible en pantallas anchas (xl: 1280px+)
+            para que el contenido del wizard tenga espacio suficiente. En pantallas
+            normales se muestra la barra compacta de arriba. */}
+        <div className="w-72 shrink-0 hidden lg:block">
           <PrecioPanel
             items={cotizacion?.items ?? []}
             subtotal={cotizacion?.subtotal ?? 0}

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, lte, not, or, sql, type SQL } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNull, lt, lte, not, or, sql, type SQL } from 'drizzle-orm'
 import type { DB } from '../index'
 import { generarConsecutivo } from '../consecutivos'
 import {
@@ -224,6 +224,22 @@ export function pedidosEntregaProxima(db: DB, diasLimite = 2) {
     .all()
 }
 
+export function pedidosPorRangoFecha(db: DB, desde: string, hasta: string) {
+  return db
+    .select()
+    .from(pedidos)
+    .innerJoin(clientes, eq(clientes.id, pedidos.clienteId))
+    .where(
+      and(
+        gte(pedidos.fechaEntrega, desde),
+        lte(pedidos.fechaEntrega, hasta),
+        not(inArray(pedidos.estado, ESTADOS_TERMINALES))
+      )
+    )
+    .orderBy(pedidos.fechaEntrega)
+    .all()
+}
+
 export function pedidosSinAbono(db: DB) {
   // Pedidos con factura pero sin pagos registrados (saldo total = factura.total).
   const rows = db
@@ -245,14 +261,22 @@ export function pedidosSinAbono(db: DB) {
 }
 
 export function pedidosSinReclamar(db: DB, diasLimite = 15) {
+  // Ejecuta la reclasificación automática primero (listo→sin_reclamar al pasar
+  // el umbral). Luego devuelve todos los pedidos ya marcados como sin_reclamar
+  // más cualquier pedido en estado listo que lleve más de `diasLimite` días
+  // (defensivo por si el umbral aquí difiere del usado en reclasificarPedidos).
+  reclasificarPedidos(db, diasLimite)
   return db
     .select()
     .from(pedidos)
     .innerJoin(clientes, eq(clientes.id, pedidos.clienteId))
     .where(
-      and(
-        eq(pedidos.estado, 'listo'),
-        sql`julianday('now') - julianday(${pedidos.updatedAt}) > ${sql.raw(String(diasLimite))}`
+      or(
+        eq(pedidos.estado, 'sin_reclamar'),
+        and(
+          eq(pedidos.estado, 'listo'),
+          sql`julianday('now') - julianday(${pedidos.updatedAt}) > ${sql.raw(String(diasLimite))}`
+        )
       )
     )
     .orderBy(pedidos.updatedAt)

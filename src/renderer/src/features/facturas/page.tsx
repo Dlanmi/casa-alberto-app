@@ -13,6 +13,7 @@ import { Select } from '@renderer/components/ui/select'
 import { Tabs } from '@renderer/components/ui/tabs'
 import { Table, Thead, Tbody, Tr, Th, Td } from '@renderer/components/ui/table'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { CashRegisterIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
@@ -151,6 +152,9 @@ export default function FacturasPage(): React.JSX.Element {
         {filtered.length === 0 ? (
           <EmptyState
             icon={Receipt}
+            illustration={
+              !search && tab === 'todas' ? <CashRegisterIllustration size={140} /> : undefined
+            }
             title={search || tab !== 'todas' ? 'Sin resultados' : 'No hay facturas'}
             description="Cuando tengas un pedido confirmado, en proceso o listo, podrás crear la factura desde aquí."
           />

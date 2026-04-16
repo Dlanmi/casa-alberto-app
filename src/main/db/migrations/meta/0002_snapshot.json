@@ -62,9 +62,7 @@
       "indexes": {
         "acudientes_cliente_id_unique": {
           "name": "acudientes_cliente_id_unique",
-          "columns": [
-            "cliente_id"
-          ],
+          "columns": ["cliente_id"],
           "isUnique": true
         }
       },
@@ -73,12 +71,8 @@
           "name": "acudientes_cliente_id_clientes_id_fk",
           "tableFrom": "acudientes",
           "tableTo": "clientes",
-          "columnsFrom": [
-            "cliente_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cliente_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -145,18 +139,12 @@
       "indexes": {
         "idx_asistencias_estudiante_fecha": {
           "name": "idx_asistencias_estudiante_fecha",
-          "columns": [
-            "estudiante_id",
-            "fecha"
-          ],
+          "columns": ["estudiante_id", "fecha"],
           "isUnique": false
         },
         "idx_asistencias_clase_fecha": {
           "name": "idx_asistencias_clase_fecha",
-          "columns": [
-            "clase_id",
-            "fecha"
-          ],
+          "columns": ["clase_id", "fecha"],
           "isUnique": false
         }
       },
@@ -165,12 +153,8 @@
           "name": "asistencias_estudiante_id_estudiantes_id_fk",
           "tableFrom": "asistencias",
           "tableTo": "estudiantes",
-          "columnsFrom": [
-            "estudiante_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["estudiante_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -178,12 +162,8 @@
           "name": "asistencias_clase_id_clases_id_fk",
           "tableFrom": "asistencias",
           "tableTo": "clases",
-          "columnsFrom": [
-            "clase_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clase_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -349,30 +329,22 @@
       "indexes": {
         "clientes_cedula_unique": {
           "name": "clientes_cedula_unique",
-          "columns": [
-            "cedula"
-          ],
+          "columns": ["cedula"],
           "isUnique": true
         },
         "idx_clientes_nombre": {
           "name": "idx_clientes_nombre",
-          "columns": [
-            "nombre"
-          ],
+          "columns": ["nombre"],
           "isUnique": false
         },
         "idx_clientes_cedula": {
           "name": "idx_clientes_cedula",
-          "columns": [
-            "cedula"
-          ],
+          "columns": ["cedula"],
           "isUnique": false
         },
         "idx_clientes_telefono": {
           "name": "idx_clientes_telefono",
-          "columns": [
-            "telefono"
-          ],
+          "columns": ["telefono"],
           "isUnique": false
         }
       },
@@ -416,9 +388,7 @@
       "indexes": {
         "configuracion_clave_unique": {
           "name": "configuracion_clave_unique",
-          "columns": [
-            "clave"
-          ],
+          "columns": ["clave"],
           "isUnique": true
         }
       },
@@ -488,12 +458,8 @@
           "name": "contrato_items_contrato_id_contratos_id_fk",
           "tableFrom": "contrato_items",
           "tableTo": "contratos",
-          "columnsFrom": [
-            "contrato_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contrato_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -603,31 +569,22 @@
       "indexes": {
         "contratos_numero_unique": {
           "name": "contratos_numero_unique",
-          "columns": [
-            "numero"
-          ],
+          "columns": ["numero"],
           "isUnique": true
         },
         "idx_contratos_numero": {
           "name": "idx_contratos_numero",
-          "columns": [
-            "numero"
-          ],
+          "columns": ["numero"],
           "isUnique": false
         },
         "idx_contratos_cliente": {
           "name": "idx_contratos_cliente",
-          "columns": [
-            "cliente_id"
-          ],
+          "columns": ["cliente_id"],
           "isUnique": false
         },
         "idx_contratos_estado_fecha": {
           "name": "idx_contratos_estado_fecha",
-          "columns": [
-            "estado",
-            "fecha"
-          ],
+          "columns": ["estado", "fecha"],
           "isUnique": false
         }
       },
@@ -636,12 +593,8 @@
           "name": "contratos_cliente_id_clientes_id_fk",
           "tableFrom": "contratos",
           "tableTo": "clientes",
-          "columnsFrom": [
-            "cliente_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cliente_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -728,9 +681,7 @@
       "indexes": {
         "cuentas_cobro_numero_unique": {
           "name": "cuentas_cobro_numero_unique",
-          "columns": [
-            "numero"
-          ],
+          "columns": ["numero"],
           "isUnique": true
         }
       },
@@ -739,12 +690,8 @@
           "name": "cuentas_cobro_contrato_id_contratos_id_fk",
           "tableFrom": "cuentas_cobro",
           "tableTo": "contratos",
-          "columnsFrom": [
-            "contrato_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contrato_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -811,12 +758,8 @@
           "name": "devoluciones_factura_id_facturas_id_fk",
           "tableFrom": "devoluciones",
           "tableTo": "facturas",
-          "columnsFrom": [
-            "factura_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["factura_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -897,9 +840,7 @@
       "indexes": {
         "idx_estudiantes_cliente": {
           "name": "idx_estudiantes_cliente",
-          "columns": [
-            "cliente_id"
-          ],
+          "columns": ["cliente_id"],
           "isUnique": false
         }
       },
@@ -908,12 +849,8 @@
           "name": "estudiantes_cliente_id_clientes_id_fk",
           "tableFrom": "estudiantes",
           "tableTo": "clientes",
-          "columnsFrom": [
-            "cliente_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cliente_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -921,12 +858,8 @@
           "name": "estudiantes_clase_id_clases_id_fk",
           "tableFrom": "estudiantes",
           "tableTo": "clases",
-          "columnsFrom": [
-            "clase_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clase_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1022,37 +955,27 @@
       "indexes": {
         "facturas_numero_unique": {
           "name": "facturas_numero_unique",
-          "columns": [
-            "numero"
-          ],
+          "columns": ["numero"],
           "isUnique": true
         },
         "idx_facturas_numero": {
           "name": "idx_facturas_numero",
-          "columns": [
-            "numero"
-          ],
+          "columns": ["numero"],
           "isUnique": false
         },
         "idx_facturas_cliente": {
           "name": "idx_facturas_cliente",
-          "columns": [
-            "cliente_id"
-          ],
+          "columns": ["cliente_id"],
           "isUnique": false
         },
         "idx_facturas_pedido": {
           "name": "idx_facturas_pedido",
-          "columns": [
-            "pedido_id"
-          ],
+          "columns": ["pedido_id"],
           "isUnique": false
         },
         "idx_facturas_estado": {
           "name": "idx_facturas_estado",
-          "columns": [
-            "estado"
-          ],
+          "columns": ["estado"],
           "isUnique": false
         }
       },
@@ -1061,12 +984,8 @@
           "name": "facturas_pedido_id_pedidos_id_fk",
           "tableFrom": "facturas",
           "tableTo": "pedidos",
-          "columnsFrom": [
-            "pedido_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["pedido_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1074,12 +993,8 @@
           "name": "facturas_cliente_id_clientes_id_fk",
           "tableFrom": "facturas",
           "tableTo": "clientes",
-          "columnsFrom": [
-            "cliente_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cliente_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1150,17 +1065,12 @@
       "indexes": {
         "idx_historial_registro": {
           "name": "idx_historial_registro",
-          "columns": [
-            "tabla",
-            "registro_id"
-          ],
+          "columns": ["tabla", "registro_id"],
           "isUnique": false
         },
         "idx_historial_fecha": {
           "name": "idx_historial_fecha",
-          "columns": [
-            "fecha"
-          ],
+          "columns": ["fecha"],
           "isUnique": false
         }
       },
@@ -1341,38 +1251,27 @@
       "indexes": {
         "idx_movfin_tipo": {
           "name": "idx_movfin_tipo",
-          "columns": [
-            "tipo"
-          ],
+          "columns": ["tipo"],
           "isUnique": false
         },
         "idx_movfin_categoria": {
           "name": "idx_movfin_categoria",
-          "columns": [
-            "categoria"
-          ],
+          "columns": ["categoria"],
           "isUnique": false
         },
         "idx_movfin_fecha": {
           "name": "idx_movfin_fecha",
-          "columns": [
-            "fecha"
-          ],
+          "columns": ["fecha"],
           "isUnique": false
         },
         "idx_movfin_referencia": {
           "name": "idx_movfin_referencia",
-          "columns": [
-            "referencia_tipo",
-            "referencia_id"
-          ],
+          "columns": ["referencia_tipo", "referencia_id"],
           "isUnique": false
         },
         "idx_movfin_proveedor": {
           "name": "idx_movfin_proveedor",
-          "columns": [
-            "proveedor_id"
-          ],
+          "columns": ["proveedor_id"],
           "isUnique": false
         }
       },
@@ -1381,12 +1280,8 @@
           "name": "movimientos_financieros_proveedor_id_proveedores_id_fk",
           "tableFrom": "movimientos_financieros",
           "tableTo": "proveedores",
-          "columnsFrom": [
-            "proveedor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["proveedor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1478,9 +1373,7 @@
       "indexes": {
         "idx_movinv_inventario": {
           "name": "idx_movinv_inventario",
-          "columns": [
-            "inventario_id"
-          ],
+          "columns": ["inventario_id"],
           "isUnique": false
         }
       },
@@ -1489,12 +1382,8 @@
           "name": "movimientos_inventario_inventario_id_inventario_id_fk",
           "tableFrom": "movimientos_inventario",
           "tableTo": "inventario",
-          "columnsFrom": [
-            "inventario_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inventario_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1502,12 +1391,8 @@
           "name": "movimientos_inventario_pedido_id_pedidos_id_fk",
           "tableFrom": "movimientos_inventario",
           "tableTo": "pedidos",
-          "columnsFrom": [
-            "pedido_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["pedido_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1515,12 +1400,8 @@
           "name": "movimientos_inventario_proveedor_id_proveedores_id_fk",
           "tableFrom": "movimientos_inventario",
           "tableTo": "proveedores",
-          "columnsFrom": [
-            "proveedor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["proveedor_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1600,16 +1481,12 @@
       "indexes": {
         "muestras_marcos_referencia_unique": {
           "name": "muestras_marcos_referencia_unique",
-          "columns": [
-            "referencia"
-          ],
+          "columns": ["referencia"],
           "isUnique": true
         },
         "idx_marcos_referencia": {
           "name": "idx_marcos_referencia",
-          "columns": [
-            "referencia"
-          ],
+          "columns": ["referencia"],
           "isUnique": false
         }
       },
@@ -1684,16 +1561,12 @@
       "indexes": {
         "idx_pagos_factura": {
           "name": "idx_pagos_factura",
-          "columns": [
-            "factura_id"
-          ],
+          "columns": ["factura_id"],
           "isUnique": false
         },
         "idx_pagos_fecha": {
           "name": "idx_pagos_fecha",
-          "columns": [
-            "fecha"
-          ],
+          "columns": ["fecha"],
           "isUnique": false
         }
       },
@@ -1702,12 +1575,8 @@
           "name": "pagos_factura_id_facturas_id_fk",
           "tableFrom": "pagos",
           "tableTo": "facturas",
-          "columnsFrom": [
-            "factura_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["factura_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1780,10 +1649,7 @@
       "indexes": {
         "idx_pagos_clases_estud_mes": {
           "name": "idx_pagos_clases_estud_mes",
-          "columns": [
-            "estudiante_id",
-            "mes"
-          ],
+          "columns": ["estudiante_id", "mes"],
           "isUnique": false
         }
       },
@@ -1792,12 +1658,8 @@
           "name": "pagos_clases_estudiante_id_estudiantes_id_fk",
           "tableFrom": "pagos_clases",
           "tableTo": "estudiantes",
-          "columnsFrom": [
-            "estudiante_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["estudiante_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1864,12 +1726,8 @@
           "name": "pagos_clases_detalle_pago_clase_id_pagos_clases_id_fk",
           "tableFrom": "pagos_clases_detalle",
           "tableTo": "pagos_clases",
-          "columnsFrom": [
-            "pago_clase_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["pago_clase_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1962,9 +1820,7 @@
       "indexes": {
         "idx_pedido_items_pedido": {
           "name": "idx_pedido_items_pedido",
-          "columns": [
-            "pedido_id"
-          ],
+          "columns": ["pedido_id"],
           "isUnique": false
         }
       },
@@ -1973,12 +1829,8 @@
           "name": "pedido_items_pedido_id_pedidos_id_fk",
           "tableFrom": "pedido_items",
           "tableTo": "pedidos",
-          "columnsFrom": [
-            "pedido_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["pedido_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2153,45 +2005,32 @@
       "indexes": {
         "pedidos_numero_unique": {
           "name": "pedidos_numero_unique",
-          "columns": [
-            "numero"
-          ],
+          "columns": ["numero"],
           "isUnique": true
         },
         "idx_pedidos_numero": {
           "name": "idx_pedidos_numero",
-          "columns": [
-            "numero"
-          ],
+          "columns": ["numero"],
           "isUnique": false
         },
         "idx_pedidos_cliente": {
           "name": "idx_pedidos_cliente",
-          "columns": [
-            "cliente_id"
-          ],
+          "columns": ["cliente_id"],
           "isUnique": false
         },
         "idx_pedidos_estado": {
           "name": "idx_pedidos_estado",
-          "columns": [
-            "estado"
-          ],
+          "columns": ["estado"],
           "isUnique": false
         },
         "idx_pedidos_fecha_entrega": {
           "name": "idx_pedidos_fecha_entrega",
-          "columns": [
-            "fecha_entrega"
-          ],
+          "columns": ["fecha_entrega"],
           "isUnique": false
         },
         "idx_pedidos_cliente_estado": {
           "name": "idx_pedidos_cliente_estado",
-          "columns": [
-            "cliente_id",
-            "estado"
-          ],
+          "columns": ["cliente_id", "estado"],
           "isUnique": false
         }
       },
@@ -2200,12 +2039,8 @@
           "name": "pedidos_cliente_id_clientes_id_fk",
           "tableFrom": "pedidos",
           "tableTo": "clientes",
-          "columnsFrom": [
-            "cliente_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cliente_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -2837,12 +2672,8 @@
           "name": "ventas_kits_estudiante_id_estudiantes_id_fk",
           "tableFrom": "ventas_kits",
           "tableTo": "estudiantes",
-          "columnsFrom": [
-            "estudiante_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["estudiante_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -2850,12 +2681,8 @@
           "name": "ventas_kits_cliente_id_clientes_id_fk",
           "tableFrom": "ventas_kits",
           "tableTo": "clientes",
-          "columnsFrom": [
-            "cliente_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cliente_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }

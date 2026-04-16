@@ -75,7 +75,7 @@ export function AppShell(): React.JSX.Element {
         <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((c) => !c)} />
         <div className="flex flex-col flex-1 min-w-0">
           <Topbar onOpenSearch={openSearch} />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 xl:p-8 scroll-smooth">
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 scroll-smooth">
             <Outlet />
           </main>
         </div>

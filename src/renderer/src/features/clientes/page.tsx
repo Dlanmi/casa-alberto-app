@@ -27,6 +27,7 @@ import { Badge } from '@renderer/components/ui/badge'
 import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { PeopleIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
@@ -151,6 +152,7 @@ export default function ClientesPage(): React.JSX.Element {
       {filtered.length === 0 ? (
         <EmptyState
           icon={Users}
+          illustration={!search ? <PeopleIllustration size={140} /> : undefined}
           title={search ? 'Sin resultados' : 'Tu directorio está vacío'}
           description={
             search
@@ -413,14 +415,14 @@ function DetailPanel({
             <div className="flex items-center gap-1">
               <button
                 onClick={onEdit}
-                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-sm text-text-soft hover:bg-surface-muted hover:text-accent-strong"
+                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-accent-strong transition-colors"
                 aria-label="Editar cliente"
               >
                 <Pencil size={18} />
               </button>
               <button
                 onClick={onClose}
-                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-sm text-text-soft hover:bg-surface-muted hover:text-text"
+                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
                 aria-label="Cerrar detalle"
               >
                 <X size={20} />

@@ -21,6 +21,7 @@ import { SearchInput } from '@renderer/components/ui/search-input'
 import { Tabs } from '@renderer/components/ui/tabs'
 import { Table, Thead, Tbody, Tr, Th, Td } from '@renderer/components/ui/table'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { CashRegisterIllustration } from '@renderer/components/illustrations'
 import { Tooltip } from '@renderer/components/ui/tooltip'
 import { MetricSkeleton, TableSkeleton } from '@renderer/components/ui/skeleton'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
@@ -181,11 +182,10 @@ export default function FinanzasPage(): React.JSX.Element {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
               onClick={() => setMes(shiftMonth(mes, -1))}
               aria-label="Mes anterior"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={18} />
             </Button>
             <span className="min-w-35 text-center text-sm font-medium text-text">
               {formatMesLabel(mes)}
@@ -193,12 +193,11 @@ export default function FinanzasPage(): React.JSX.Element {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
               onClick={() => setMes(shiftMonth(mes, 1))}
               disabled={isCurrentMonth}
               aria-label="Mes siguiente"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={18} />
             </Button>
           </div>
           {!isCurrentMonth && (
@@ -291,6 +290,7 @@ export default function FinanzasPage(): React.JSX.Element {
         {filteredMovimientos.length === 0 ? (
           <EmptyState
             icon={DollarSign}
+            illustration={!search ? <CashRegisterIllustration size={140} /> : undefined}
             title={search ? 'Sin resultados' : 'Sin movimientos este mes'}
             description={
               search

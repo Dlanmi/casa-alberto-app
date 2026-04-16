@@ -108,7 +108,7 @@ export function TipoTrabajoGrid({ onSelect, onManagePrecios }: Props): React.JSX
             </h2>
             <p className="mt-1 text-sm text-text-muted">{bloque.description}</p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {TIPOS.filter((item) => bloque.tipos.includes(item.tipo)).map((item) => {
               const Icon = item.icon
               return (

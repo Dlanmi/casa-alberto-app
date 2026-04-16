@@ -457,21 +457,21 @@ function ConfigRow({
               onKeyDown={handleKeyDown}
               autoFocus
               className={cn(
-                'h-10 w-48 rounded-md border border-border bg-surface px-3 text-sm text-text',
+                'h-11 w-48 rounded-md border border-border bg-surface px-3 text-sm text-text',
                 'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
               )}
             />
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-sm text-success-strong hover:bg-success-bg"
+              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-success-strong hover:bg-success-bg transition-colors"
               aria-label="Guardar"
             >
               <Check size={18} />
             </button>
             <button
               onClick={handleCancel}
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-sm text-text-soft hover:bg-surface-muted"
+              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
               aria-label="Cancelar"
             >
               <X size={18} />
@@ -480,7 +480,7 @@ function ConfigRow({
         ) : (
           <>
             {justSaved && (
-              <span className="text-xs text-success flex items-center gap-1">
+              <span className="text-xs text-success-strong flex items-center gap-1">
                 <Check size={14} />
                 Guardado
               </span>
@@ -490,7 +490,7 @@ function ConfigRow({
             </span>
             <button
               onClick={handleEdit}
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-sm text-text-soft hover:bg-surface-muted hover:text-text-muted"
+              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
               aria-label="Editar"
             >
               <Pencil size={16} />

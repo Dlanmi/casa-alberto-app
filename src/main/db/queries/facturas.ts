@@ -122,6 +122,9 @@ export function registrarPago(db: DB, data: NuevoPago) {
 
     const factura = tx.select().from(facturas).where(eq(facturas.id, data.facturaId)).get()
     if (!factura) throw new Error(`Factura ${data.facturaId} no encontrada`)
+    if (factura.estado === 'anulada') {
+      throw new Error('No se puede registrar un pago sobre una factura anulada.')
+    }
 
     const pedido = tx.select().from(pedidos).where(eq(pedidos.id, factura.pedidoId)).get()
     if (!pedido) throw new Error(`Pedido ${factura.pedidoId} no encontrado`)
@@ -200,8 +203,37 @@ export type NuevaDevolucion = {
 
 export function registrarDevolucion(db: DB, data: NuevaDevolucion) {
   return db.transaction((tx) => {
+    if (!Number.isFinite(data.monto) || data.monto <= 0) {
+      throw new Error('El monto de la devolución debe ser mayor a 0')
+    }
+    if (!data.motivo || data.motivo.trim() === '') {
+      throw new Error('La devolución requiere un motivo')
+    }
+
     const factura = tx.select().from(facturas).where(eq(facturas.id, data.facturaId)).get()
     if (!factura) throw new Error(`Factura ${data.facturaId} no encontrada`)
+    if (factura.estado === 'anulada') {
+      throw new Error('No se puede registrar una devolución sobre una factura anulada.')
+    }
+
+    // Una devolución no puede superar lo efectivamente cobrado al cliente
+    // (pagos menos devoluciones previas). Evita saldos negativos imposibles.
+    const prevPagos = tx
+      .select({ sum: sql<number>`coalesce(sum(${pagos.monto}), 0)` })
+      .from(pagos)
+      .where(eq(pagos.facturaId, data.facturaId))
+      .get()
+    const prevDev = tx
+      .select({ sum: sql<number>`coalesce(sum(${devoluciones.monto}), 0)` })
+      .from(devoluciones)
+      .where(eq(devoluciones.facturaId, data.facturaId))
+      .get()
+    const cobradoNeto = (prevPagos?.sum ?? 0) - (prevDev?.sum ?? 0)
+    if (data.monto > cobradoNeto) {
+      throw new Error(
+        `La devolución (${data.monto}) excede lo cobrado al cliente (${cobradoNeto}).`
+      )
+    }
 
     const dev = tx
       .insert(devoluciones)

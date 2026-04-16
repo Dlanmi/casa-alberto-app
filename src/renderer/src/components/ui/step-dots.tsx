@@ -16,7 +16,7 @@ type StepDotsProps = {
 
 export function StepDots({ steps, current, onJump, className }: StepDotsProps): React.JSX.Element {
   return (
-    <ol className={cn('flex w-full items-center', className)} aria-label="Progreso del asistente">
+    <ol className={cn('flex w-full items-center pt-3', className)} aria-label="Progreso del asistente">
       {steps.map((step, index) => {
         const done = index < current
         const active = index === current
@@ -29,11 +29,11 @@ export function StepDots({ steps, current, onJump, className }: StepDotsProps): 
             aria-current={active ? 'step' : undefined}
             aria-label={`Paso ${index + 1}: ${step.label}${done ? ' (completado)' : active ? ' (actual)' : ''}`}
             className={cn(
-              'relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all',
+              'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all',
               done && 'border-accent bg-accent text-white shadow-1',
               active &&
                 'border-accent bg-surface text-accent-strong ring-4 ring-accent/20 scale-110',
-              !done && !active && 'border-border-strong bg-surface text-text-soft',
+              !done && !active && 'border-border-strong bg-surface text-text-muted',
               clickable && 'cursor-pointer hover:scale-105',
               !clickable && 'cursor-default'
             )}
@@ -51,8 +51,8 @@ export function StepDots({ steps, current, onJump, className }: StepDotsProps): 
               {Dot}
               <span
                 className={cn(
-                  'text-center text-[11px] font-medium uppercase tracking-wider max-w-[90px]',
-                  active ? 'text-accent-strong' : done ? 'text-text' : 'text-text-soft'
+                  'text-center text-xs font-medium uppercase tracking-wider max-w-[90px]',
+                  active ? 'text-accent-strong' : done ? 'text-text' : 'text-text-muted'
                 )}
               >
                 {step.label}

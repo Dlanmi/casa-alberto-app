@@ -20,6 +20,7 @@ import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
 import { Table, Thead, Tbody, Tr, Th, Td } from '@renderer/components/ui/table'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { FrameIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { ClientePicker } from '@renderer/components/shared/cliente-picker'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
@@ -169,7 +170,7 @@ export default function ContratosPage(): React.JSX.Element {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Total"
           value={stats.total}
@@ -210,6 +211,7 @@ export default function ContratosPage(): React.JSX.Element {
         {filtered.length === 0 ? (
           <EmptyState
             icon={FileSignature}
+            illustration={!search ? <FrameIllustration size={140} /> : undefined}
             title={search ? 'Sin resultados' : 'Sin contratos'}
             description={
               search
@@ -405,7 +407,8 @@ function DetailPanel({
             </div>
             <button
               onClick={onClose}
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-sm text-text-soft hover:bg-surface-muted hover:text-text-muted"
+              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
+              aria-label="Cerrar detalle"
             >
               <X size={20} />
             </button>
@@ -771,9 +774,10 @@ function CreateContratoModal({
                   type="button"
                   onClick={() => removeItem(item.key)}
                   className={cn(
-                    'flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-sm text-text-soft hover:bg-error-bg hover:text-error',
+                    'flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-error-bg hover:text-error transition-colors',
                     items.length <= 1 && 'opacity-30 pointer-events-none'
                   )}
+                  aria-label="Eliminar item"
                 >
                   <Trash2 size={16} />
                 </button>

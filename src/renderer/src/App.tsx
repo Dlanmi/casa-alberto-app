@@ -3,6 +3,7 @@ import { ToastProvider } from '@renderer/contexts/toast-context'
 import { AppShell } from '@renderer/components/layout/app-shell'
 import { AppRouteError } from '@renderer/components/layout/app-route-error'
 import DashboardPage from '@renderer/features/dashboard/page'
+import AgendaPage from '@renderer/features/agenda/page'
 import CotizadorPage from '@renderer/features/cotizador/page'
 import PedidosPage from '@renderer/features/pedidos/page'
 import FacturasPage from '@renderer/features/facturas/page'
@@ -22,6 +23,7 @@ const router = createHashRouter([
     errorElement: <AppRouteError />,
     children: [
       { index: true, element: <DashboardPage /> },
+      { path: 'agenda', element: <AgendaPage /> },
       { path: 'cotizador', element: <CotizadorPage /> },
       { path: 'pedidos', element: <PedidosPage /> },
       { path: 'pedidos/:id', element: <PedidosPage /> },

@@ -12,6 +12,7 @@ import { Input } from '@renderer/components/ui/input'
 import { Select } from '@renderer/components/ui/select'
 import { Table, Thead, Tbody, Tr, Th, Td } from '@renderer/components/ui/table'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { WorkshopIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { cn } from '@renderer/lib/cn'
@@ -204,6 +205,7 @@ export default function InventarioPage(): React.JSX.Element {
       {enriched.length === 0 ? (
         <EmptyState
           icon={Package}
+          illustration={<WorkshopIllustration size={140} />}
           title="Sin materiales registrados"
           description="Registra los materiales que almacenas en el local para controlar el stock. Los marcos no van aquí porque se piden al proveedor."
           actionLabel="Nuevo material"

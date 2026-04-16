@@ -56,7 +56,7 @@ export function StepMarco({ data, onChange, marcos }: Props): React.JSX.Element 
       {/* AGENT_UX: Tarjetas de marco con icono Frame, referencia en mono,
           colilla como badge, precio destacado, checkmark redondeado en
           selección. Antes eran pure-text rows — ahora son escaneables. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-115 overflow-y-auto pr-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto pr-1">
         {filtered.map((marco) => {
           const selected = data.muestraMarcoId === marco.id
           return (

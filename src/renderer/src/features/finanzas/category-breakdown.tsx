@@ -74,7 +74,7 @@ export function CategoryBreakdown({
   if (ingresos.length === 0 && gastos.length === 0) return null
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-6 md:grid-cols-2">
       {ingresos.length > 0 && (
         <div className="space-y-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-soft">

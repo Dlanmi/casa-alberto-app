@@ -6,6 +6,7 @@ type EmptyStateProps = {
   icon: LucideIcon
   title: string
   description?: string
+  illustration?: React.ReactNode
   actionLabel?: string
   actionIcon?: LucideIcon
   onAction?: () => void
@@ -19,6 +20,7 @@ export function EmptyState({
   icon: Icon,
   title,
   description,
+  illustration,
   actionLabel,
   actionIcon: ActionIcon,
   onAction,
@@ -28,9 +30,13 @@ export function EmptyState({
   const CtaIcon = ActionIcon ?? Plus
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center rounded-lg border border-dashed border-border bg-surface-muted/70 animate-fade-in-up">
-      <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-surface shadow-1">
-        <Icon size={40} className="text-accent-strong" strokeWidth={1.5} aria-hidden="true" />
-      </div>
+      {illustration ? (
+        <div className="mb-5">{illustration}</div>
+      ) : (
+        <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-surface shadow-1">
+          <Icon size={40} className="text-accent-strong" strokeWidth={1.5} aria-hidden="true" />
+        </div>
+      )}
       <h3 className="text-lg font-semibold text-text mb-2">{title}</h3>
       {description && (
         <p className="text-sm text-text-muted max-w-[min(28rem,90%)] mb-6 leading-relaxed">

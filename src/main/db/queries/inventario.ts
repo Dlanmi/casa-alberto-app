@@ -20,11 +20,30 @@ export type NuevoInventarioItem = {
 
 export function listarInventario(db: DB, soloActivos = true) {
   const q = db.select().from(inventario)
-  if (soloActivos) return q.where(eq(inventario.activo, true)).orderBy(inventario.nombre).all()
-  return q.orderBy(inventario.nombre).all()
+  // Fase 2 §E.2 — los marcos NO se almacenan, se piden bajo demanda al
+  // proveedor. Filtramos cualquier registro legado que pudiera existir con
+  // tipo 'marco' para que no aparezca en la UI.
+  if (soloActivos) {
+    return q
+      .where(and(eq(inventario.activo, true), sql`${inventario.tipo} != 'marco'`))
+      .orderBy(inventario.nombre)
+      .all()
+  }
+  return q
+    .where(sql`${inventario.tipo} != 'marco'`)
+    .orderBy(inventario.nombre)
+    .all()
 }
 
 export function crearItemInventario(db: DB, data: NuevoInventarioItem) {
+  // Fase 2 §E.2 — los marcos se piden a Alberto/Edimol los lunes y miércoles.
+  // Nunca se almacenan, así que rechazamos explícitamente crear inventario
+  // de tipo 'marco' (aunque el enum lo incluye para compatibilidad histórica).
+  if (data.tipo === 'marco') {
+    throw new Error(
+      'Los marcos no se almacenan en inventario. Se piden al proveedor cuando entra el trabajo.'
+    )
+  }
   return db
     .insert(inventario)
     .values({

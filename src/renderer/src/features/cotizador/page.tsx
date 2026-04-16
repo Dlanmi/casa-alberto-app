@@ -18,24 +18,11 @@ export default function CotizadorPage(): React.JSX.Element {
 
   if (tipoTrabajo) {
     return (
-      <WorkflowScreen
-        title="Nueva cotización"
-        subtitle="Avanza paso a paso. Al final vinculas el cliente y conviertes en pedido."
-        secondaryActions={[
-          {
-            label: 'Cambiar tipo de trabajo',
-            onClick: () => setTipoTrabajo(null),
-            variant: 'ghost'
-          }
-        ]}
-        main={
-          <WizardShell
-            tipoTrabajo={tipoTrabajo}
-            onBack={() => setTipoTrabajo(null)}
-            cliente={cliente}
-            onClienteChange={setCliente}
-          />
-        }
+      <WizardShell
+        tipoTrabajo={tipoTrabajo}
+        onBack={() => setTipoTrabajo(null)}
+        cliente={cliente}
+        onClienteChange={setCliente}
       />
     )
   }

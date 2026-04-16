@@ -7,6 +7,7 @@ import { useIpc } from '@renderer/hooks/use-ipc'
 import { useToast } from '@renderer/contexts/toast-context'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { FrameIllustration } from '@renderer/components/illustrations'
 import { cn } from '@renderer/lib/cn'
 import { extractPedidoIds, type PedidoAlertaRow } from '@renderer/lib/pedidos-alertas'
 import { KanbanBoard } from './kanban-board'
@@ -238,7 +239,7 @@ export default function PedidosPage(): React.JSX.Element {
               </button>
             ))}
           </div>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
             <div className="min-w-0 flex-1">
               <SearchInput
                 value={search}
@@ -282,6 +283,7 @@ export default function PedidosPage(): React.JSX.Element {
       {(pedidos ?? []).length === 0 ? (
         <EmptyState
           icon={ClipboardList}
+          illustration={<FrameIllustration size={140} />}
           title="Aún no hay pedidos"
           description="Cuando hagas tu primera cotización y la confirmes, aparecerá aquí. Empieza creando una cotización."
           actionLabel="Ir al Cotizador"
@@ -307,6 +309,16 @@ export default function PedidosPage(): React.JSX.Element {
           pedido={selected}
           onClose={() => setSelected(null)}
           onChangeEstado={handleChangeEstado}
+          onPedidoUpdated={async () => {
+            refetch()
+            // Refresh the selected pedido so the panel shows updated data
+            const updated = (await window.api.pedidos.obtener(
+              selected.id
+            )) as IpcResult<Pedido | null>
+            if (updated.ok && updated.data) {
+              setSelected(updated.data)
+            }
+          }}
         />
       )}
     </OperationalBoard>

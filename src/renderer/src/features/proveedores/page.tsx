@@ -20,6 +20,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { WorkshopIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { DirectoryScreen, MetricCard, PageSection } from '@renderer/components/layout/page-frame'
 import { formatTelefono } from '@renderer/lib/format'
@@ -94,7 +95,7 @@ export default function ProveedoresPage(): React.JSX.Element {
         />
       }
     >
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3">
         <MetricCard
           label="Proveedores"
           value={stats.total}
@@ -128,17 +129,18 @@ export default function ProveedoresPage(): React.JSX.Element {
         {filtered.length === 0 ? (
           <EmptyState
             icon={Truck}
+            illustration={!search ? <WorkshopIllustration size={140} /> : undefined}
             title={search ? 'Sin resultados' : 'Sin proveedores registrados'}
             description={
               search
-                ? 'Intenta con otro termino o limpia el filtro.'
-                : 'Agrega tus proveedores de marcos, vidrios y materiales para tener su informacion siempre a la mano.'
+                ? 'Intenta con otro término o limpia el filtro.'
+                : 'Agrega tus proveedores de marcos, vidrios y materiales para tener su información siempre a la mano.'
             }
             actionLabel={!search ? 'Nuevo proveedor' : undefined}
             onAction={!search ? () => setShowModal(true) : undefined}
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((p) => (
               <Card
                 key={p.id}
@@ -249,14 +251,14 @@ function ProveedorDetailPanel({
             <div className="flex items-center gap-1">
               <button
                 onClick={onEdit}
-                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-sm text-text-soft hover:bg-surface-muted hover:text-accent-strong"
+                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-accent-strong transition-colors"
                 aria-label="Editar proveedor"
               >
                 <Pencil size={18} />
               </button>
               <button
                 onClick={onClose}
-                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-sm text-text-soft hover:bg-surface-muted hover:text-text"
+                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
                 aria-label="Cerrar detalle"
               >
                 <X size={20} />

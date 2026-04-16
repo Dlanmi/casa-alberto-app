@@ -44,6 +44,7 @@ import {
   cotizarEnmarcacionPaspartu,
   cotizarRetablo,
   cotizarTapa,
+  cotizarVidrioEspejo,
   listarMuestrasMarcos,
   obtenerMuestraMarco,
   crearMuestraMarco,
@@ -77,6 +78,7 @@ import {
   obtenerPedidoPorNumero,
   pedidosAtrasados,
   pedidosEntregaProxima,
+  pedidosPorRangoFecha,
   pedidosSinAbono,
   pedidosSinReclamar,
   reclasificarPedidos,
@@ -263,6 +265,7 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('cotizador:retablo', (_e, input) => wrap(cotizarRetablo)(db, input))
   ipcMain.handle('cotizador:bastidor', (_e, input) => wrap(cotizarBastidor)(db, input))
   ipcMain.handle('cotizador:tapa', (_e, input) => wrap(cotizarTapa)(db, input))
+  ipcMain.handle('cotizador:vidrioEspejo', (_e, input) => wrap(cotizarVidrioEspejo)(db, input))
 
   // pedidos
   ipcMain.handle('pedidos:listar', (_e, opts) => wrap(listarPedidos)(db, opts))
@@ -292,6 +295,9 @@ export function registerIpcHandlers(db: DB): void {
     wrap(obtenerMatrizUrgencia)(db, diasUrgencia)
   )
   ipcMain.handle('pedidos:reclasificar', () => wrap(reclasificarPedidos)(db))
+  ipcMain.handle('pedidos:porRangoFecha', (_e, desde: string, hasta: string) =>
+    wrap(pedidosPorRangoFecha)(db, desde, hasta)
+  )
 
   // facturas
   ipcMain.handle('facturas:crear', (_e, data) => wrap(crearFactura)(db, data))
@@ -370,10 +376,7 @@ export function registerIpcHandlers(db: DB): void {
 
   // pdf
   ipcMain.handle('pdf:generarFactura', (_e, data) => wrap(generarFacturaPDF)(db, data))
-  ipcMain.handle('pdf:abrir', (_e, filePath: string) => {
-    abrirPDF(filePath)
-    return { ok: true, data: null }
-  })
+  ipcMain.handle('pdf:abrir', (_e, filePath: string) => wrap(abrirPDF)(filePath))
 
   // excel
   ipcMain.handle('excel:exportarFinanzas', (_e, mes: string) =>

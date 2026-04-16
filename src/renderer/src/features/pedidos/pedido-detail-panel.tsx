@@ -1,5 +1,16 @@
 import { useState } from 'react'
-import { X, CreditCard, FileText, CheckCircle, Hammer, Package, Truck, Inbox } from 'lucide-react'
+import {
+  X,
+  CreditCard,
+  FileText,
+  CheckCircle,
+  Hammer,
+  Package,
+  Truck,
+  Inbox,
+  Calendar,
+  Check
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
@@ -47,12 +58,21 @@ type Props = {
   pedido: Pedido
   onClose: () => void
   onChangeEstado: (pedidoId: number, estado: EstadoPedido) => void
+  onPedidoUpdated?: () => void
 }
 
-export function PedidoDetailPanel({ pedido, onClose, onChangeEstado }: Props): React.JSX.Element {
+export function PedidoDetailPanel({
+  pedido,
+  onClose,
+  onChangeEstado,
+  onPedidoUpdated
+}: Props): React.JSX.Element {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [pagandoMonto, setPagandoMonto] = useState<number | null>(null)
+  const [editingFecha, setEditingFecha] = useState(false)
+  const [fechaInput, setFechaInput] = useState(pedido.fechaEntrega ?? '')
+  const [savingFecha, setSavingFecha] = useState(false)
   const nextEstado = NEXT_ESTADO[pedido.estado]
 
   // Fetch facturas for this pedido to find a linked factura
@@ -134,7 +154,7 @@ export function PedidoDetailPanel({ pedido, onClose, onChangeEstado }: Props): R
         </div>
         <button
           onClick={onClose}
-          className="h-10 w-10 flex items-center justify-center rounded-sm hover:bg-surface-muted text-text-soft cursor-pointer"
+          className="h-11 w-11 flex items-center justify-center rounded-md hover:bg-surface-muted text-text-muted hover:text-text cursor-pointer transition-colors"
           aria-label="Cerrar panel"
         >
           <X size={20} />
@@ -189,8 +209,8 @@ export function PedidoDetailPanel({ pedido, onClose, onChangeEstado }: Props): R
                       </div>
                       <span
                         className={cn(
-                          'max-w-15 text-center text-[10px] font-medium leading-tight',
-                          active ? 'text-accent-strong' : done ? 'text-text' : 'text-text-soft'
+                          'max-w-16 text-center text-[11px] font-medium leading-tight',
+                          active ? 'text-accent-strong' : done ? 'text-text' : 'text-text-muted'
                         )}
                       >
                         {stage.label}
@@ -239,12 +259,90 @@ export function PedidoDetailPanel({ pedido, onClose, onChangeEstado }: Props): R
               <span className="text-text-soft">Ingreso</span>
               <FechaDisplay fecha={pedido.fechaIngreso} />
             </div>
-            {pedido.fechaEntrega && (
-              <div className="flex justify-between">
-                <span className="text-text-soft">Entrega</span>
-                <FechaDisplay fecha={pedido.fechaEntrega} relative />
-              </div>
-            )}
+            {/* Fecha de entrega editable */}
+            <div className="flex justify-between items-center">
+              <span className="text-text-soft">Entrega</span>
+              {editingFecha ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={fechaInput}
+                    onChange={(e) => setFechaInput(e.target.value)}
+                    min={pedido.fechaIngreso}
+                    className="h-8 rounded-md border border-accent bg-surface px-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <button
+                    type="button"
+                    disabled={savingFecha}
+                    onClick={async () => {
+                      if (!fechaInput) return
+                      setSavingFecha(true)
+                      try {
+                        const result = (await window.api.pedidos.actualizarFechaEntrega(
+                          pedido.id,
+                          fechaInput
+                        )) as IpcResult<Pedido | null>
+                        if (result.ok) {
+                          showToast({
+                            tone: 'success',
+                            title: 'Fecha actualizada',
+                            message: `Entrega cambiada a ${new Date(fechaInput + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}.`
+                          })
+                          setEditingFecha(false)
+                          onPedidoUpdated?.()
+                        } else {
+                          showToast({
+                            tone: 'error',
+                            title: 'Error',
+                            message: result.error
+                          })
+                        }
+                      } catch {
+                        showToast({
+                          tone: 'error',
+                          title: 'Error',
+                          message: 'No se pudo actualizar la fecha'
+                        })
+                      } finally {
+                        setSavingFecha(false)
+                      }
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-white hover:bg-accent-hover cursor-pointer"
+                    aria-label="Guardar fecha"
+                  >
+                    {savingFecha ? <Spinner size="sm" /> : <Check size={14} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingFecha(false)
+                      setFechaInput(pedido.fechaEntrega ?? '')
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-text-soft hover:bg-surface-muted cursor-pointer"
+                    aria-label="Cancelar"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFechaInput(pedido.fechaEntrega ?? '')
+                    setEditingFecha(true)
+                  }}
+                  className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1 text-sm text-text-muted hover:border-accent hover:text-accent-strong cursor-pointer transition-colors"
+                  title="Clic para cambiar la fecha de entrega"
+                >
+                  {pedido.fechaEntrega ? (
+                    <FechaDisplay fecha={pedido.fechaEntrega} relative />
+                  ) : (
+                    <span className="text-text-soft italic">Sin fecha</span>
+                  )}
+                  <Calendar size={14} className="text-accent-strong" />
+                </button>
+              )}
+            </div>
             <div className="flex justify-between items-center">
               <span className="text-text-soft">Precio total</span>
               <PrecioDisplay value={pedido.precioTotal} />

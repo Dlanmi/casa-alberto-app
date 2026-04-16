@@ -97,14 +97,25 @@ const api = {
       invoke<IpcResult<ResultadoCotizacion>>('cotizador:enmarcacionEstandar', input),
     enmarcacionPaspartu: (input: InputEnmarcacionPaspartu) =>
       invoke<IpcResult<ResultadoCotizacion>>('cotizador:enmarcacionPaspartu', input),
-    acolchado: (input: { anchoCm: number; altoCm: number; porcentajeMateriales?: number }) =>
-      invoke<IpcResult<ResultadoCotizacion>>('cotizador:acolchado', input),
+    acolchado: (input: {
+      anchoCm: number
+      altoCm: number
+      muestraMarcoId?: number | null
+      porcentajeMateriales?: number
+    }) => invoke<IpcResult<ResultadoCotizacion>>('cotizador:acolchado', input),
     retablo: (input: { anchoCm: number; altoCm: number; porcentajeMateriales?: number }) =>
       invoke<IpcResult<ResultadoCotizacion>>('cotizador:retablo', input),
     bastidor: (input: { anchoCm: number; altoCm: number; porcentajeMateriales?: number }) =>
       invoke<IpcResult<ResultadoCotizacion>>('cotizador:bastidor', input),
     tapa: (input: { anchoCm: number; altoCm: number; porcentajeMateriales?: number }) =>
-      invoke<IpcResult<ResultadoCotizacion>>('cotizador:tapa', input)
+      invoke<IpcResult<ResultadoCotizacion>>('cotizador:tapa', input),
+    vidrioEspejo: (input: {
+      anchoCm: number
+      altoCm: number
+      tipoVidrio: 'claro' | 'antirreflectivo'
+      precioInstalacion?: number
+      descripcion?: string | null
+    }) => invoke<IpcResult<ResultadoCotizacion>>('cotizador:vidrioEspejo', input)
   },
   precios: {
     listarPaspartuPintado: () => invoke('precios:listarPaspartuPintado'),
@@ -143,7 +154,8 @@ const api = {
       entregaProxima: (dias?: number) => invoke('pedidos:alertas:entregaProxima', dias),
       sinAbono: () => invoke('pedidos:alertas:sinAbono'),
       sinReclamar: (dias?: number) => invoke('pedidos:alertas:sinReclamar', dias)
-    }
+    },
+    porRangoFecha: (desde: string, hasta: string) => invoke('pedidos:porRangoFecha', desde, hasta)
   },
   facturas: {
     crear: (data: NuevaFactura) => invoke<IpcResult<Factura>>('facturas:crear', data),

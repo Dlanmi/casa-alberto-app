@@ -22,6 +22,7 @@ import { Input } from '@renderer/components/ui/input'
 import { Select } from '@renderer/components/ui/select'
 import { Tabs } from '@renderer/components/ui/tabs'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { PaletteBrushIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
@@ -107,6 +108,22 @@ export default function ClasesPage(): React.JSX.Element {
     refetch: refetchPagos,
     error: errorPagos
   } = useIpc<PagoClase[]>(() => window.api.pagosClases.listarMes(mesActual), [mesActual])
+
+  // BR-012 / Fase 2 §D — los precios de la mensualidad y el kit viven en
+  // `configuracion`. No se pueden hardcodear en la UI porque el dueño los
+  // ajusta desde el módulo de Configuración. Si el usuario todavía no corrió
+  // el seed o el valor está en 0 usamos los valores base de Fase 2 como
+  // fallback razonable.
+  const { data: precioMensualCfg } = useIpc<number>(
+    () => window.api.configuracion.getNumber('precio_clase_mensual', 110000),
+    []
+  )
+  const { data: precioKitCfg } = useIpc<number>(
+    () => window.api.configuracion.getNumber('precio_kit_dibujo', 15000),
+    []
+  )
+  const precioMensual = precioMensualCfg && precioMensualCfg > 0 ? precioMensualCfg : 110000
+  const precioKit = precioKitCfg && precioKitCfg > 0 ? precioKitCfg : 15000
 
   const clienteMap = useMemo(() => {
     const map = new Map<number, string>()
@@ -253,7 +270,7 @@ export default function ClasesPage(): React.JSX.Element {
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               <MetricCard label="Clases" value={stats.totalClases} icon={BookOpen} />
               <MetricCard
                 label="Estudiantes"
@@ -286,6 +303,7 @@ export default function ClasesPage(): React.JSX.Element {
                 {!estudiantes || estudiantes.length === 0 ? (
                   <EmptyState
                     icon={Palette}
+                    illustration={<PaletteBrushIllustration size={140} />}
                     title="Sin estudiantes registrados"
                     description="Registra a tus estudiantes de dibujo para llevar el control de pagos y asistencia."
                     actionLabel="Nuevo estudiante"
@@ -453,7 +471,11 @@ export default function ClasesPage(): React.JSX.Element {
                       const clase = est.claseId ? claseMap.get(est.claseId) : null
                       const pago = pagoMap.get(est.id)
                       const estadoPago: EstadoPagoClase = pago?.estado ?? 'pendiente'
-                      const valorMensual = 110000
+                      // Usa el valorTotal real del pago si existe, si no el
+                      // precio configurado. Esto mantiene correcta la barra
+                      // aunque el dueño cambie la tarifa a mitad de mes.
+                      const valorMensual = pago?.valorTotal ?? precioMensual
+                      const totalPagado = pago?.totalPagado ?? 0
 
                       return (
                         <Card
@@ -479,7 +501,7 @@ export default function ClasesPage(): React.JSX.Element {
                               )}
                             </div>
                           </div>
-                          <PagoBar total={valorMensual} pagado={pago?.valorTotal ?? 0} showLabels />
+                          <PagoBar total={valorMensual} pagado={totalPagado} showLabels />
                           <div className="flex items-center justify-between">
                             <Badge color={ESTADO_PAGO_COLOR[estadoPago]}>
                               {ESTADO_PAGO_LABEL[estadoPago]}
@@ -539,11 +561,11 @@ export default function ClasesPage(): React.JSX.Element {
                               setPreselectedClaseId(c.id)
                               setActiveModal('estudiante')
                             }}
-                            className="flex h-6 w-6 items-center justify-center rounded-full text-accent-strong hover:bg-accent/10 cursor-pointer"
+                            className="flex h-9 w-9 items-center justify-center rounded-md text-accent-strong hover:bg-accent/10 cursor-pointer transition-colors"
                             aria-label={`Inscribir estudiante a ${c.nombre}`}
                             title="Inscribir estudiante"
                           >
-                            <UserPlus size={13} />
+                            <UserPlus size={16} />
                           </button>
                         </div>
                       </div>
@@ -584,6 +606,7 @@ export default function ClasesPage(): React.JSX.Element {
           estudiantes={estudiantes ?? []}
           clienteMap={clienteMap}
           initialEstudianteId={pagoEstudianteId}
+          precioMensual={precioMensual}
           onClose={closePagoModal}
           onSuccess={() => {
             closePagoModal()
@@ -598,6 +621,7 @@ export default function ClasesPage(): React.JSX.Element {
         <VentaKitModal
           estudiantes={estudiantes ?? []}
           clienteMap={clienteMap}
+          precioKit={precioKit}
           onClose={() => setActiveModal(null)}
           onSuccess={() => {
             setActiveModal(null)
@@ -843,7 +867,7 @@ function DetalleEstudianteModal({
         {pago && (
           <div className="space-y-2">
             <h4 className="text-sm font-semibold text-text">Pago del mes</h4>
-            <PagoBar total={110000} pagado={pago.valorTotal} showLabels />
+            <PagoBar total={pago.valorTotal} pagado={pago.totalPagado ?? 0} showLabels />
           </div>
         )}
 
@@ -931,19 +955,21 @@ function PagoClaseModal({
   estudiantes,
   clienteMap,
   initialEstudianteId = '',
+  precioMensual,
   onClose,
   onSuccess
 }: {
   estudiantes: Estudiante[]
   clienteMap: Map<number, string>
   initialEstudianteId?: string
+  precioMensual: number
   onClose: () => void
   onSuccess: () => void
 }): React.JSX.Element {
   const [form, setForm] = useState({
     estudianteId: initialEstudianteId,
     mes: mesActualISO(),
-    monto: '110000',
+    monto: String(precioMensual),
     metodoPago: 'efectivo' as MetodoPago
   })
 
@@ -1011,7 +1037,7 @@ function PagoClaseModal({
             type="number"
             value={form.monto}
             onChange={(e) => setForm((p) => ({ ...p, monto: e.target.value }))}
-            hint={formatCOP(110000)}
+            hint={formatCOP(precioMensual)}
           />
         </div>
         <Select
@@ -1040,11 +1066,13 @@ function PagoClaseModal({
 function VentaKitModal({
   estudiantes,
   clienteMap,
+  precioKit,
   onClose,
   onSuccess
 }: {
   estudiantes: Estudiante[]
   clienteMap: Map<number, string>
+  precioKit: number
   onClose: () => void
   onSuccess: () => void
 }): React.JSX.Element {
@@ -1065,11 +1093,14 @@ function VentaKitModal({
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault()
+    // venderKit exige estudiante o cliente: aquí sólo permitimos estudiante,
+    // así que lo validamos antes de disparar el mutator.
+    if (!estudianteId) return
     try {
       await execute({
-        estudianteId: estudianteId ? parseInt(estudianteId) : null,
+        estudianteId: parseInt(estudianteId),
         fecha: hoyISO(),
-        precio: 15000
+        precio: precioKit
       })
       onSuccess()
     } catch {
@@ -1081,20 +1112,20 @@ function VentaKitModal({
     <Modal open onClose={onClose} title="Vender kit de dibujo" size="sm">
       <form onSubmit={handleSubmit} className="space-y-4">
         <Select
-          label="Estudiante (opcional)"
-          options={[{ value: '', label: 'Sin asignar' }, ...estudianteOptions]}
+          label="Estudiante"
+          options={[{ value: '', label: 'Selecciona un estudiante' }, ...estudianteOptions]}
           value={estudianteId}
           onChange={(e) => setEstudianteId(e.target.value)}
         />
         <div className="rounded-lg border border-border bg-surface-muted p-4 text-center">
           <p className="mb-1 text-sm text-text-muted">Precio del kit</p>
-          <PrecioDisplay value={15000} size="lg" className="text-text" />
+          <PrecioDisplay value={precioKit} size="lg" className="text-text" />
         </div>
         <div className="flex gap-3 pt-2">
           <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit" className="flex-1" disabled={loading}>
+          <Button type="submit" className="flex-1" disabled={loading || !estudianteId}>
             {loading ? 'Vendiendo...' : 'Vender kit'}
           </Button>
         </div>
