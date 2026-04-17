@@ -142,7 +142,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
 
       <nav className="flex-1 py-4 px-2 overflow-y-auto">
         {!collapsed && (
-          <p className="text-[11px] font-medium uppercase tracking-widest text-text-soft px-3 pb-2">
+          <p className="text-xs font-medium uppercase tracking-widest text-text-muted px-3 pb-2">
             Módulos
           </p>
         )}
@@ -165,20 +165,20 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
                 aria-current={active ? 'page' : undefined}
                 aria-label={collapsed ? item.label : undefined}
               >
-                <Icon size={18} className="shrink-0" />
-                {!collapsed && <span className="text-sm truncate flex-1">{item.label}</span>}
+                <Icon size={20} className="shrink-0" />
+                {!collapsed && <span className="text-base truncate flex-1">{item.label}</span>}
                 {badgeCount > 0 &&
                   (collapsed ? (
                     <span
                       aria-live="polite"
-                      className="absolute -top-1 -right-1 h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold animate-badge-pulse"
+                      className="absolute -top-1 -right-1 h-5 min-w-5 px-1 flex items-center justify-center rounded-full bg-accent text-white text-xs font-bold"
                     >
                       {badgeCount}
                     </span>
                   ) : (
                     <span
                       aria-live="polite"
-                      className="h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold animate-badge-pulse"
+                      className="h-6 min-w-6 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-xs font-bold"
                     >
                       {badgeCount}
                     </span>
@@ -248,7 +248,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
           ))}
         <button
           onClick={onToggle}
-          className="w-full h-11 flex items-center justify-center rounded-md text-text-soft hover:text-text-muted hover:bg-surface-muted cursor-pointer focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
+          className="w-full h-11 flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-surface-muted cursor-pointer focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
           aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
         >
           {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}

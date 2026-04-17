@@ -92,10 +92,10 @@ export function UrgencyMatrix(): React.JSX.Element {
     <Card padding="md">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-soft">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
             Tablero del día
           </p>
-          <h2 className="text-lg font-semibold text-text">Pedidos activos</h2>
+          <h2 className="text-xl font-semibold text-text">Pedidos activos</h2>
         </div>
         <button
           onClick={() => navigate('/pedidos')}
@@ -127,65 +127,64 @@ export function UrgencyMatrix(): React.JSX.Element {
         </button>
       )}
 
-      {todoAlDia && (
-        <div className="mb-4 flex items-center gap-4 rounded-lg border border-success/20 bg-success-bg/60 px-5 py-4">
-          <CalmDayIllustration size={84} className="shrink-0" />
+      {todoAlDia ? (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-success/20 bg-success-bg/60 px-6 py-8 text-center">
+          <CalmDayIllustration size={120} className="shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-success-strong">Todo al día</p>
-            <p className="mt-1 text-xs text-success-strong/80">
+            <p className="text-base font-semibold text-success-strong">Todo al día</p>
+            <p className="mt-1 text-sm text-success-strong/90">
               Sin pedidos urgentes ni atrasados. Aprovecha para adelantar trabajo o tomarte un
               respiro.
             </p>
           </div>
         </div>
-      )}
-
-      {/* 2x2 matrix */}
-      <div className={cn('grid grid-cols-2 gap-3 transition-opacity', loading && 'opacity-60')}>
-        {quadrants.map((q) => {
-          const Icon = q.icon
-          const disabled = q.count === 0
-          return (
-            <button
-              key={q.filter}
-              onClick={() => navigate(`/pedidos?focus=${q.filter}`)}
-              disabled={disabled}
-              aria-label={`${q.label}: ${q.count}`}
-              className={cn(
-                'group flex min-h-37 flex-col items-start gap-3 rounded-lg border-2 p-5 text-left transition-all duration-200',
-                colorClasses[q.color],
-                !disabled && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-2',
-                disabled && 'opacity-60 cursor-default'
-              )}
-            >
-              <div className="flex w-full items-center justify-between">
-                <div
-                  className={cn(
-                    'flex h-11 w-11 items-center justify-center rounded-full transition-transform',
-                    iconBgClasses[q.color],
-                    !disabled && 'group-hover:scale-110'
-                  )}
-                >
-                  <Icon size={22} />
-                </div>
-                {!disabled && (
-                  <span
-                    aria-hidden
-                    className="text-xl font-bold opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    →
-                  </span>
+      ) : (
+        <div className={cn('grid grid-cols-2 gap-3 transition-opacity', loading && 'opacity-60')}>
+          {quadrants.map((q) => {
+            const Icon = q.icon
+            const disabled = q.count === 0
+            return (
+              <button
+                key={q.filter}
+                onClick={() => navigate(`/pedidos?focus=${q.filter}`)}
+                disabled={disabled}
+                aria-label={`${q.label}: ${q.count}`}
+                className={cn(
+                  'group flex min-h-37 flex-col items-start gap-3 rounded-lg border-2 p-5 text-left transition-all duration-200',
+                  colorClasses[q.color],
+                  !disabled && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-2',
+                  disabled && 'opacity-60 cursor-default'
                 )}
-              </div>
-              <div>
-                <p className="text-4xl font-bold leading-none tabular-nums">{q.count}</p>
-                <p className="mt-2 text-sm font-semibold">{q.label}</p>
-                <p className="text-xs opacity-80">{q.sublabel}</p>
-              </div>
-            </button>
-          )
-        })}
-      </div>
+              >
+                <div className="flex w-full items-center justify-between">
+                  <div
+                    className={cn(
+                      'flex h-11 w-11 items-center justify-center rounded-full transition-transform',
+                      iconBgClasses[q.color],
+                      !disabled && 'group-hover:scale-110'
+                    )}
+                  >
+                    <Icon size={22} />
+                  </div>
+                  {!disabled && (
+                    <span
+                      aria-hidden
+                      className="text-xl font-bold opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      →
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-4xl font-bold leading-none tabular-nums">{q.count}</p>
+                  <p className="mt-2 text-base font-semibold">{q.label}</p>
+                  <p className="text-sm">{q.sublabel}</p>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </Card>
   )
 }
