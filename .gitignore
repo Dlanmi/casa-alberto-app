@@ -17,7 +17,31 @@ TESTER_*.md
 SMOKE_TEST_MANUAL.md
 FINAL_REPORT.md
 CasaAlberto_Fase*.md
+DESIGN.md
 .claude/
+.conductor/
+
+# Variables de entorno / secretos
+.env
+.env.*
+
+# Bases de datos SQLite (por si se copian al repo por error)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Caches de build
+*.tsbuildinfo
+
+# IDEs alternativos
+.idea/
+*.swp
+*.swo
 
 # Build artifacts
 release/
@@ -33,6 +57,10 @@ coverage/
 # Certificate/key files (preemptive)
 *.pem
 *.p12
+*.key
+*.crt
+*.cer
+*.mobileprovision
 
 # Windows
 Thumbs.db
