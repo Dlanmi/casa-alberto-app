@@ -103,7 +103,7 @@ function Header({
             </p>
           )}
           <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-text">{title}</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-text">{title}</h1>
             <p className="max-w-2xl text-base leading-relaxed text-text-muted">{subtitle}</p>
           </div>
         </div>
@@ -193,7 +193,7 @@ export function MetricCard({
           {detail && <p className="mt-1 text-xs text-text-muted">{detail}</p>}
         </div>
       </div>
-      <div className="text-2xl font-semibold tracking-tight text-text">{value}</div>
+      <div className="text-2xl font-bold tracking-tight text-text">{value}</div>
     </Card>
   )
 }

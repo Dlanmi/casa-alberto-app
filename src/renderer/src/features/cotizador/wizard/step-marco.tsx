@@ -30,7 +30,7 @@ export function StepMarco({ data, onChange, marcos }: Props): React.JSX.Element 
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text mb-1">Seleccionar marco</h2>
+      <h2 className="text-xl font-bold tracking-tight text-text mb-1">Seleccionar marco</h2>
       <p className="text-sm text-text-muted mb-4">
         El cliente escoge la muestra. Cada referencia tiene colilla y precio por metro.
       </p>
@@ -59,7 +59,7 @@ export function StepMarco({ data, onChange, marcos }: Props): React.JSX.Element 
       {/* p-1 evita que border-2 / shadow-2 / hover:-translate-y-0.5 se
           recorten al tocar el borde del scrollview (bug reportado por el dueño:
           las cards aparecían "cortadas" por el contenedor). */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto p-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto p-1">
         {filtered.map((marco) => {
           const selected = data.muestraMarcoId === marco.id
           return (

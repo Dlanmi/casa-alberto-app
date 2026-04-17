@@ -16,7 +16,7 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text mb-1">Opciones</h2>
+      <h2 className="text-xl font-bold tracking-tight text-text mb-1">Opciones</h2>
       <p className="text-sm text-text-muted mb-6">Configura paspartú y vidrio para este cuadro.</p>
 
       <div className="space-y-8 max-w-lg">

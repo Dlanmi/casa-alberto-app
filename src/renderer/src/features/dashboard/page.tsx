@@ -176,7 +176,7 @@ export default function DashboardPage(): React.JSX.Element {
           con icono + texto para que el dueño de 60 años pueda escanear y
           actuar sin leer. Nueva cotización vive en el header (primaryAction)
           para no duplicar el mismo CTA dos veces en la pantalla. */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Button size="lg" variant="outline" onClick={() => goPedidos('requiere_accion')}>
           <ClipboardList size={18} />
           Gestionar pedidos
@@ -420,7 +420,7 @@ export default function DashboardPage(): React.JSX.Element {
                 />
               )}
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                 <Card padding="md" className="space-y-2 bg-surface-muted">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-soft">
                     Cobros pendientes

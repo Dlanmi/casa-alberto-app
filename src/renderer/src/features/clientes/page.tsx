@@ -496,7 +496,7 @@ function DetailPanel({
             }
           />
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <Button size="sm" onClick={() => navigate('/cotizador')} className="justify-center">
               <Calculator size={16} />
               Cotizar
@@ -555,7 +555,7 @@ function DetailPanel({
               <h3 className="text-sm font-medium uppercase tracking-wider text-text-soft">
                 Estadísticas
               </h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Card padding="sm" className="text-center">
                   <p className="text-2xl font-semibold tabular-nums text-text">
                     {stats.totalPedidos}

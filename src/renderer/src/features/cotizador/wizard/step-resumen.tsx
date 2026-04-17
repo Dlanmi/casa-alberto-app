@@ -170,7 +170,7 @@ export function StepResumen({
 
   return (
     <div>
-      <h2 className="mb-1 text-lg font-semibold text-text">Resumen de cotización</h2>
+      <h2 className="mb-1 text-xl font-bold tracking-tight text-text">Resumen de cotización</h2>
       <p className="mb-6 flex items-center gap-2 text-sm text-text-muted">
         <TipoIcon size={16} className="text-accent-strong" />
         <span>
@@ -326,7 +326,7 @@ export function StepResumen({
                     <p className="mb-2 text-xs font-medium uppercase tracking-wider text-text-muted">
                       Método de pago
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {(
                         [
                           { key: 'efectivo', label: 'Efectivo', icon: Wallet },

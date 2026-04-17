@@ -626,7 +626,7 @@ function StepVidrioEspejo({
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text mb-1">Tipo de vidrio</h2>
+      <h2 className="text-xl font-bold tracking-tight text-text mb-1">Tipo de vidrio</h2>
       <p className="text-sm text-text-muted mb-6">
         Selecciona el tipo de vidrio y agrega el costo de instalación si aplica.
       </p>
@@ -634,7 +634,7 @@ function StepVidrioEspejo({
       <div className="space-y-6 max-w-lg">
         <div>
           <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-3">Tipo</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               {
                 key: 'claro' as const,
@@ -726,7 +726,7 @@ function StepPrecioManual({
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text mb-1">
+      <h2 className="text-xl font-bold tracking-tight text-text mb-1">
         {esRestauracion ? 'Restauración' : 'Vidrio / Espejo'}
       </h2>
       <p className="text-sm text-text-muted mb-6">

@@ -95,7 +95,7 @@ export function UrgencyMatrix(): React.JSX.Element {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
             Tablero del día
           </p>
-          <h2 className="text-xl font-semibold text-text">Pedidos activos</h2>
+          <h2 className="text-xl font-bold tracking-tight text-text">Pedidos activos</h2>
         </div>
         <button
           onClick={() => navigate('/pedidos')}
@@ -139,7 +139,12 @@ export function UrgencyMatrix(): React.JSX.Element {
           </div>
         </div>
       ) : (
-        <div className={cn('grid grid-cols-2 gap-3 transition-opacity', loading && 'opacity-60')}>
+        <div
+          className={cn(
+            'grid grid-cols-1 gap-3 sm:grid-cols-2 transition-opacity',
+            loading && 'opacity-60'
+          )}
+        >
           {quadrants.map((q) => {
             const Icon = q.icon
             const disabled = q.count === 0
