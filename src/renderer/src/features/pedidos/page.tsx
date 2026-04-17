@@ -5,6 +5,8 @@ import { OperationalBoard } from '@renderer/components/layout/page-frame'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useEmojis } from '@renderer/contexts/emojis-context'
+import { EMOJI_TOAST, EMOJI_ESTADO_PEDIDO } from '@renderer/lib/emojis'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { EmptyState } from '@renderer/components/ui/empty-state'
 import { FrameIllustration } from '@renderer/components/illustrations'
@@ -38,6 +40,7 @@ export default function PedidosPage(): React.JSX.Element {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { showToast } = useToast()
+  const { emoji } = useEmojis()
   const [selected, setSelected] = useState<Pedido | null>(null)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [search, setSearch] = useState('')
@@ -163,9 +166,13 @@ export default function PedidosPage(): React.JSX.Element {
       )) as IpcResult<Pedido>
 
       if (result.ok) {
+        const titleEmoji =
+          nuevoEstado === 'entregado'
+            ? EMOJI_TOAST.pedido_entregado
+            : EMOJI_ESTADO_PEDIDO[nuevoEstado]
         showToast({
           tone: 'success',
-          title: `Pedido ${oldPedido.numero} actualizado`,
+          title: `${emoji(titleEmoji)} Pedido ${oldPedido.numero} actualizado`.trim(),
           message: getEstadoMessage(nuevoEstado),
           actionLabel: getEstadoActionLabel(nuevoEstado),
           onAction: () => {
@@ -192,7 +199,7 @@ export default function PedidosPage(): React.JSX.Element {
         })
       }
     },
-    [navigate, pedidos, refetch, selected, showToast, sinAbonoIds]
+    [emoji, navigate, pedidos, refetch, selected, showToast, sinAbonoIds]
   )
 
   if (loading) return <PageLoader />

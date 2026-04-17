@@ -21,7 +21,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
 import { EmptyState } from '@renderer/components/ui/empty-state'
-import { WorkshopIllustration } from '@renderer/components/illustrations'
+import { TruckIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { DirectoryScreen, MetricCard, PageSection } from '@renderer/components/layout/page-frame'
 import { formatTelefono } from '@renderer/lib/format'
@@ -130,7 +130,7 @@ export default function ProveedoresPage(): React.JSX.Element {
         {filtered.length === 0 ? (
           <EmptyState
             icon={Truck}
-            illustration={!search ? <WorkshopIllustration size={140} /> : undefined}
+            illustration={!search ? <TruckIllustration size={140} /> : undefined}
             title={search ? 'Sin resultados' : 'Sin proveedores registrados'}
             description={
               search

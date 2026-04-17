@@ -6,6 +6,8 @@ import { useIpc } from '@renderer/hooks/use-ipc'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useDirtyGuard } from '@renderer/hooks/use-dirty-guard'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useEmojis } from '@renderer/contexts/emojis-context'
+import { EMOJI_TOAST } from '@renderer/lib/emojis'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Button } from '@renderer/components/ui/button'
 import { Modal } from '@renderer/components/ui/modal'
@@ -47,6 +49,7 @@ export default function FacturasPage(): React.JSX.Element {
   const [showNuevaFactura, setShowNuevaFactura] = useState(false)
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const { emoji } = useEmojis()
 
   const {
     data: facturas,
@@ -203,13 +206,16 @@ export default function FacturasPage(): React.JSX.Element {
             if (nuevoSaldo != null && nuevoSaldo <= 0) {
               showToast({
                 tone: 'success',
-                title: 'Factura pagada en su totalidad',
+                title: `${emoji(EMOJI_TOAST.factura_pagada)} Factura pagada en su totalidad`.trim(),
                 message: 'El cliente puede recoger su pedido.',
                 actionLabel: 'Ver pedidos',
                 onAction: () => navigate('/pedidos')
               })
             } else {
-              showToast('success', 'Pago registrado correctamente')
+              showToast(
+                'success',
+                `${emoji(EMOJI_TOAST.pago_registrado)} Pago registrado correctamente`.trim()
+              )
             }
           }}
         />

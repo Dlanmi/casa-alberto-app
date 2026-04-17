@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { cn } from '@renderer/lib/cn'
 import { ESTADO_PEDIDO_LABEL, ESTADO_PEDIDO_COLOR, type StatusColor } from '@renderer/lib/constants'
+import { EMOJI_ESTADO_PEDIDO } from '@renderer/lib/emojis'
+import { useEmojis } from '@renderer/contexts/emojis-context'
 import type { EstadoPedido, Pedido } from '@shared/types'
 import { KanbanCard } from './kanban-card'
 
@@ -38,6 +40,7 @@ export function KanbanColumn({
 }: KanbanColumnProps) {
   const [dragOver, setDragOver] = useState(false)
   const color = ESTADO_PEDIDO_COLOR[estado]
+  const { enabled: emojisEnabled } = useEmojis()
 
   function handleDragOver(e: React.DragEvent) {
     if (dropKind === 'disabled') {
@@ -77,7 +80,14 @@ export function KanbanColumn({
       {/* Column header */}
       <div className={cn('px-3 py-2 rounded-t-[var(--radius-lg)]', bgClasses[color])}>
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-text">{ESTADO_PEDIDO_LABEL[estado]}</span>
+          <span className="text-sm font-semibold text-text">
+            {emojisEnabled && (
+              <span className="mr-1.5" aria-hidden="true">
+                {EMOJI_ESTADO_PEDIDO[estado]}
+              </span>
+            )}
+            {ESTADO_PEDIDO_LABEL[estado]}
+          </span>
           <span className="text-xs font-medium tabular-nums text-text-muted bg-white/70 px-2 py-0.5 rounded-full">
             {pedidos.length}
           </span>

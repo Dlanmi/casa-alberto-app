@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '@renderer/contexts/toast-context'
+import { EmojisProvider } from '@renderer/contexts/emojis-context'
 import FacturasPage from './page'
 
 function installWindowApi(): void {
@@ -37,6 +38,10 @@ function installWindowApi(): void {
             }
           ]
         }))
+      },
+      configuracion: {
+        get: vi.fn(async () => ({ ok: true, data: '1' })),
+        set: vi.fn(async () => ({ ok: true, data: null }))
       }
     }
   })
@@ -52,11 +57,13 @@ describe('FacturasPage', () => {
 
     render(
       <MemoryRouter initialEntries={['/facturas']}>
-        <ToastProvider>
-          <Routes>
-            <Route path="/facturas" element={<FacturasPage />} />
-          </Routes>
-        </ToastProvider>
+        <EmojisProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/facturas" element={<FacturasPage />} />
+            </Routes>
+          </ToastProvider>
+        </EmojisProvider>
       </MemoryRouter>
     )
 

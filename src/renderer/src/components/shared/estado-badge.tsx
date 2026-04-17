@@ -6,6 +6,8 @@ import {
   ESTADO_FACTURA_LABEL,
   ESTADO_FACTURA_COLOR
 } from '@renderer/lib/constants'
+import { EMOJI_ESTADO_PEDIDO, EMOJI_ESTADO_FACTURA } from '@renderer/lib/emojis'
+import { useEmojis } from '@renderer/contexts/emojis-context'
 import type { EstadoPedido, EstadoFactura } from '@shared/types'
 import type { LucideIcon } from 'lucide-react'
 import type { StatusColor } from '@renderer/lib/constants'
@@ -21,8 +23,13 @@ const PEDIDO_ICON: Record<EstadoPedido, LucideIcon> = {
 }
 
 export function EstadoPedidoBadge({ estado }: { estado: EstadoPedido }) {
+  const { enabled } = useEmojis()
   return (
-    <Badge color={ESTADO_PEDIDO_COLOR[estado]} icon={PEDIDO_ICON[estado]}>
+    <Badge
+      color={ESTADO_PEDIDO_COLOR[estado]}
+      icon={enabled ? undefined : PEDIDO_ICON[estado]}
+    >
+      {enabled && <span aria-hidden="true">{EMOJI_ESTADO_PEDIDO[estado]}</span>}
       {ESTADO_PEDIDO_LABEL[estado]}
     </Badge>
   )
@@ -35,8 +42,13 @@ const FACTURA_ICON: Record<EstadoFactura, LucideIcon> = {
 }
 
 export function EstadoFacturaBadge({ estado }: { estado: EstadoFactura }) {
+  const { enabled } = useEmojis()
   return (
-    <Badge color={ESTADO_FACTURA_COLOR[estado] as StatusColor} icon={FACTURA_ICON[estado]}>
+    <Badge
+      color={ESTADO_FACTURA_COLOR[estado] as StatusColor}
+      icon={enabled ? undefined : FACTURA_ICON[estado]}
+    >
+      {enabled && <span aria-hidden="true">{EMOJI_ESTADO_FACTURA[estado]}</span>}
       {ESTADO_FACTURA_LABEL[estado]}
     </Badge>
   )

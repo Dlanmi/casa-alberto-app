@@ -3,6 +3,7 @@ import { AlertTriangle, Clock, CircleDollarSign, CheckCircle } from 'lucide-reac
 import { cn } from '@renderer/lib/cn'
 import { Card } from '@renderer/components/ui/card'
 import { useMatrizUrgencia } from '@renderer/hooks/use-matriz-urgencia'
+import { CalmDayIllustration } from '@renderer/components/illustrations'
 
 // AGENT_UX + AGENT_BIZ: Matriz operativa 2x2 (urgencia x pago).
 // Los cuadrantes vienen del backend via useMatrizUrgencia() (BR-001) para
@@ -79,6 +80,14 @@ export function UrgencyMatrix(): React.JSX.Element {
     neutral: 'bg-border/40'
   }
 
+  const todoAlDia =
+    !loading &&
+    atrasados === 0 &&
+    urgenteSinAbono === 0 &&
+    urgenteConAbono === 0 &&
+    normalSinAbono === 0 &&
+    normalConAbono === 0
+
   return (
     <Card padding="md">
       <div className="mb-4 flex items-center justify-between">
@@ -116,6 +125,19 @@ export function UrgencyMatrix(): React.JSX.Element {
             →
           </span>
         </button>
+      )}
+
+      {todoAlDia && (
+        <div className="mb-4 flex items-center gap-4 rounded-lg border border-success/20 bg-success-bg/60 px-5 py-4">
+          <CalmDayIllustration size={84} className="shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-success-strong">Todo al día</p>
+            <p className="mt-1 text-xs text-success-strong/80">
+              Sin pedidos urgentes ni atrasados. Aprovecha para adelantar trabajo o tomarte un
+              respiro.
+            </p>
+          </div>
+        </div>
       )}
 
       {/* 2x2 matrix */}
