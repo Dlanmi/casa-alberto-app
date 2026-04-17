@@ -18,9 +18,27 @@ type KanbanCardProps = {
   // solo cuando realmente sepamos que no hay pagos.
   pagado?: number
   onClick: () => void
+  // Fase 3 — si true, renderiza un ring acento para destacar el pedido
+  // recién creado tras auto-navegación desde el cotizador.
+  highlighted?: boolean
 }
 
-export function KanbanCard({ pedido, clienteNombre, pagado, onClick }: KanbanCardProps) {
+// Días transcurridos desde una fecha ISO con o sin tiempo. Local a esta
+// card porque no merece promoverlo a format.ts hasta que lo use otro lado.
+function diasDesde(iso: string): number {
+  const ahora = Date.now()
+  const inicio = new Date(iso).getTime()
+  if (!Number.isFinite(inicio)) return 0
+  return Math.max(0, Math.floor((ahora - inicio) / (1000 * 60 * 60 * 24)))
+}
+
+export function KanbanCard({
+  pedido,
+  clienteNombre,
+  pagado,
+  onClick,
+  highlighted = false
+}: KanbanCardProps) {
   const [dragging, setDragging] = useState(false)
   const dias = pedido.fechaEntrega ? diasRestantes(pedido.fechaEntrega) : null
   const atrasado = dias !== null && dias < 0
@@ -30,6 +48,15 @@ export function KanbanCard({ pedido, clienteNombre, pagado, onClick }: KanbanCar
 
   const fechaIcon = atrasado ? AlertTriangle : urgente ? Clock : Calendar
   const FechaIcon = fechaIcon
+
+  // Fase 3 — badge "hace N días" solo cuando el pedido lleva > 3 días en
+  // estados activos. Ayuda a papá a detectar trabajos que se quedaron
+  // estancados sin tener que abrir el detalle.
+  const diasEnTablero =
+    pedido.estado === 'confirmado' || pedido.estado === 'en_proceso' || pedido.estado === 'listo'
+      ? diasDesde(pedido.updatedAt)
+      : 0
+  const muestraDiasEstado = diasEnTablero > 3
 
   return (
     // AGENT_UX: Card visual con avatar de iniciales, icono del tipo de
@@ -45,6 +72,7 @@ export function KanbanCard({ pedido, clienteNombre, pagado, onClick }: KanbanCar
         'border-2 border-transparent',
         atrasado && 'border-error/40',
         urgente && !atrasado && 'border-warning/40',
+        highlighted && 'ring-4 ring-accent ring-offset-2 animate-pulse',
         dragging && 'opacity-60 scale-95'
       )}
     >
@@ -97,8 +125,24 @@ export function KanbanCard({ pedido, clienteNombre, pagado, onClick }: KanbanCar
       {/* Payment progress — solo si tenemos data real de pagos cargada */}
       {pagado !== undefined && <PagoBar total={pedido.precioTotal} pagado={pagado} />}
 
-      {/* Footer: state badge */}
-      <div className="mt-3 flex items-center justify-end">
+      {/* Footer: state badge + días en estado si lleva demasiado */}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        {muestraDiasEstado ? (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums',
+              diasEnTablero > 7
+                ? 'bg-warning-bg text-warning-strong'
+                : 'bg-surface-muted text-text-muted'
+            )}
+            title={`Este pedido lleva ${diasEnTablero} días sin avanzar de estado.`}
+          >
+            <Clock size={11} className="shrink-0" />
+            hace {diasEnTablero} días
+          </span>
+        ) : (
+          <span />
+        )}
         <EstadoPedidoBadge estado={pedido.estado} />
       </div>
     </button>

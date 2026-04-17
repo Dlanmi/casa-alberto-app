@@ -6,6 +6,7 @@ import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
 import { InitialsAvatar } from '@renderer/components/shared/initials-avatar'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { cn } from '@renderer/lib/cn'
 import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
 import type { Pedido } from '@shared/types'
@@ -14,12 +15,14 @@ type PedidoListViewProps = {
   pedidos: Pedido[]
   onRowClick: (pedido: Pedido) => void
   clienteMap?: Map<number, string>
+  highlightedId?: number | null
 }
 
 export function PedidoListView({
   pedidos,
   onRowClick,
-  clienteMap
+  clienteMap,
+  highlightedId = null
 }: PedidoListViewProps): React.JSX.Element {
   if (pedidos.length === 0) {
     return (
@@ -51,7 +54,14 @@ export function PedidoListView({
           const TipoIcon = TIPO_TRABAJO_ICON[p.tipoTrabajo]
           const clienteNombre = clienteMap?.get(p.clienteId) ?? 'Sin cliente'
           return (
-            <Tr key={p.id} className="cursor-pointer" onClick={() => onRowClick(p)}>
+            <Tr
+              key={p.id}
+              className={cn(
+                'cursor-pointer',
+                highlightedId === p.id && 'ring-2 ring-accent bg-accent/10 animate-pulse'
+              )}
+              onClick={() => onRowClick(p)}
+            >
               <Td className="font-medium tabular-nums">{p.numero}</Td>
               <Td>
                 <div className="flex items-center gap-2">

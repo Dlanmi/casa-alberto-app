@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
-import { Package, Download, Plus, ArrowUpDown, AlertCircle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Package, Download, Plus, ArrowUpDown, AlertCircle, Truck } from 'lucide-react'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { DirectoryScreen } from '@renderer/components/layout/page-frame'
 import { useIpc } from '@renderer/hooks/use-ipc'
@@ -72,6 +73,7 @@ const STOCK_PRIORITY: Record<StockEstado, number> = {
 }
 
 export default function InventarioPage(): React.JSX.Element {
+  const navigate = useNavigate()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showMovModal, setShowMovModal] = useState(false)
   const [search, setSearch] = useState('')
@@ -229,6 +231,7 @@ export default function InventarioPage(): React.JSX.Element {
               <Th className="text-right">Stock actual</Th>
               <Th className="text-right">Stock mínimo</Th>
               <Th>Estado</Th>
+              <Th className="text-right">Acción</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -264,6 +267,19 @@ export default function InventarioPage(): React.JSX.Element {
                   <Badge color={STOCK_COLOR[item.stockEstado]}>
                     {STOCK_LABEL[item.stockEstado]}
                   </Badge>
+                </Td>
+                <Td className="text-right">
+                  {item.stockEstado !== 'BIEN' && (
+                    <Button
+                      size="sm"
+                      variant={item.stockEstado === 'CRITICO' ? 'primary' : 'outline'}
+                      onClick={() => navigate('/proveedores')}
+                      title={`Ir a proveedores para reponer ${item.nombre}`}
+                    >
+                      <Truck size={14} />
+                      Pedir
+                    </Button>
+                  )}
                 </Td>
               </Tr>
             ))}

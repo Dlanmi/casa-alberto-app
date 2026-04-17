@@ -25,6 +25,7 @@ type KanbanColumnProps = {
   onDragEnd?: () => void
   dragActivePedidoId?: number | null
   dropKind?: 'none' | 'allowed' | 'disabled'
+  highlightedId?: number | null
 }
 
 export function KanbanColumn({
@@ -36,7 +37,8 @@ export function KanbanColumn({
   onDragStart,
   onDragEnd,
   dragActivePedidoId = null,
-  dropKind = 'none'
+  dropKind = 'none',
+  highlightedId = null
 }: KanbanColumnProps) {
   const [dragOver, setDragOver] = useState(false)
   const color = ESTADO_PEDIDO_COLOR[estado]
@@ -121,6 +123,7 @@ export function KanbanColumn({
               pedido={pedido}
               clienteNombre={clienteMap.get(pedido.clienteId)}
               onClick={() => onCardClick(pedido)}
+              highlighted={highlightedId === pedido.id}
             />
           </div>
         ))}

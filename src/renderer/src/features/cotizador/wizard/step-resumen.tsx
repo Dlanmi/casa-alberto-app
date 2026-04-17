@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   FileText,
   ClipboardList,
-  CheckCircle,
   ShoppingCart,
   Receipt,
   UserPlus,
@@ -62,7 +61,6 @@ export function StepResumen({
   const { showToast } = useToast()
   const { emoji } = useEmojis()
   const [creating, setCreating] = useState(false)
-  const [createdPedido, setCreatedPedido] = useState<{ id: number; numero: string } | null>(null)
 
   // Campos adicionales para el pedido
   const [conAbono, setConAbono] = useState(true)
@@ -127,17 +125,17 @@ export function StepResumen({
         })
       }
 
-      setCreatedPedido({ id: pedido.id, numero: pedido.numero })
       showToast({
         tone: 'success',
-        title: `${emoji(EMOJI_TOAST.pedido_creado)} Pedido creado`.trim(),
+        title: `${emoji(EMOJI_TOAST.pedido_creado)} Pedido ${pedido.numero} creado`.trim(),
         message:
           abonoNum > 0
-            ? `Pedido ${pedido.numero} creado con abono de ${formatCOP(abonoNum)}. Factura generada.`
-            : `Pedido ${pedido.numero} creado. Factura queda pendiente de cobro por ${formatCOP(cotizacion.precioTotal)}.`,
-        actionLabel: 'Ir a pedidos',
-        onAction: () => navigate('/pedidos')
+            ? `Abono de ${formatCOP(abonoNum)} registrado. Factura generada.`
+            : `Factura pendiente por ${formatCOP(cotizacion.precioTotal)}.`
       })
+      // Navegación automática al listado de pedidos con el nuevo pedido
+      // destacado — evita que el usuario se quede pensando "¿qué hago ahora?".
+      navigate(`/pedidos?highlight=${pedido.id}`)
     } catch (err) {
       console.error('Create order failed:', err)
       showToast({
@@ -422,92 +420,70 @@ export function StepResumen({
       </Card>
 
       {/* Acciones */}
-      {!createdPedido && (
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={handleCrearPedido} disabled={!cliente || creating} size="lg">
-            <ClipboardList size={18} />
-            {creating ? 'Creando...' : 'Crear Pedido'}
-          </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={async () => {
-              try {
-                const now = new Date()
-                const fecha = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-                const seq = String(now.getTime()).slice(-4)
-                const numero = `COT-${fecha}-${seq}`
-                const result = (await window.api.pdf.generarFactura({
-                  numero,
-                  fecha: hoyISO(),
-                  clienteNombre: cliente?.nombre ?? 'Sin cliente',
-                  items: cotizacion.items.map((it) => ({
-                    descripcion: it.descripcion,
-                    cantidad: 1,
-                    precioUnitario: it.subtotal,
-                    subtotal: it.subtotal
-                  })),
-                  subtotal: cotizacion.subtotal,
-                  totalMateriales: cotizacion.totalMateriales,
-                  total: cotizacion.precioTotal,
-                  pagos: [],
-                  saldo: cotizacion.precioTotal,
-                  notas: `${TIPO_TRABAJO_LABEL[tipoTrabajo]} ${data.anchoCm}x${data.altoCm}cm`
-                })) as IpcResult<string>
-                if (result.ok) {
-                  showToast({
-                    tone: 'success',
-                    title: 'PDF generado',
-                    message: 'La cotización se abrió en PDF para revisión o envío al cliente.'
-                  })
-                  await window.api.pdf.abrir(result.data)
-                } else {
-                  showToast({
-                    tone: 'error',
-                    title: 'No se pudo generar el PDF',
-                    message: result.error
-                  })
-                }
-              } catch (err) {
-                console.error('PDF generation failed:', err)
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onClick={handleCrearPedido} disabled={!cliente || creating} size="lg">
+          <ClipboardList size={18} />
+          {creating ? 'Creando...' : 'Crear Pedido'}
+        </Button>
+        <Button
+          variant="secondary"
+          size="lg"
+          onClick={async () => {
+            try {
+              const now = new Date()
+              const fecha = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+              const seq = String(now.getTime()).slice(-4)
+              const numero = `COT-${fecha}-${seq}`
+              const result = (await window.api.pdf.generarFactura({
+                numero,
+                fecha: hoyISO(),
+                clienteNombre: cliente?.nombre ?? 'Sin cliente',
+                items: cotizacion.items.map((it) => ({
+                  descripcion: it.descripcion,
+                  cantidad: 1,
+                  precioUnitario: it.subtotal,
+                  subtotal: it.subtotal
+                })),
+                subtotal: cotizacion.subtotal,
+                totalMateriales: cotizacion.totalMateriales,
+                total: cotizacion.precioTotal,
+                pagos: [],
+                saldo: cotizacion.precioTotal,
+                notas: `${TIPO_TRABAJO_LABEL[tipoTrabajo]} ${data.anchoCm}x${data.altoCm}cm`
+              })) as IpcResult<string>
+              if (result.ok) {
+                showToast({
+                  tone: 'success',
+                  title: 'PDF generado',
+                  message: 'La cotización se abrió en PDF para revisión o envío al cliente.'
+                })
+                await window.api.pdf.abrir(result.data)
+              } else {
                 showToast({
                   tone: 'error',
                   title: 'No se pudo generar el PDF',
-                  message: 'Revisa los datos de la cotización y vuelve a intentarlo.'
+                  message: result.error
                 })
               }
-            }}
-          >
-            <FileText size={18} />
-            Generar PDF
-          </Button>
-          {!cliente && (
-            <p className="w-full text-xs text-text-muted">
-              Vincula un cliente en el paso 1 para habilitar la creación del pedido.
-            </p>
-          )}
-        </div>
-      )}
-
-      {createdPedido && (
-        <Card padding="md" className="mt-6 text-center">
-          <CheckCircle size={32} className="mx-auto mb-3 text-success-strong" />
-          <p className="mb-1 text-base font-semibold text-text">
-            Pedido {createdPedido.numero} creado
+            } catch (err) {
+              console.error('PDF generation failed:', err)
+              showToast({
+                tone: 'error',
+                title: 'No se pudo generar el PDF',
+                message: 'Revisa los datos de la cotización y vuelve a intentarlo.'
+              })
+            }
+          }}
+        >
+          <FileText size={18} />
+          Generar PDF
+        </Button>
+        {!cliente && (
+          <p className="w-full text-xs text-text-muted">
+            Vincula un cliente en el paso 1 para habilitar la creación del pedido.
           </p>
-          <p className="mb-4 text-sm text-text-muted">
-            {abonoNum > 0
-              ? `Factura generada con abono de ${formatCOP(abonoNum)}. Saldo: ${formatCOP(saldo > 0 ? saldo : 0)}.`
-              : 'El siguiente paso es facturar cuando el cliente confirme.'}
-          </p>
-          <div className="flex justify-center gap-3">
-            <Button onClick={() => navigate('/pedidos')}>Ir a pedidos</Button>
-            <Button variant="secondary" onClick={() => navigate('/facturas')}>
-              Ver facturas
-            </Button>
-          </div>
-        </Card>
-      )}
+        )}
+      </div>
     </div>
   )
 }
