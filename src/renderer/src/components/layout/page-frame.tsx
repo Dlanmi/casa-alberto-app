@@ -98,13 +98,13 @@ function Header({
       <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
         <div className="max-w-3xl space-y-3">
           {eyebrow && (
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-text-soft">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-text-muted">
               {eyebrow}
             </p>
           )}
           <div className="space-y-2">
             <h1 className="text-3xl font-semibold tracking-tight text-text">{title}</h1>
-            <p className="max-w-2xl text-sm leading-6 text-text-muted">{subtitle}</p>
+            <p className="max-w-2xl text-base leading-relaxed text-text-muted">{subtitle}</p>
           </div>
         </div>
 
