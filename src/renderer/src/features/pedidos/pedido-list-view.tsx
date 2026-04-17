@@ -1,6 +1,6 @@
 import { ClipboardList } from 'lucide-react'
 import { Table, Thead, Tbody, Tr, Th, Td } from '@renderer/components/ui/table'
-import { EstadoPedidoBadge } from '@renderer/components/shared/estado-badge'
+import { EstadoPedidoDot } from '@renderer/components/shared/estado-badge'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
@@ -29,7 +29,7 @@ export function PedidoListView({
       <EmptyState
         icon={ClipboardList}
         title="Aún no hay pedidos"
-        description="Cuando hagas tu primera cotización y la confirmes, aparecerá aquí. Empieza creando una cotización."
+        description="Crea una cotización y confírmala para verlos aquí."
       />
     )
   }
@@ -83,11 +83,11 @@ export function PedidoListView({
               <Td className="text-right">
                 <PrecioDisplay value={p.precioTotal} size="sm" />
               </Td>
-              <Td className="w-30">
+              <Td className="min-w-30">
                 <PagoBar total={p.precioTotal} pagado={0} />
               </Td>
               <Td>
-                <EstadoPedidoBadge estado={p.estado} />
+                <EstadoPedidoDot estado={p.estado} />
               </Td>
             </Tr>
           )

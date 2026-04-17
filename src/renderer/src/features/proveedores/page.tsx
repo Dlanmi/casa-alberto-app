@@ -238,7 +238,7 @@ function ProveedorDetailPanel({
         role="dialog"
         aria-modal="true"
         aria-label={`Detalle de ${proveedor.nombre}`}
-        className="relative h-full w-105 max-w-[80vw] overflow-y-auto bg-surface shadow-4 animate-slide-in-right"
+        className="relative h-full w-full sm:w-105 sm:max-w-[80vw] overflow-y-auto bg-surface shadow-4 animate-slide-in-right"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 space-y-6">

@@ -36,8 +36,8 @@ export function BarChartMini({
   height = 160
 }: BarChartMiniProps): React.JSX.Element {
   const data: ChartItem[] = [
-    { label: 'Ingresos', valor: ingresos, color: '#047857' },
-    { label: 'Gastos', valor: gastos, color: '#b42318' }
+    { label: 'Ingresos', valor: ingresos, color: 'var(--color-success)' },
+    { label: 'Gastos', valor: gastos, color: 'var(--color-error)' }
   ]
 
   return (
@@ -47,7 +47,7 @@ export function BarChartMini({
           dataKey="label"
           axisLine={false}
           tickLine={false}
-          tick={{ fontSize: 12, fill: '#78716f' }}
+          tick={{ fontSize: 12, fill: 'var(--color-text-soft)' }}
         />
         <YAxis hide />
         <Tooltip content={<CustomTooltip />} cursor={false} />

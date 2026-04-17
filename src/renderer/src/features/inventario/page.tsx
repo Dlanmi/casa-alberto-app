@@ -211,7 +211,7 @@ export default function InventarioPage(): React.JSX.Element {
           icon={Package}
           illustration={<BoxesIllustration size={140} />}
           title="Sin materiales registrados"
-          description="Registra los materiales que almacenas en el local para controlar el stock. Los marcos no van aquí porque se piden al proveedor."
+          description="Registra los materiales que almacenas para controlar el stock."
           actionLabel="Nuevo material"
           onAction={() => setShowCreateModal(true)}
         />

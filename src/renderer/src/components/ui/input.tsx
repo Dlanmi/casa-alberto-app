@@ -28,7 +28,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={inputId}
           className={cn(
-            'h-11 w-full rounded-md border border-border bg-surface px-3 text-sm text-text shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]',
+            'h-11 w-full rounded-md border border-border bg-surface px-3 text-sm text-text shadow-inset-input',
             'placeholder:text-text-soft',
             // Halo sutil: el ring usa accent semi-transparente separado del
             // border para evitar el "doble borde" visual que el dueño reportó.

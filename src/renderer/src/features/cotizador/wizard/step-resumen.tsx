@@ -277,39 +277,38 @@ export function StepResumen({
               <span className="text-xs text-text-muted">(opcional)</span>
             </div>
 
-            {/* Toggle */}
-            <div className="rounded-lg border border-border bg-surface p-4">
-              <div className="flex items-center justify-between">
-                <div>
+            {!conAbono ? (
+              <button
+                onClick={() => setConAbono(true)}
+                className="flex w-full items-center justify-between rounded-lg border border-dashed border-border bg-surface p-4 text-left transition-colors hover:border-accent hover:bg-accent/5 cursor-pointer"
+                aria-label="Registrar abono"
+              >
+                <span className="flex items-center gap-2">
+                  <Banknote size={18} className="text-accent" />
                   <span className="text-sm font-medium text-text">
-                    ¿El cliente deja un abono ahora?
+                    ¿Cobraste algo? Registrar abono
                   </span>
-                  <p className="mt-0.5 text-xs text-text-muted">
-                    Se creará la factura y se registrará el pago automáticamente.
-                  </p>
+                </span>
+                <span className="text-xs text-text-muted">Opcional</span>
+              </button>
+            ) : (
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+                  <span className="flex items-center gap-2 text-sm font-medium text-text">
+                    <Banknote size={18} className="text-success" />
+                    Registrar abono
+                  </span>
+                  <button
+                    onClick={() => {
+                      setConAbono(false)
+                      setAbono('')
+                    }}
+                    className="text-xs text-text-muted hover:text-text cursor-pointer"
+                  >
+                    Quitar
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    setConAbono(!conAbono)
-                    if (conAbono) setAbono('')
-                  }}
-                  className={cn(
-                    'relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0',
-                    conAbono ? 'bg-success' : 'bg-border'
-                  )}
-                  aria-label={conAbono ? 'Desactivar abono' : 'Activar abono'}
-                >
-                  <span
-                    className={cn(
-                      'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow-1 transition-all duration-200',
-                      conAbono ? 'left-[23px]' : 'left-[3px]'
-                    )}
-                  />
-                </button>
-              </div>
-
-              {conAbono && (
-                <div className="mt-4 space-y-4 border-t border-border pt-4">
+                <div className="space-y-4">
                   {/* Monto */}
                   <Input
                     label="Monto del abono"
@@ -391,8 +390,8 @@ export function StepResumen({
                     </div>
                   )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* ── 3. Notas ── */}

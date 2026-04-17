@@ -287,7 +287,7 @@ function AparienciaSection(): React.JSX.Element {
           className={cn(
             'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
-            enabled ? 'bg-accent' : 'bg-neutral-300',
+            enabled ? 'bg-accent' : 'bg-border-strong',
             saving && 'opacity-60'
           )}
         >

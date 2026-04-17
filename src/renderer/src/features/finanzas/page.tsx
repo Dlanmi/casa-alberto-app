@@ -190,7 +190,7 @@ export default function FinanzasPage(): React.JSX.Element {
             >
               <ChevronLeft size={18} />
             </Button>
-            <span className="min-w-35 text-center text-sm font-medium text-text">
+            <span className="min-w-0 sm:min-w-35 text-center text-sm font-medium text-text">
               {formatMesLabel(mes)}
             </span>
             <Button

@@ -772,7 +772,7 @@ function CreateContratoModal({
                       )}
                     />
                   </div>
-                  <div className="w-20">
+                  <div className="w-16 sm:w-20 shrink-0">
                     <input
                       type="number"
                       placeholder="Cant."
@@ -787,7 +787,7 @@ function CreateContratoModal({
                       )}
                     />
                   </div>
-                  <div className="w-32">
+                  <div className="w-24 sm:w-32 shrink-0">
                     <input
                       type="number"
                       placeholder="Valor unit."

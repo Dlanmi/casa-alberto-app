@@ -382,7 +382,7 @@ export function WizardShell({
             />
           )}
 
-          <div className="flex justify-between mt-8 pt-6 border-t border-border">
+          <div className="sticky bottom-0 -mx-2 mt-8 flex justify-between border-t border-border bg-surface/95 px-2 py-4 backdrop-blur">
             <Button
               variant="outline"
               size="lg"

@@ -313,7 +313,7 @@ export default function PedidosPage(): React.JSX.Element {
           icon={ClipboardList}
           illustration={<FrameIllustration size={140} />}
           title="Aún no hay pedidos"
-          description="Cuando hagas tu primera cotización y la confirmes, aparecerá aquí. Empieza creando una cotización."
+          description="Crea una cotización y confírmala para verlos aquí."
           actionLabel="Ir al Cotizador"
           onAction={() => navigate('/cotizador')}
         />

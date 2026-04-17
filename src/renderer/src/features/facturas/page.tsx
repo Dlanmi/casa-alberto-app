@@ -20,7 +20,7 @@ import { CashRegisterIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
-import { EstadoFacturaBadge } from '@renderer/components/shared/estado-badge'
+import { EstadoFacturaBadge, EstadoFacturaDot } from '@renderer/components/shared/estado-badge'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
@@ -161,7 +161,7 @@ export default function FacturasPage(): React.JSX.Element {
               !search && tab === 'todas' ? <CashRegisterIllustration size={140} /> : undefined
             }
             title={search || tab !== 'todas' ? 'Sin resultados' : 'No hay facturas'}
-            description="Cuando tengas un pedido confirmado, en proceso o listo, podrás crear la factura desde aquí."
+            description="Confirma un pedido para poder facturarlo."
           />
         ) : (
           <Table>
@@ -186,7 +186,7 @@ export default function FacturasPage(): React.JSX.Element {
                     <PrecioDisplay value={f.total} size="sm" />
                   </Td>
                   <Td>
-                    <EstadoFacturaBadge estado={f.estado} />
+                    <EstadoFacturaDot estado={f.estado} />
                   </Td>
                 </Tr>
               ))}

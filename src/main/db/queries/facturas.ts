@@ -80,7 +80,11 @@ export function listarFacturas(
   if (opts.clienteId) conds.push(eq(facturas.clienteId, opts.clienteId))
   if (opts.estado) conds.push(eq(facturas.estado, opts.estado))
   const where = conds.length > 0 ? and(...conds) : undefined
-  const q = db.select().from(facturas).where(where).orderBy(desc(facturas.fecha))
+  const q = db
+    .select()
+    .from(facturas)
+    .where(where)
+    .orderBy(desc(facturas.createdAt), desc(facturas.id))
   if (opts.limit) return q.limit(opts.limit).all()
   return q.all()
 }
