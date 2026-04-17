@@ -4,6 +4,8 @@ import { AppTitleBar } from './app-titlebar'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { CommandPalette } from './command-palette'
+import { HelpButton } from './help-button'
+import { WelcomeTour } from './welcome-tour'
 import { useKeyboard } from '@renderer/hooks/use-keyboard'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { PageLoader } from '@renderer/components/ui/spinner'
@@ -81,6 +83,8 @@ export function AppShell(): React.JSX.Element {
         </div>
       </div>
       <CommandPalette open={searchOpen} onClose={closeSearch} />
+      <HelpButton />
+      <WelcomeTour />
     </div>
   )
 }

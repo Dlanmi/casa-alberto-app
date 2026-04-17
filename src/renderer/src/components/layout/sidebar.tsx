@@ -161,9 +161,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
                   const Icon = item.icon
                   const badgeCount = badges[item.path as keyof BadgeCounts] ?? 0
 
+                  const tourAnchor =
+                    item.path === '/'
+                      ? 'sidebar-dashboard'
+                      : item.path === '/cotizador'
+                        ? 'sidebar-cotizador'
+                        : item.path === '/pedidos'
+                          ? 'sidebar-pedidos'
+                          : undefined
+
                   const button = (
                     <button
                       onClick={() => navigate(item.path)}
+                      data-tour={tourAnchor}
                       className={cn(
                         'w-full flex items-center gap-3 rounded-md transition-colors cursor-pointer relative',
                         collapsed ? 'h-11 justify-center' : 'h-11 px-3',
