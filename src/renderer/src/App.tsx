@@ -1,5 +1,6 @@
 import { createHashRouter, RouterProvider } from 'react-router-dom'
 import { ToastProvider } from '@renderer/contexts/toast-context'
+import { EmojisProvider } from '@renderer/contexts/emojis-context'
 import { AppShell } from '@renderer/components/layout/app-shell'
 import { AppRouteError } from '@renderer/components/layout/app-route-error'
 import DashboardPage from '@renderer/features/dashboard/page'
@@ -45,9 +46,11 @@ const router = createHashRouter([
 
 function App(): React.JSX.Element {
   return (
-    <ToastProvider>
-      <RouterProvider router={router} />
-    </ToastProvider>
+    <EmojisProvider>
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
+    </EmojisProvider>
   )
 }
 

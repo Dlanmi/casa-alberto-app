@@ -21,6 +21,8 @@ import { useIpc } from '@renderer/hooks/use-ipc'
 import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useEmojis } from '@renderer/contexts/emojis-context'
+import { EMOJI_TOAST } from '@renderer/lib/emojis'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
@@ -65,6 +67,7 @@ export default function ClientesPage(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [editCliente, setEditCliente] = useState<Cliente | null>(null)
   const { showToast } = useToast()
+  const { emoji } = useEmojis()
 
   const {
     data: clientes,
@@ -197,7 +200,10 @@ export default function ClientesPage(): React.JSX.Element {
           onCreated={() => {
             setShowCreate(false)
             refetch()
-            showToast('success', 'Cliente creado correctamente')
+            showToast(
+              'success',
+              `${emoji(EMOJI_TOAST.cliente_creado)} Cliente creado correctamente`.trim()
+            )
           }}
         />
       )}

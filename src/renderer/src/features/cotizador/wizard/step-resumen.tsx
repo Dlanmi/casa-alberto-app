@@ -19,6 +19,8 @@ import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { ClientePicker } from '@renderer/components/shared/cliente-picker'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useEmojis } from '@renderer/contexts/emojis-context'
+import { EMOJI_TOAST } from '@renderer/lib/emojis'
 import { formatCOP, hoyISO } from '@renderer/lib/format'
 import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { conceptoIcon, TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
@@ -58,6 +60,7 @@ export function StepResumen({
 }: Props): React.JSX.Element {
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const { emoji } = useEmojis()
   const [creating, setCreating] = useState(false)
   const [createdPedido, setCreatedPedido] = useState<{ id: number; numero: string } | null>(null)
 
@@ -127,7 +130,7 @@ export function StepResumen({
       setCreatedPedido({ id: pedido.id, numero: pedido.numero })
       showToast({
         tone: 'success',
-        title: 'Pedido creado',
+        title: `${emoji(EMOJI_TOAST.pedido_creado)} Pedido creado`.trim(),
         message:
           abonoNum > 0
             ? `Pedido ${pedido.numero} creado con abono de ${formatCOP(abonoNum)}. Factura generada.`

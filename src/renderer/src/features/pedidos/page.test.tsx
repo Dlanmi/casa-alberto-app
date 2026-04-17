@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '@renderer/contexts/toast-context'
+import { EmojisProvider } from '@renderer/contexts/emojis-context'
 import PedidosPage from './page'
 
 function installWindowApi(): void {
@@ -58,6 +59,10 @@ function installWindowApi(): void {
             { id: 11, nombre: 'Luis Gómez' }
           ]
         }))
+      },
+      configuracion: {
+        get: vi.fn(async () => ({ ok: true, data: '1' })),
+        set: vi.fn(async () => ({ ok: true, data: null }))
       }
     }
   })
@@ -73,11 +78,13 @@ describe('PedidosPage', () => {
 
     render(
       <MemoryRouter initialEntries={['/pedidos?focus=sin_abono']}>
-        <ToastProvider>
-          <Routes>
-            <Route path="/pedidos" element={<PedidosPage />} />
-          </Routes>
-        </ToastProvider>
+        <EmojisProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/pedidos" element={<PedidosPage />} />
+            </Routes>
+          </ToastProvider>
+        </EmojisProvider>
       </MemoryRouter>
     )
 

@@ -29,6 +29,8 @@ import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { MetricCard, OperationalBoard, PageSection } from '@renderer/components/layout/page-frame'
 import { CategoryBreakdown } from './category-breakdown'
 import { CATEGORIA_FIN_ICON } from '@renderer/lib/iconography'
+import { EMOJI_CATEGORIA_FINANZAS } from '@renderer/lib/emojis'
+import { useEmojis } from '@renderer/contexts/emojis-context'
 import { formatCOP, mesActualISO, hoyISO } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/cn'
 import type {
@@ -98,6 +100,7 @@ export default function FinanzasPage(): React.JSX.Element {
   const [search, setSearch] = useState('')
   const [tipoTab, setTipoTab] = useState('todos')
   const { showToast } = useToast()
+  const { enabled: emojisEnabled } = useEmojis()
 
   const mesActual = mesActualISO()
   const isCurrentMonth = mes === mesActual
@@ -315,6 +318,7 @@ export default function FinanzasPage(): React.JSX.Element {
               <Tbody>
                 {filteredMovimientos.map((m) => {
                   const CategoriaIcon = CATEGORIA_FIN_ICON[m.categoria] ?? DollarSign
+                  const categoriaEmoji = EMOJI_CATEGORIA_FINANZAS[m.categoria]
                   const fullDescripcion = m.descripcion || ''
                   return (
                     <Tr key={m.id}>
@@ -330,7 +334,13 @@ export default function FinanzasPage(): React.JSX.Element {
                       </Td>
                       <Td>
                         <span className="inline-flex items-center gap-1.5 text-text-muted">
-                          <CategoriaIcon size={14} className="text-accent-strong" />
+                          {emojisEnabled && categoriaEmoji ? (
+                            <span aria-hidden="true" className="text-base leading-none">
+                              {categoriaEmoji}
+                            </span>
+                          ) : (
+                            <CategoriaIcon size={14} className="text-accent-strong" />
+                          )}
                           {CATEGORIA_LABEL[m.categoria] ?? m.categoria}
                         </span>
                       </Td>
@@ -420,7 +430,7 @@ function MovimientoModal({
 
   const categoriaOptions = CATEGORIAS_MOVIMIENTO.map((c) => ({
     value: c,
-    label: CATEGORIA_LABEL[c] ?? c
+    label: `${EMOJI_CATEGORIA_FINANZAS[c] ?? ''} ${CATEGORIA_LABEL[c] ?? c}`.trim()
   }))
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {

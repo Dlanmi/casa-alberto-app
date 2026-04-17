@@ -9,6 +9,8 @@ import {
   GlassWater
 } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
+import { EMOJI_TIPO_TRABAJO } from '@renderer/lib/emojis'
+import { useEmojis } from '@renderer/contexts/emojis-context'
 import type { TipoTrabajo } from '@shared/types'
 import type { LucideIcon } from 'lucide-react'
 
@@ -98,6 +100,7 @@ const BLOQUES: {
 ]
 
 export function TipoTrabajoGrid({ onSelect, onManagePrecios }: Props): React.JSX.Element {
+  const { enabled: emojisEnabled } = useEmojis()
   return (
     <div className="space-y-6">
       {BLOQUES.map((bloque) => (
@@ -123,7 +126,13 @@ export function TipoTrabajoGrid({ onSelect, onManagePrecios }: Props): React.JSX
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent/10 text-accent-strong">
-                      <Icon size={22} strokeWidth={1.7} />
+                      {emojisEnabled ? (
+                        <span className="text-2xl leading-none" aria-hidden="true">
+                          {EMOJI_TIPO_TRABAJO[item.tipo]}
+                        </span>
+                      ) : (
+                        <Icon size={22} strokeWidth={1.7} />
+                      )}
                     </div>
                     <span className="text-xs font-medium uppercase tracking-[0.14em] text-text-soft">
                       Abrir flujo

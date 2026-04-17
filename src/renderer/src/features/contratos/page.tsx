@@ -22,7 +22,7 @@ import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
 import { Table, Thead, Tbody, Tr, Th, Td } from '@renderer/components/ui/table'
 import { EmptyState } from '@renderer/components/ui/empty-state'
-import { FrameIllustration } from '@renderer/components/illustrations'
+import { ContractIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { ClientePicker } from '@renderer/components/shared/cliente-picker'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
@@ -215,7 +215,7 @@ export default function ContratosPage(): React.JSX.Element {
         {filtered.length === 0 ? (
           <EmptyState
             icon={FileSignature}
-            illustration={!search ? <FrameIllustration size={140} /> : undefined}
+            illustration={!search ? <ContractIllustration size={140} /> : undefined}
             title={search ? 'Sin resultados' : 'Sin contratos'}
             description={
               search
