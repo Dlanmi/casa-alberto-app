@@ -30,13 +30,15 @@ type KanbanBoardProps = {
   clienteMap: Map<number, string>
   onCardClick: (pedido: Pedido) => void
   onChangeEstado: (pedidoId: number, nuevoEstado: EstadoPedido) => void
+  highlightedId?: number | null
 }
 
 export function KanbanBoard({
   pedidos,
   clienteMap,
   onCardClick,
-  onChangeEstado
+  onChangeEstado,
+  highlightedId = null
 }: KanbanBoardProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [scrollState, setScrollState] = useState({ left: false, right: false })
@@ -111,6 +113,7 @@ export function KanbanBoard({
             onDragEnd={() => setDragState(null)}
             dragActivePedidoId={dragState?.pedidoId ?? null}
             dropKind={dropKind}
+            highlightedId={highlightedId}
           />
         )
       })}

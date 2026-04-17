@@ -21,6 +21,8 @@ import { useIpc } from '@renderer/hooks/use-ipc'
 import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useEmojis } from '@renderer/contexts/emojis-context'
+import { EMOJI_TOAST } from '@renderer/lib/emojis'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
@@ -36,6 +38,7 @@ import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { iniciales, formatTelefono } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/cn'
+import { getAlertaPedido, type PedidoAlertaRow } from '@renderer/lib/pedidos-alertas'
 import type { Cliente, IpcResult } from '@shared/types'
 
 type ClienteEstadisticas = {
@@ -65,6 +68,7 @@ export default function ClientesPage(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [editCliente, setEditCliente] = useState<Cliente | null>(null)
   const { showToast } = useToast()
+  const { emoji } = useEmojis()
 
   const {
     data: clientes,
@@ -72,6 +76,23 @@ export default function ClientesPage(): React.JSX.Element {
     error,
     refetch
   } = useIpc<Cliente[]>(() => window.api.clientes.listar({ soloActivos: true }), [])
+
+  // Fase 3 — conjunto de IDs de clientes con pedidos sin abono. Permite
+  // mostrar un badge rojo junto al nombre para que papá ubique sin abrir
+  // cuál cliente tiene pagos pendientes. El endpoint ya está en la app y
+  // lo usa la sidebar para el contador de pedidos.
+  const { data: sinAbonoAlertas } = useIpc<PedidoAlertaRow[]>(
+    () => window.api.pedidos.alertas.sinAbono(),
+    []
+  )
+  const clientesConDeuda = useMemo(() => {
+    const ids = new Set<number>()
+    for (const alerta of sinAbonoAlertas ?? []) {
+      const clienteId = getAlertaPedido(alerta)?.clienteId
+      if (typeof clienteId === 'number') ids.add(clienteId)
+    }
+    return ids
+  }, [sinAbonoAlertas])
 
   const filtered = useMemo(() => {
     if (!clientes) return []
@@ -169,11 +190,13 @@ export default function ClientesPage(): React.JSX.Element {
             <ClienteCard
               key={c.id}
               cliente={c}
+              tieneDeuda={clientesConDeuda.has(c.id)}
               onOpen={() => setSelectedId(c.id)}
               onCall={(tel) => {
                 window.location.href = `tel:${tel.replace(/\D/g, '')}`
               }}
               onCotizar={() => navigate('/cotizador')}
+              onVerDeuda={() => navigate(`/pedidos?focus=sin_abono`)}
             />
           ))}
         </div>
@@ -197,7 +220,10 @@ export default function ClientesPage(): React.JSX.Element {
           onCreated={() => {
             setShowCreate(false)
             refetch()
-            showToast('success', 'Cliente creado correctamente')
+            showToast(
+              'success',
+              `${emoji(EMOJI_TOAST.cliente_creado)} Cliente creado correctamente`.trim()
+            )
           }}
         />
       )}
@@ -226,14 +252,18 @@ export default function ClientesPage(): React.JSX.Element {
 // la ficha. El usuario de 60 años puede iniciar acción en 1 click.
 function ClienteCard({
   cliente,
+  tieneDeuda,
   onOpen,
   onCall,
-  onCotizar
+  onCotizar,
+  onVerDeuda
 }: {
   cliente: Cliente
+  tieneDeuda: boolean
   onOpen: () => void
   onCall: (tel: string) => void
   onCotizar: () => void
+  onVerDeuda: () => void
 }): React.JSX.Element {
   const stopPropagation = (e: React.MouseEvent): void => e.stopPropagation()
   const clienteScore = scoreCliente(cliente)
@@ -256,6 +286,20 @@ function ClienteCard({
               <span className="shrink-0 text-[10px] font-medium text-info px-1.5 py-0.5 bg-info-bg rounded-sm">
                 Menor
               </span>
+            )}
+            {tieneDeuda && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  stopPropagation(e)
+                  onVerDeuda()
+                }}
+                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-error-bg text-error-strong cursor-pointer hover:bg-error/15"
+                title="Este cliente tiene pedidos sin abono. Clic para ver la lista."
+              >
+                <AlertCircle size={11} />
+                Con deuda
+              </button>
             )}
             {clienteScore && (
               <span
@@ -452,7 +496,7 @@ function DetailPanel({
             }
           />
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <Button size="sm" onClick={() => navigate('/cotizador')} className="justify-center">
               <Calculator size={16} />
               Cotizar
@@ -511,7 +555,7 @@ function DetailPanel({
               <h3 className="text-sm font-medium uppercase tracking-wider text-text-soft">
                 Estadísticas
               </h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Card padding="sm" className="text-center">
                   <p className="text-2xl font-semibold tabular-nums text-text">
                     {stats.totalPedidos}

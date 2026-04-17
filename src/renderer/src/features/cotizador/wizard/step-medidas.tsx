@@ -18,10 +18,9 @@ export function StepMedidas({ data, onChange }: Props): React.JSX.Element {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text mb-1">Medidas</h2>
+      <h2 className="text-xl font-bold tracking-tight text-text mb-1">Medidas</h2>
       <p className="text-sm text-text-muted mb-6">
-        Mide el ancho y el alto de la pieza a enmarcar en centímetros. Usa siempre las medidas
-        interiores.
+        Ancho y alto de la pieza, en centímetros y medida interior.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">

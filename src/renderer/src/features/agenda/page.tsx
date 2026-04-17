@@ -705,7 +705,7 @@ export default function AgendaPage(): React.JSX.Element {
       ) : (
         <div className="space-y-6">
           {/* Week overview row */}
-          <div className="grid grid-cols-7 gap-2" role="listbox" aria-label="Dias de la semana">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2" role="listbox" aria-label="Dias de la semana">
             {weekDays.map((day) => (
               <WeekOverviewCell
                 key={day.diaKey}

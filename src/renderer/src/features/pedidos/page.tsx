@@ -1,10 +1,12 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { LayoutGrid, List, ClipboardList, Calculator } from 'lucide-react'
 import { OperationalBoard } from '@renderer/components/layout/page-frame'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useEmojis } from '@renderer/contexts/emojis-context'
+import { EMOJI_TOAST, EMOJI_ESTADO_PEDIDO } from '@renderer/lib/emojis'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { EmptyState } from '@renderer/components/ui/empty-state'
 import { FrameIllustration } from '@renderer/components/illustrations'
@@ -38,9 +40,31 @@ export default function PedidosPage(): React.JSX.Element {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { showToast } = useToast()
+  const { emoji } = useEmojis()
   const [selected, setSelected] = useState<Pedido | null>(null)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [search, setSearch] = useState('')
+
+  // Fase 3 — highlight: tras crear un pedido en el cotizador, la URL trae
+  // ?highlight=ID. Resaltamos la tarjeta/fila correspondiente por 3s para que
+  // papá vea con claridad dónde quedó su nuevo pedido.
+  const highlightParam = searchParams.get('highlight')
+  const highlightedId = highlightParam ? Number(highlightParam) : null
+
+  useEffect(() => {
+    if (!highlightedId) return
+    const timer = setTimeout(() => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          next.delete('highlight')
+          return next
+        },
+        { replace: true }
+      )
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [highlightedId, setSearchParams])
 
   const currentFocus = (() => {
     const focus = searchParams.get('focus')
@@ -163,9 +187,13 @@ export default function PedidosPage(): React.JSX.Element {
       )) as IpcResult<Pedido>
 
       if (result.ok) {
+        const titleEmoji =
+          nuevoEstado === 'entregado'
+            ? EMOJI_TOAST.pedido_entregado
+            : EMOJI_ESTADO_PEDIDO[nuevoEstado]
         showToast({
           tone: 'success',
-          title: `Pedido ${oldPedido.numero} actualizado`,
+          title: `${emoji(titleEmoji)} Pedido ${oldPedido.numero} actualizado`.trim(),
           message: getEstadoMessage(nuevoEstado),
           actionLabel: getEstadoActionLabel(nuevoEstado),
           onAction: () => {
@@ -192,7 +220,7 @@ export default function PedidosPage(): React.JSX.Element {
         })
       }
     },
-    [navigate, pedidos, refetch, selected, showToast, sinAbonoIds]
+    [emoji, navigate, pedidos, refetch, selected, showToast, sinAbonoIds]
   )
 
   if (loading) return <PageLoader />
@@ -285,7 +313,7 @@ export default function PedidosPage(): React.JSX.Element {
           icon={ClipboardList}
           illustration={<FrameIllustration size={140} />}
           title="Aún no hay pedidos"
-          description="Cuando hagas tu primera cotización y la confirmes, aparecerá aquí. Empieza creando una cotización."
+          description="Crea una cotización y confírmala para verlos aquí."
           actionLabel="Ir al Cotizador"
           onAction={() => navigate('/cotizador')}
         />
@@ -295,12 +323,14 @@ export default function PedidosPage(): React.JSX.Element {
           clienteMap={clienteMap}
           onCardClick={setSelected}
           onChangeEstado={handleChangeEstado}
+          highlightedId={highlightedId}
         />
       ) : (
         <PedidoListView
           pedidos={filteredPedidos}
           onRowClick={setSelected}
           clienteMap={clienteMap}
+          highlightedId={highlightedId}
         />
       )}
 

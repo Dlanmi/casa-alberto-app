@@ -150,7 +150,7 @@ export function PedidoDetailPanel({
 
   return (
     <div
-      className="fixed right-0 top-0 bottom-0 w-105 max-w-[80vw] bg-surface border-l border-border shadow-4 z-40 flex flex-col animate-slide-in-right"
+      className="fixed right-0 top-0 bottom-0 w-full sm:w-105 sm:max-w-[80vw] bg-surface border-l border-border shadow-4 z-40 flex flex-col animate-slide-in-right"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">

@@ -20,7 +20,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           type="text"
           value={value}
           className={cn(
-            'h-11 w-full rounded-md border border-border bg-surface pl-10 pr-10 text-sm text-text shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]',
+            'h-11 w-full rounded-md border border-border bg-surface pl-10 pr-10 text-sm text-text shadow-inset-input',
             'placeholder:text-text-soft',
             'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent',
             className

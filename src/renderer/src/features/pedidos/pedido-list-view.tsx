@@ -1,11 +1,12 @@
 import { ClipboardList } from 'lucide-react'
 import { Table, Thead, Tbody, Tr, Th, Td } from '@renderer/components/ui/table'
-import { EstadoPedidoBadge } from '@renderer/components/shared/estado-badge'
+import { EstadoPedidoDot } from '@renderer/components/shared/estado-badge'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
 import { InitialsAvatar } from '@renderer/components/shared/initials-avatar'
 import { EmptyState } from '@renderer/components/ui/empty-state'
+import { cn } from '@renderer/lib/cn'
 import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
 import type { Pedido } from '@shared/types'
@@ -14,19 +15,21 @@ type PedidoListViewProps = {
   pedidos: Pedido[]
   onRowClick: (pedido: Pedido) => void
   clienteMap?: Map<number, string>
+  highlightedId?: number | null
 }
 
 export function PedidoListView({
   pedidos,
   onRowClick,
-  clienteMap
+  clienteMap,
+  highlightedId = null
 }: PedidoListViewProps): React.JSX.Element {
   if (pedidos.length === 0) {
     return (
       <EmptyState
         icon={ClipboardList}
         title="Aún no hay pedidos"
-        description="Cuando hagas tu primera cotización y la confirmes, aparecerá aquí. Empieza creando una cotización."
+        description="Crea una cotización y confírmala para verlos aquí."
       />
     )
   }
@@ -51,7 +54,14 @@ export function PedidoListView({
           const TipoIcon = TIPO_TRABAJO_ICON[p.tipoTrabajo]
           const clienteNombre = clienteMap?.get(p.clienteId) ?? 'Sin cliente'
           return (
-            <Tr key={p.id} className="cursor-pointer" onClick={() => onRowClick(p)}>
+            <Tr
+              key={p.id}
+              className={cn(
+                'cursor-pointer',
+                highlightedId === p.id && 'ring-2 ring-accent bg-accent/10 animate-pulse'
+              )}
+              onClick={() => onRowClick(p)}
+            >
               <Td className="font-medium tabular-nums">{p.numero}</Td>
               <Td>
                 <div className="flex items-center gap-2">
@@ -73,11 +83,11 @@ export function PedidoListView({
               <Td className="text-right">
                 <PrecioDisplay value={p.precioTotal} size="sm" />
               </Td>
-              <Td className="w-30">
+              <Td className="min-w-30">
                 <PagoBar total={p.precioTotal} pagado={0} />
               </Td>
               <Td>
-                <EstadoPedidoBadge estado={p.estado} />
+                <EstadoPedidoDot estado={p.estado} />
               </Td>
             </Tr>
           )

@@ -6,6 +6,8 @@ import { useIpc } from '@renderer/hooks/use-ipc'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useDirtyGuard } from '@renderer/hooks/use-dirty-guard'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useEmojis } from '@renderer/contexts/emojis-context'
+import { EMOJI_TOAST } from '@renderer/lib/emojis'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Button } from '@renderer/components/ui/button'
 import { Modal } from '@renderer/components/ui/modal'
@@ -18,7 +20,7 @@ import { CashRegisterIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
-import { EstadoFacturaBadge } from '@renderer/components/shared/estado-badge'
+import { EstadoFacturaBadge, EstadoFacturaDot } from '@renderer/components/shared/estado-badge'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
@@ -47,6 +49,7 @@ export default function FacturasPage(): React.JSX.Element {
   const [showNuevaFactura, setShowNuevaFactura] = useState(false)
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const { emoji } = useEmojis()
 
   const {
     data: facturas,
@@ -158,7 +161,7 @@ export default function FacturasPage(): React.JSX.Element {
               !search && tab === 'todas' ? <CashRegisterIllustration size={140} /> : undefined
             }
             title={search || tab !== 'todas' ? 'Sin resultados' : 'No hay facturas'}
-            description="Cuando tengas un pedido confirmado, en proceso o listo, podrás crear la factura desde aquí."
+            description="Confirma un pedido para poder facturarlo."
           />
         ) : (
           <Table>
@@ -183,7 +186,7 @@ export default function FacturasPage(): React.JSX.Element {
                     <PrecioDisplay value={f.total} size="sm" />
                   </Td>
                   <Td>
-                    <EstadoFacturaBadge estado={f.estado} />
+                    <EstadoFacturaDot estado={f.estado} />
                   </Td>
                 </Tr>
               ))}
@@ -203,13 +206,16 @@ export default function FacturasPage(): React.JSX.Element {
             if (nuevoSaldo != null && nuevoSaldo <= 0) {
               showToast({
                 tone: 'success',
-                title: 'Factura pagada en su totalidad',
+                title: `${emoji(EMOJI_TOAST.factura_pagada)} Factura pagada en su totalidad`.trim(),
                 message: 'El cliente puede recoger su pedido.',
                 actionLabel: 'Ver pedidos',
                 onAction: () => navigate('/pedidos')
               })
             } else {
-              showToast('success', 'Pago registrado correctamente')
+              showToast(
+                'success',
+                `${emoji(EMOJI_TOAST.pago_registrado)} Pago registrado correctamente`.trim()
+              )
             }
           }}
         />

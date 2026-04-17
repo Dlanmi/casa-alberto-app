@@ -35,26 +35,36 @@ export const ROUTES = {
 
 // ---- Sidebar Items ----
 
+export type SidebarGroup = 'dia_a_dia' | 'personas' | 'negocio' | 'ajustes'
+
+export const SIDEBAR_GROUP_LABEL: Record<SidebarGroup, string> = {
+  dia_a_dia: 'Día a día',
+  personas: 'Personas',
+  negocio: 'Negocio',
+  ajustes: 'Ajustes'
+}
+
 export interface SidebarItem {
   label: string
   icon: LucideIcon
   path: string
   shortcut?: string
+  group: SidebarGroup
 }
 
 export const SIDEBAR_ITEMS: SidebarItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: ROUTES.dashboard, shortcut: 'Alt+1' },
-  { label: 'Agenda', icon: CalendarDays, path: ROUTES.agenda, shortcut: 'Alt+2' },
-  { label: 'Cotizador', icon: Calculator, path: ROUTES.cotizador, shortcut: 'Alt+3' },
-  { label: 'Pedidos', icon: ClipboardList, path: ROUTES.pedidos, shortcut: 'Alt+4' },
-  { label: 'Facturas', icon: Receipt, path: ROUTES.facturas, shortcut: 'Alt+5' },
-  { label: 'Clientes', icon: Users, path: ROUTES.clientes, shortcut: 'Alt+6' },
-  { label: 'Clases', icon: Palette, path: ROUTES.clases, shortcut: 'Alt+7' },
-  { label: 'Finanzas', icon: TrendingUp, path: ROUTES.finanzas, shortcut: 'Alt+8' },
-  { label: 'Proveedores', icon: Truck, path: ROUTES.proveedores, shortcut: 'Alt+9' },
-  { label: 'Contratos', icon: FileSignature, path: ROUTES.contratos },
-  { label: 'Inventario', icon: Package, path: ROUTES.inventario },
-  { label: 'Configuración', icon: Settings, path: ROUTES.configuracion }
+  { label: 'Dashboard', icon: LayoutDashboard, path: ROUTES.dashboard, shortcut: 'Alt+1', group: 'dia_a_dia' },
+  { label: 'Agenda', icon: CalendarDays, path: ROUTES.agenda, shortcut: 'Alt+2', group: 'dia_a_dia' },
+  { label: 'Cotizador', icon: Calculator, path: ROUTES.cotizador, shortcut: 'Alt+3', group: 'dia_a_dia' },
+  { label: 'Pedidos', icon: ClipboardList, path: ROUTES.pedidos, shortcut: 'Alt+4', group: 'dia_a_dia' },
+  { label: 'Facturas', icon: Receipt, path: ROUTES.facturas, shortcut: 'Alt+5', group: 'dia_a_dia' },
+  { label: 'Clientes', icon: Users, path: ROUTES.clientes, shortcut: 'Alt+6', group: 'personas' },
+  { label: 'Proveedores', icon: Truck, path: ROUTES.proveedores, shortcut: 'Alt+9', group: 'personas' },
+  { label: 'Clases', icon: Palette, path: ROUTES.clases, shortcut: 'Alt+7', group: 'personas' },
+  { label: 'Finanzas', icon: TrendingUp, path: ROUTES.finanzas, shortcut: 'Alt+8', group: 'negocio' },
+  { label: 'Inventario', icon: Package, path: ROUTES.inventario, group: 'negocio' },
+  { label: 'Contratos', icon: FileSignature, path: ROUTES.contratos, group: 'negocio' },
+  { label: 'Configuración', icon: Settings, path: ROUTES.configuracion, group: 'ajustes' }
 ]
 
 // ---- Label Maps ----

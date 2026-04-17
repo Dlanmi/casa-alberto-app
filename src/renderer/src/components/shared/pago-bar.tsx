@@ -27,13 +27,13 @@ export function PagoBar({
         />
       </div>
       {showLabels && (
-        <div className="flex justify-between text-xs tabular-nums">
-          <span className="text-text-muted">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 text-xs tabular-nums">
+          <span className="whitespace-nowrap text-text-muted">
             {formatCOP(pagado)} de {formatCOP(total)}
           </span>
           <span
             className={cn(
-              'font-medium',
+              'whitespace-nowrap font-medium',
               completo
                 ? 'text-success-strong'
                 : porcentaje > 0

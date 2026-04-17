@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   FileText,
   ClipboardList,
-  CheckCircle,
   ShoppingCart,
   Receipt,
   UserPlus,
@@ -19,6 +18,8 @@ import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { ClientePicker } from '@renderer/components/shared/cliente-picker'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useEmojis } from '@renderer/contexts/emojis-context'
+import { EMOJI_TOAST } from '@renderer/lib/emojis'
 import { formatCOP, hoyISO } from '@renderer/lib/format'
 import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { conceptoIcon, TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
@@ -58,8 +59,8 @@ export function StepResumen({
 }: Props): React.JSX.Element {
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const { emoji } = useEmojis()
   const [creating, setCreating] = useState(false)
-  const [createdPedido, setCreatedPedido] = useState<{ id: number; numero: string } | null>(null)
 
   // Campos adicionales para el pedido
   const [conAbono, setConAbono] = useState(true)
@@ -124,17 +125,17 @@ export function StepResumen({
         })
       }
 
-      setCreatedPedido({ id: pedido.id, numero: pedido.numero })
       showToast({
         tone: 'success',
-        title: 'Pedido creado',
+        title: `${emoji(EMOJI_TOAST.pedido_creado)} Pedido ${pedido.numero} creado`.trim(),
         message:
           abonoNum > 0
-            ? `Pedido ${pedido.numero} creado con abono de ${formatCOP(abonoNum)}. Factura generada.`
-            : `Pedido ${pedido.numero} creado. Factura queda pendiente de cobro por ${formatCOP(cotizacion.precioTotal)}.`,
-        actionLabel: 'Ir a pedidos',
-        onAction: () => navigate('/pedidos')
+            ? `Abono de ${formatCOP(abonoNum)} registrado. Factura generada.`
+            : `Factura pendiente por ${formatCOP(cotizacion.precioTotal)}.`
       })
+      // Navegación automática al listado de pedidos con el nuevo pedido
+      // destacado — evita que el usuario se quede pensando "¿qué hago ahora?".
+      navigate(`/pedidos?highlight=${pedido.id}`)
     } catch (err) {
       console.error('Create order failed:', err)
       showToast({
@@ -169,7 +170,7 @@ export function StepResumen({
 
   return (
     <div>
-      <h2 className="mb-1 text-lg font-semibold text-text">Resumen de cotización</h2>
+      <h2 className="mb-1 text-xl font-bold tracking-tight text-text">Resumen de cotización</h2>
       <p className="mb-6 flex items-center gap-2 text-sm text-text-muted">
         <TipoIcon size={16} className="text-accent-strong" />
         <span>
@@ -276,39 +277,38 @@ export function StepResumen({
               <span className="text-xs text-text-muted">(opcional)</span>
             </div>
 
-            {/* Toggle */}
-            <div className="rounded-lg border border-border bg-surface p-4">
-              <div className="flex items-center justify-between">
-                <div>
+            {!conAbono ? (
+              <button
+                onClick={() => setConAbono(true)}
+                className="flex w-full items-center justify-between rounded-lg border border-dashed border-border bg-surface p-4 text-left transition-colors hover:border-accent hover:bg-accent/5 cursor-pointer"
+                aria-label="Registrar abono"
+              >
+                <span className="flex items-center gap-2">
+                  <Banknote size={18} className="text-accent" />
                   <span className="text-sm font-medium text-text">
-                    ¿El cliente deja un abono ahora?
+                    ¿Cobraste algo? Registrar abono
                   </span>
-                  <p className="mt-0.5 text-xs text-text-muted">
-                    Se creará la factura y se registrará el pago automáticamente.
-                  </p>
+                </span>
+                <span className="text-xs text-text-muted">Opcional</span>
+              </button>
+            ) : (
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+                  <span className="flex items-center gap-2 text-sm font-medium text-text">
+                    <Banknote size={18} className="text-success" />
+                    Registrar abono
+                  </span>
+                  <button
+                    onClick={() => {
+                      setConAbono(false)
+                      setAbono('')
+                    }}
+                    className="text-xs text-text-muted hover:text-text cursor-pointer"
+                  >
+                    Quitar
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    setConAbono(!conAbono)
-                    if (conAbono) setAbono('')
-                  }}
-                  className={cn(
-                    'relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0',
-                    conAbono ? 'bg-success' : 'bg-border'
-                  )}
-                  aria-label={conAbono ? 'Desactivar abono' : 'Activar abono'}
-                >
-                  <span
-                    className={cn(
-                      'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow-1 transition-all duration-200',
-                      conAbono ? 'left-[23px]' : 'left-[3px]'
-                    )}
-                  />
-                </button>
-              </div>
-
-              {conAbono && (
-                <div className="mt-4 space-y-4 border-t border-border pt-4">
+                <div className="space-y-4">
                   {/* Monto */}
                   <Input
                     label="Monto del abono"
@@ -325,7 +325,7 @@ export function StepResumen({
                     <p className="mb-2 text-xs font-medium uppercase tracking-wider text-text-muted">
                       Método de pago
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {(
                         [
                           { key: 'efectivo', label: 'Efectivo', icon: Wallet },
@@ -390,8 +390,8 @@ export function StepResumen({
                     </div>
                   )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* ── 3. Notas ── */}
@@ -419,92 +419,70 @@ export function StepResumen({
       </Card>
 
       {/* Acciones */}
-      {!createdPedido && (
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={handleCrearPedido} disabled={!cliente || creating} size="lg">
-            <ClipboardList size={18} />
-            {creating ? 'Creando...' : 'Crear Pedido'}
-          </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={async () => {
-              try {
-                const now = new Date()
-                const fecha = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-                const seq = String(now.getTime()).slice(-4)
-                const numero = `COT-${fecha}-${seq}`
-                const result = (await window.api.pdf.generarFactura({
-                  numero,
-                  fecha: hoyISO(),
-                  clienteNombre: cliente?.nombre ?? 'Sin cliente',
-                  items: cotizacion.items.map((it) => ({
-                    descripcion: it.descripcion,
-                    cantidad: 1,
-                    precioUnitario: it.subtotal,
-                    subtotal: it.subtotal
-                  })),
-                  subtotal: cotizacion.subtotal,
-                  totalMateriales: cotizacion.totalMateriales,
-                  total: cotizacion.precioTotal,
-                  pagos: [],
-                  saldo: cotizacion.precioTotal,
-                  notas: `${TIPO_TRABAJO_LABEL[tipoTrabajo]} ${data.anchoCm}x${data.altoCm}cm`
-                })) as IpcResult<string>
-                if (result.ok) {
-                  showToast({
-                    tone: 'success',
-                    title: 'PDF generado',
-                    message: 'La cotización se abrió en PDF para revisión o envío al cliente.'
-                  })
-                  await window.api.pdf.abrir(result.data)
-                } else {
-                  showToast({
-                    tone: 'error',
-                    title: 'No se pudo generar el PDF',
-                    message: result.error
-                  })
-                }
-              } catch (err) {
-                console.error('PDF generation failed:', err)
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onClick={handleCrearPedido} disabled={!cliente || creating} size="lg">
+          <ClipboardList size={18} />
+          {creating ? 'Creando...' : 'Crear Pedido'}
+        </Button>
+        <Button
+          variant="secondary"
+          size="lg"
+          onClick={async () => {
+            try {
+              const now = new Date()
+              const fecha = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+              const seq = String(now.getTime()).slice(-4)
+              const numero = `COT-${fecha}-${seq}`
+              const result = (await window.api.pdf.generarFactura({
+                numero,
+                fecha: hoyISO(),
+                clienteNombre: cliente?.nombre ?? 'Sin cliente',
+                items: cotizacion.items.map((it) => ({
+                  descripcion: it.descripcion,
+                  cantidad: 1,
+                  precioUnitario: it.subtotal,
+                  subtotal: it.subtotal
+                })),
+                subtotal: cotizacion.subtotal,
+                totalMateriales: cotizacion.totalMateriales,
+                total: cotizacion.precioTotal,
+                pagos: [],
+                saldo: cotizacion.precioTotal,
+                notas: `${TIPO_TRABAJO_LABEL[tipoTrabajo]} ${data.anchoCm}x${data.altoCm}cm`
+              })) as IpcResult<string>
+              if (result.ok) {
+                showToast({
+                  tone: 'success',
+                  title: 'PDF generado',
+                  message: 'La cotización se abrió en PDF para revisión o envío al cliente.'
+                })
+                await window.api.pdf.abrir(result.data)
+              } else {
                 showToast({
                   tone: 'error',
                   title: 'No se pudo generar el PDF',
-                  message: 'Revisa los datos de la cotización y vuelve a intentarlo.'
+                  message: result.error
                 })
               }
-            }}
-          >
-            <FileText size={18} />
-            Generar PDF
-          </Button>
-          {!cliente && (
-            <p className="w-full text-xs text-text-muted">
-              Vincula un cliente en el paso 1 para habilitar la creación del pedido.
-            </p>
-          )}
-        </div>
-      )}
-
-      {createdPedido && (
-        <Card padding="md" className="mt-6 text-center">
-          <CheckCircle size={32} className="mx-auto mb-3 text-success-strong" />
-          <p className="mb-1 text-base font-semibold text-text">
-            Pedido {createdPedido.numero} creado
+            } catch (err) {
+              console.error('PDF generation failed:', err)
+              showToast({
+                tone: 'error',
+                title: 'No se pudo generar el PDF',
+                message: 'Revisa los datos de la cotización y vuelve a intentarlo.'
+              })
+            }
+          }}
+        >
+          <FileText size={18} />
+          Generar PDF
+        </Button>
+        {!cliente && (
+          <p className="w-full text-xs text-text-muted">
+            Vincula un cliente en el paso 1 para habilitar la creación del pedido.
           </p>
-          <p className="mb-4 text-sm text-text-muted">
-            {abonoNum > 0
-              ? `Factura generada con abono de ${formatCOP(abonoNum)}. Saldo: ${formatCOP(saldo > 0 ? saldo : 0)}.`
-              : 'El siguiente paso es facturar cuando el cliente confirme.'}
-          </p>
-          <div className="flex justify-center gap-3">
-            <Button onClick={() => navigate('/pedidos')}>Ir a pedidos</Button>
-            <Button variant="secondary" onClick={() => navigate('/facturas')}>
-              Ver facturas
-            </Button>
-          </div>
-        </Card>
-      )}
+        )}
+      </div>
     </div>
   )
 }

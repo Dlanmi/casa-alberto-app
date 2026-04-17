@@ -38,7 +38,16 @@ type ToastContextValue = {
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null)
-const DEFAULT_DURATION = 10_000
+// Duraciones pensadas para un usuario de 60 años que necesita tiempo para leer.
+// Los errores no auto-cierran para que no se pierda información crítica.
+const DURATION_BY_TONE: Record<ToastTone, number> = {
+  success: 8_000,
+  info: 8_000,
+  warning: 12_000,
+  progress: 10_000,
+  error: 0 // 0 = persistente, el usuario cierra manualmente
+}
+const DURATION_WITH_ACTION = 15_000
 // Máximo de toasts simultáneos visibles. Si llega uno nuevo con la pila llena,
 // se descarta el más viejo para mantener la UI legible. El papá de 60 años no
 // debe ver una pila de 10 notificaciones solapadas.
@@ -91,10 +100,15 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
     (input: ToastOptions | ToastTone, message?: string, undoAction?: () => void): void => {
       const normalized = normalizeToastArgs(input, message, undoAction)
       const id = ++idRef.current
+      const baseDuration =
+        normalized.onAction && normalized.actionLabel
+          ? DURATION_WITH_ACTION
+          : DURATION_BY_TONE[normalized.tone]
+      // tone 'error' => baseDuration es 0 => persistente por defecto
       const toast: ToastRecord = {
         id,
-        durationMs: DEFAULT_DURATION,
-        persistent: false,
+        durationMs: baseDuration || undefined,
+        persistent: baseDuration === 0,
         ...normalized
       }
 
@@ -118,8 +132,8 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
         return [...next, toast]
       })
 
-      if (!toast.persistent) {
-        const timer = setTimeout(() => removeToast(id), toast.durationMs ?? DEFAULT_DURATION)
+      if (!toast.persistent && toast.durationMs) {
+        const timer = setTimeout(() => removeToast(id), toast.durationMs)
         timersRef.current.set(id, timer)
       }
     },
@@ -174,7 +188,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
                 )}
               />
               <div className="flex-1 min-w-0">
-                {toast.title && <p className="text-sm font-semibold text-text">{toast.title}</p>}
+                {toast.title && <p className="text-base font-semibold text-text">{toast.title}</p>}
                 <p className="text-sm text-text-muted">{toast.message}</p>
                 {toast.actionLabel && toast.onAction && (
                   <button
@@ -187,7 +201,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
               </div>
               <button
                 onClick={() => removeToast(toast.id)}
-                className="h-11 w-11 shrink-0 flex items-center justify-center rounded-md text-text-soft hover:text-text-muted hover:bg-black/5 transition-colors cursor-pointer"
+                className="h-11 w-11 shrink-0 flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-black/5 transition-colors cursor-pointer"
                 aria-label="Cerrar"
               >
                 <X size={16} />

@@ -302,7 +302,7 @@ export default function OnboardingPage(): React.JSX.Element {
 
         {step === 1 && (
           <div>
-            <h2 className="text-xl font-semibold text-text mb-1">Datos del negocio</h2>
+            <h2 className="text-xl font-bold tracking-tight text-text mb-1">Datos del negocio</h2>
             <p className="text-sm text-text-muted mb-6">
               Estos datos aparecen en facturas, cotizaciones y contratos.
             </p>
@@ -373,7 +373,7 @@ export default function OnboardingPage(): React.JSX.Element {
 
         {step === 2 && (
           <div>
-            <h2 className="text-xl font-semibold text-text mb-1">Precios iniciales</h2>
+            <h2 className="text-xl font-bold tracking-tight text-text mb-1">Precios iniciales</h2>
             <p className="text-sm text-text-muted mb-6">
               Puedes importar tu lista de precios o empezar con la base de ejemplo y ajustar luego.
             </p>
@@ -430,7 +430,7 @@ export default function OnboardingPage(): React.JSX.Element {
             <div className="h-16 w-16 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-6">
               <Rocket size={32} className="text-success-strong" />
             </div>
-            <h2 className="text-xl font-semibold text-text mb-3">Todo listo</h2>
+            <h2 className="text-xl font-bold tracking-tight text-text mb-3">Todo listo</h2>
             <p className="text-sm text-text-muted mb-3 max-w-sm mx-auto">
               Ya tienes la base mínima para trabajar. Estos son los siguientes pasos más útiles:
             </p>

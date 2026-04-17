@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { PanelLeftClose, PanelLeftOpen, HardDrive, Download } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
-import { SIDEBAR_ITEMS } from '@renderer/lib/constants'
+import { SIDEBAR_ITEMS, SIDEBAR_GROUP_LABEL } from '@renderer/lib/constants'
+import type { SidebarGroup, SidebarItem } from '@renderer/lib/constants'
 import { Tooltip } from '@renderer/components/ui/tooltip'
 import type { BackupInfo, IpcResult, Pedido, UpdateStatus } from '@shared/types'
 
@@ -141,64 +142,87 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
           lugar (la titlebar) y el sidebar arranca directo con los módulos. */}
 
       <nav className="flex-1 py-4 px-2 overflow-y-auto">
-        {!collapsed && (
-          <p className="text-[11px] font-medium uppercase tracking-widest text-text-soft px-3 pb-2">
-            Módulos
-          </p>
-        )}
-        <ul className="flex flex-col gap-0.5">
-          {SIDEBAR_ITEMS.map((item) => {
-            const active = isActive(item.path)
-            const Icon = item.icon
-            const badgeCount = badges[item.path as keyof BadgeCounts] ?? 0
+        {(Object.keys(SIDEBAR_GROUP_LABEL) as SidebarGroup[]).map((group, groupIndex) => {
+          const items = SIDEBAR_ITEMS.filter((i) => i.group === group)
+          if (items.length === 0) return null
+          return (
+            <div key={group} className={groupIndex > 0 ? 'mt-3' : undefined}>
+              {!collapsed && (
+                <p className="text-xs font-medium uppercase tracking-widest text-text-muted px-3 pb-1.5">
+                  {SIDEBAR_GROUP_LABEL[group]}
+                </p>
+              )}
+              {collapsed && groupIndex > 0 && (
+                <div className="mx-3 my-2 border-t border-border" aria-hidden />
+              )}
+              <ul className="flex flex-col gap-0.5">
+                {items.map((item: SidebarItem) => {
+                  const active = isActive(item.path)
+                  const Icon = item.icon
+                  const badgeCount = badges[item.path as keyof BadgeCounts] ?? 0
 
-            const button = (
-              <button
-                onClick={() => navigate(item.path)}
-                className={cn(
-                  'w-full flex items-center gap-3 rounded-md transition-colors cursor-pointer relative',
-                  collapsed ? 'h-11 justify-center' : 'h-11 px-3',
-                  active
-                    ? 'font-semibold text-text before:absolute before:left-0 before:top-1/4 before:h-1/2 before:w-[3px] before:rounded-r-full before:bg-accent'
-                    : 'text-text-muted hover:bg-surface-muted hover:text-text'
-                )}
-                aria-current={active ? 'page' : undefined}
-                aria-label={collapsed ? item.label : undefined}
-              >
-                <Icon size={18} className="shrink-0" />
-                {!collapsed && <span className="text-sm truncate flex-1">{item.label}</span>}
-                {badgeCount > 0 &&
-                  (collapsed ? (
-                    <span
-                      aria-live="polite"
-                      className="absolute -top-1 -right-1 h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold animate-badge-pulse"
-                    >
-                      {badgeCount}
-                    </span>
-                  ) : (
-                    <span
-                      aria-live="polite"
-                      className="h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-[10px] font-bold animate-badge-pulse"
-                    >
-                      {badgeCount}
-                    </span>
-                  ))}
-              </button>
-            )
+                  const tourAnchor =
+                    item.path === '/'
+                      ? 'sidebar-dashboard'
+                      : item.path === '/cotizador'
+                        ? 'sidebar-cotizador'
+                        : item.path === '/pedidos'
+                          ? 'sidebar-pedidos'
+                          : undefined
 
-            return (
-              <li key={item.path}>
-                {collapsed ? (
-                  <Tooltip content={item.label} position="right">
-                    {button}
-                  </Tooltip>
-                ) : (
-                  button
-                )}
-              </li>
-            )
-          })}
-        </ul>
+                  const button = (
+                    <button
+                      onClick={() => navigate(item.path)}
+                      data-tour={tourAnchor}
+                      className={cn(
+                        'w-full flex items-center gap-3 rounded-md transition-colors cursor-pointer relative',
+                        collapsed ? 'h-11 justify-center' : 'h-11 px-3',
+                        active
+                          ? 'font-semibold text-text before:absolute before:left-0 before:top-1/4 before:h-1/2 before:w-[3px] before:rounded-r-full before:bg-accent'
+                          : 'text-text-muted hover:bg-surface-muted hover:text-text'
+                      )}
+                      aria-current={active ? 'page' : undefined}
+                      aria-label={collapsed ? item.label : undefined}
+                    >
+                      <Icon size={20} className="shrink-0" />
+                      {!collapsed && (
+                        <span className="text-base truncate flex-1">{item.label}</span>
+                      )}
+                      {badgeCount > 0 &&
+                        (collapsed ? (
+                          <span
+                            aria-live="polite"
+                            className="absolute -top-1 -right-1 h-5 min-w-5 px-1 flex items-center justify-center rounded-full bg-accent text-white text-xs font-bold"
+                          >
+                            {badgeCount}
+                          </span>
+                        ) : (
+                          <span
+                            aria-live="polite"
+                            className="h-6 min-w-6 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-xs font-bold"
+                          >
+                            {badgeCount}
+                          </span>
+                        ))}
+                    </button>
+                  )
+
+                  return (
+                    <li key={item.path}>
+                      {collapsed ? (
+                        <Tooltip content={item.label} position="right">
+                          {button}
+                        </Tooltip>
+                      ) : (
+                        button
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )
+        })}
       </nav>
 
       <div className="border-t border-border p-2 shrink-0 space-y-1">
@@ -248,7 +272,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
           ))}
         <button
           onClick={onToggle}
-          className="w-full h-11 flex items-center justify-center rounded-md text-text-soft hover:text-text-muted hover:bg-surface-muted cursor-pointer focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
+          className="w-full h-11 flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-surface-muted cursor-pointer focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
           aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
         >
           {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}

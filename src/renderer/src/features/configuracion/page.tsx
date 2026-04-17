@@ -13,6 +13,7 @@ import {
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useEmojis } from '@renderer/contexts/emojis-context'
 import { Card, CardTitle } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
 import { Spinner } from '@renderer/components/ui/spinner'
@@ -230,10 +231,75 @@ export default function ConfiguracionPage(): React.JSX.Element {
               </div>
             </Card>
           ))}
+          <AparienciaSection />
           <BackupSection />
         </div>
       )}
     </DirectoryScreen>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Apariencia — toggle de emojis                                      */
+/* ------------------------------------------------------------------ */
+
+function AparienciaSection(): React.JSX.Element {
+  const { enabled, setEnabled } = useEmojis()
+  const { showToast } = useToast()
+  const [saving, setSaving] = useState(false)
+
+  async function handleToggle(): Promise<void> {
+    setSaving(true)
+    try {
+      await setEnabled(!enabled)
+      showToast('success', !enabled ? 'Emojis activados 🎨' : 'Emojis desactivados')
+    } catch {
+      showToast('error', 'No se pudo guardar la preferencia')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card padding="md" className="space-y-4 border-border bg-surface">
+      <div>
+        <CardTitle>Apariencia</CardTitle>
+        <p className="text-sm text-text-muted mt-1">
+          Ajustes visuales de la aplicación.
+        </p>
+      </div>
+
+      <div className="flex items-start justify-between gap-4 rounded-md border border-transparent px-3 py-2.5 hover:border-border hover:bg-surface-muted transition-colors">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-text">Mostrar emojis</p>
+          <p className="text-xs text-text-muted mt-0.5">
+            Activa íconos cálidos en estados, categorías y notificaciones. Desactívalo si
+            prefieres vista sobria.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Mostrar emojis"
+          disabled={saving}
+          onClick={handleToggle}
+          className={cn(
+            'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+            enabled ? 'bg-accent' : 'bg-border-strong',
+            saving && 'opacity-60'
+          )}
+        >
+          <span
+            className={cn(
+              'inline-block h-5 w-5 transform rounded-full bg-white shadow-1 transition-transform',
+              enabled ? 'translate-x-6' : 'translate-x-1'
+            )}
+          />
+        </button>
+      </div>
+    </Card>
   )
 }
 

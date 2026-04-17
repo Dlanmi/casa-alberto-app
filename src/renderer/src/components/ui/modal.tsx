@@ -123,7 +123,7 @@ export function Modal({
       <div className="p-4 sm:p-6 md:p-8">
         {title && (
           <div className="flex items-center justify-between mb-6">
-            <h2 id={titleId} className="text-xl font-semibold text-text">
+            <h2 id={titleId} className="text-xl font-bold tracking-tight text-text">
               {title}
             </h2>
             <button

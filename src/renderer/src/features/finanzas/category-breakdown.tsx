@@ -1,5 +1,8 @@
 import { cn } from '@renderer/lib/cn'
 import { formatCOP } from '@renderer/lib/format'
+import { EMOJI_CATEGORIA_FINANZAS } from '@renderer/lib/emojis'
+import { useEmojis } from '@renderer/contexts/emojis-context'
+import type { CategoriaMovimiento } from '@shared/types'
 
 type CategoriaItem = { categoria: string; tipo: string; total: number }
 
@@ -28,10 +31,17 @@ function BarRow({
   max: number
   tone: 'success' | 'error'
 }): React.JSX.Element {
+  const { enabled: emojisEnabled } = useEmojis()
   const pct = max > 0 ? Math.round((value / max) * 100) : 0
+  const emoji = EMOJI_CATEGORIA_FINANZAS[label as CategoriaMovimiento]
   return (
     <div className="flex items-center gap-3">
       <span className="w-20 sm:w-28 shrink-0 truncate text-sm text-text-muted">
+        {emojisEnabled && emoji && (
+          <span aria-hidden="true" className="mr-1">
+            {emoji}
+          </span>
+        )}
         {CATEGORIA_LABEL[label] ?? label}
       </span>
       <div className="flex-1 h-5 rounded-sm bg-surface-muted overflow-hidden">

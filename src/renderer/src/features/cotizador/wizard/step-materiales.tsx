@@ -9,10 +9,9 @@ type Props = {
 export function StepMateriales({ data, onChange }: Props): React.JSX.Element {
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text mb-1">Materiales adicionales</h2>
+      <h2 className="text-xl font-bold tracking-tight text-text mb-1">Materiales adicionales</h2>
       <p className="text-sm text-text-muted mb-6">
-        Cartón de respaldo, puntillas, pegantes, cintas y piolas para colgar. Se cobra como
-        porcentaje sobre el subtotal.
+        Cartón, puntillas, pegante, cinta y piola — como % del subtotal.
       </p>
 
       <div className="max-w-md">

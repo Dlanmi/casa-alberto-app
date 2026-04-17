@@ -63,6 +63,11 @@ const CONFIG_INICIAL: { clave: string; valor: string; descripcion: string }[] = 
     clave: 'onboarding_completed',
     valor: '0',
     descripcion: 'Wizard de primera ejecución completado'
+  },
+  {
+    clave: 'emojis_habilitados',
+    valor: '1',
+    descripcion: 'Mostrar emojis en estados, categorías y notificaciones'
   }
 ]
 

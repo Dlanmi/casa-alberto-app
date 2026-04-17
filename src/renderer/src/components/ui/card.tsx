@@ -15,7 +15,7 @@ export function Card({
   return (
     <div
       className={cn(
-        'bg-surface rounded-lg border border-border shadow-1',
+        'bg-surface rounded-xl border border-border shadow-1',
         padding === 'sm' && 'p-4',
         padding === 'md' && 'p-6',
         padding === 'lg' && 'p-8',

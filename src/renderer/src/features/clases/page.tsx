@@ -9,7 +9,8 @@ import {
   Calendar,
   Edit2,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Banknote
 } from 'lucide-react'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
@@ -502,11 +503,11 @@ export default function ClasesPage(): React.JSX.Element {
                             </div>
                           </div>
                           <PagoBar total={valorMensual} pagado={totalPagado} showLabels />
-                          <div className="flex items-center justify-between">
-                            <Badge color={ESTADO_PAGO_COLOR[estadoPago]}>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <Badge color={ESTADO_PAGO_COLOR[estadoPago]} className="shrink-0">
                               {ESTADO_PAGO_LABEL[estadoPago]}
                             </Badge>
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
                               {pago && (
                                 <PrecioDisplay
                                   value={pago.valorTotal}
@@ -517,10 +518,12 @@ export default function ClasesPage(): React.JSX.Element {
                               {estadoPago !== 'pagado' && (
                                 <Button
                                   variant="ghost"
-                                  size="xs"
+                                  size="icon"
                                   onClick={() => openPagoModal(est.id)}
+                                  aria-label="Cobrar mensualidad"
+                                  title="Cobrar"
                                 >
-                                  Cobrar
+                                  <Banknote size={16} />
                                 </Button>
                               )}
                             </div>
@@ -792,9 +795,8 @@ function DetalleEstudianteModal({
           </div>
           <div className="flex items-center gap-2">
             {est?.esMenor && <Badge color="info">Menor</Badge>}
-            <Button variant="secondary" size="sm" onClick={onEdit}>
-              <Edit2 size={14} className="mr-1" />
-              Editar
+            <Button variant="ghost" size="icon" onClick={onEdit} aria-label="Editar estudiante">
+              <Edit2 size={16} />
             </Button>
           </div>
         </div>
