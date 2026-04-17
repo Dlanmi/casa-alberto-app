@@ -11,9 +11,9 @@ const STEPS: Step[] = [
   {
     target: 'body',
     placement: 'center',
-    title: 'Bienvenido a Casa Alberto',
+    title: '¡Hola! Bienvenido a Casa Alberto',
     content:
-      'Te voy a mostrar en 5 pasos cómo está organizada la app. Puedes saltar el recorrido cuando quieras.',
+      'Te voy a mostrar en 5 pasos cómo está organizada la app. Puedes saltar el recorrido cuando quieras con el botón "Saltar tour".',
     skipBeacon: true
   },
   {
@@ -21,7 +21,7 @@ const STEPS: Step[] = [
     placement: 'right',
     title: 'Tablero del día',
     content:
-      'Aquí es donde arrancas la jornada: alertas, cobros pendientes, entregas próximas y balance.',
+      'Aquí arranca la jornada: alertas, cobros pendientes, entregas próximas y balance financiero.',
     skipBeacon: true
   },
   {
@@ -43,12 +43,20 @@ const STEPS: Step[] = [
   {
     target: '[data-tour="help-button"]',
     placement: 'left',
-    title: 'Botón de ayuda',
+    title: 'Ayuda contextual',
     content:
-      'Si te quedas con alguna duda, pulsa este botón abajo a la derecha. Te muestro consejos según la pantalla en la que estés.',
+      'Si quedas con alguna duda, pulsa este botón abajo a la derecha. Te muestro consejos según la pantalla en la que estés.',
     skipBeacon: true
   }
 ]
+
+// Colores directamente del tema amber/warm para que el tour se sienta
+// parte de la app. Evitamos usar CSS vars en inline styles porque Joyride
+// genera styles en JS y algunas propiedades no resuelven var() bien.
+const ACCENT = '#c38a2e'
+const TEXT = '#44403c'
+const TEXT_MUTED = '#57534e'
+const SURFACE = '#ffffff'
 
 export function WelcomeTour(): React.JSX.Element | null {
   const [run, setRun] = useState(false)
@@ -79,8 +87,92 @@ export function WelcomeTour(): React.JSX.Element | null {
       options={{
         showProgress: true,
         buttons: ['back', 'skip', 'primary'],
-        primaryColor: '#c38a2e',
+        primaryColor: ACCENT,
+        backgroundColor: SURFACE,
+        textColor: TEXT,
+        arrowColor: SURFACE,
+        overlayColor: 'rgba(28, 25, 23, 0.55)',
+        spotlightPadding: 8,
+        spotlightRadius: 10,
         zIndex: 10000
+      }}
+      styles={{
+        tooltip: {
+          borderRadius: 14,
+          boxShadow: '0 20px 50px rgba(28, 25, 23, 0.25)',
+          padding: 0,
+          fontFamily: 'inherit',
+          width: 380,
+          maxWidth: 'calc(100vw - 48px)'
+        },
+        tooltipContainer: {
+          padding: '24px 24px 0 24px',
+          textAlign: 'left'
+        },
+        tooltipTitle: {
+          fontSize: 20,
+          fontWeight: 700,
+          color: TEXT,
+          margin: 0,
+          lineHeight: 1.3
+        },
+        tooltipContent: {
+          fontSize: 16,
+          color: TEXT_MUTED,
+          lineHeight: 1.55,
+          padding: '12px 0 4px',
+          textAlign: 'left'
+        },
+        tooltipFooter: {
+          marginTop: 12,
+          padding: '16px 24px',
+          borderTop: '1px solid #e7e5e4',
+          backgroundColor: '#faf9f7',
+          borderRadius: '0 0 14px 14px',
+          gap: 8
+        },
+        tooltipFooterSpacer: {
+          flex: 1
+        },
+        buttonPrimary: {
+          backgroundColor: ACCENT,
+          color: '#ffffff',
+          borderRadius: 8,
+          padding: '10px 20px',
+          fontSize: 15,
+          fontWeight: 600,
+          border: 'none',
+          cursor: 'pointer',
+          minHeight: 44,
+          transition: 'background-color 0.15s ease'
+        },
+        buttonBack: {
+          color: TEXT_MUTED,
+          backgroundColor: 'transparent',
+          fontSize: 15,
+          fontWeight: 500,
+          padding: '10px 16px',
+          minHeight: 44,
+          cursor: 'pointer'
+        },
+        buttonSkip: {
+          color: TEXT_MUTED,
+          backgroundColor: 'transparent',
+          fontSize: 14,
+          fontWeight: 500,
+          padding: '10px 16px',
+          minHeight: 44,
+          cursor: 'pointer'
+        },
+        buttonClose: {
+          display: 'none'
+        },
+        overlay: {
+          mixBlendMode: 'normal'
+        },
+        beacon: {
+          display: 'none'
+        }
       }}
       locale={{
         back: 'Anterior',
@@ -92,4 +184,10 @@ export function WelcomeTour(): React.JSX.Element | null {
       onEvent={handleEvent}
     />
   )
+}
+
+// Permite reiniciar el tour desde Configuración.
+export function resetWelcomeTour(): void {
+  localStorage.removeItem(STORAGE_KEY)
+  window.location.reload()
 }

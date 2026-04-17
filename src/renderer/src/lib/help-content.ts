@@ -129,6 +129,69 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
     }
   },
   {
+    prefix: '/clases',
+    content: {
+      heading: 'Clases de dibujo',
+      tips: [
+        {
+          title: 'Crear una clase',
+          description:
+            'Pulsa "Nueva clase" para abrir un curso con horario, duración y precio. Luego puedes matricular estudiantes.'
+        },
+        {
+          title: 'Matricular estudiantes',
+          description:
+            'Dentro de cada clase, usa "Agregar estudiante" y selecciona un cliente existente. Si es menor de edad, marca esa opción para registrar al acudiente.'
+        },
+        {
+          title: 'Registrar pagos mensuales',
+          description:
+            'Cada estudiante tiene su propio saldo. Usa "Registrar pago" para abonar la mensualidad — el sistema actualiza automáticamente el estado a "Al día" o "Pendiente".'
+        },
+        {
+          title: 'Ver quién está al día',
+          description:
+            'El panel principal muestra estudiantes con pagos pendientes de un vistazo, para que sepas a quién cobrar esta semana.'
+        }
+      ]
+    }
+  },
+  {
+    prefix: '/agenda',
+    content: {
+      heading: 'Agenda de entregas',
+      tips: [
+        {
+          title: 'Vista semanal o diaria',
+          description:
+            'Cambia entre vistas para planear tu semana o enfocarte en lo del día.'
+        },
+        {
+          title: 'Entregas pendientes',
+          description:
+            'Cada evento muestra el cliente y el pedido. Clic para abrir el detalle del pedido.'
+        }
+      ]
+    }
+  },
+  {
+    prefix: '/contratos',
+    content: {
+      heading: 'Contratos',
+      tips: [
+        {
+          title: 'Plantillas de contrato',
+          description:
+            'Genera contratos para trabajos grandes. Se rellenan automáticamente con los datos del cliente y del pedido.'
+        },
+        {
+          title: 'Descargar PDF',
+          description: 'Una vez firmado, descarga el PDF para archivar o enviar al cliente.'
+        }
+      ]
+    }
+  },
+  {
     prefix: '/finanzas',
     content: {
       heading: 'Finanzas del taller',

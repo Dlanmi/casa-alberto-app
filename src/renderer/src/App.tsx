@@ -1,21 +1,31 @@
+import { lazy, Suspense } from 'react'
 import { createHashRouter, RouterProvider } from 'react-router-dom'
 import { ToastProvider } from '@renderer/contexts/toast-context'
 import { EmojisProvider } from '@renderer/contexts/emojis-context'
 import { AppShell } from '@renderer/components/layout/app-shell'
 import { AppRouteError } from '@renderer/components/layout/app-route-error'
+import { PageLoader } from '@renderer/components/ui/spinner'
 import DashboardPage from '@renderer/features/dashboard/page'
-import AgendaPage from '@renderer/features/agenda/page'
-import CotizadorPage from '@renderer/features/cotizador/page'
-import PedidosPage from '@renderer/features/pedidos/page'
-import FacturasPage from '@renderer/features/facturas/page'
-import ClientesPage from '@renderer/features/clientes/page'
-import ClasesPage from '@renderer/features/clases/page'
-import FinanzasPage from '@renderer/features/finanzas/page'
-import ProveedoresPage from '@renderer/features/proveedores/page'
-import ContratosPage from '@renderer/features/contratos/page'
-import InventarioPage from '@renderer/features/inventario/page'
-import ConfiguracionPage from '@renderer/features/configuracion/page'
-import OnboardingPage from '@renderer/features/onboarding/page'
+
+// Lazy-load todas las rutas salvo Dashboard (es la de arranque). Esto evita
+// que la app cargue ~12 módulos en el bundle inicial, que era el costo
+// dominante en el tiempo hasta primer render en producción.
+const AgendaPage = lazy(() => import('@renderer/features/agenda/page'))
+const CotizadorPage = lazy(() => import('@renderer/features/cotizador/page'))
+const PedidosPage = lazy(() => import('@renderer/features/pedidos/page'))
+const FacturasPage = lazy(() => import('@renderer/features/facturas/page'))
+const ClientesPage = lazy(() => import('@renderer/features/clientes/page'))
+const ClasesPage = lazy(() => import('@renderer/features/clases/page'))
+const FinanzasPage = lazy(() => import('@renderer/features/finanzas/page'))
+const ProveedoresPage = lazy(() => import('@renderer/features/proveedores/page'))
+const ContratosPage = lazy(() => import('@renderer/features/contratos/page'))
+const InventarioPage = lazy(() => import('@renderer/features/inventario/page'))
+const ConfiguracionPage = lazy(() => import('@renderer/features/configuracion/page'))
+const OnboardingPage = lazy(() => import('@renderer/features/onboarding/page'))
+
+function lazyRoute(element: React.ReactNode): React.JSX.Element {
+  return <Suspense fallback={<PageLoader />}>{element}</Suspense>
+}
 
 const router = createHashRouter([
   {
@@ -24,24 +34,28 @@ const router = createHashRouter([
     errorElement: <AppRouteError />,
     children: [
       { index: true, element: <DashboardPage /> },
-      { path: 'agenda', element: <AgendaPage /> },
-      { path: 'cotizador', element: <CotizadorPage /> },
-      { path: 'pedidos', element: <PedidosPage /> },
-      { path: 'pedidos/:id', element: <PedidosPage /> },
-      { path: 'facturas', element: <FacturasPage /> },
-      { path: 'facturas/:id', element: <FacturasPage /> },
-      { path: 'clientes', element: <ClientesPage /> },
-      { path: 'clientes/:id', element: <ClientesPage /> },
-      { path: 'clases', element: <ClasesPage /> },
-      { path: 'finanzas', element: <FinanzasPage /> },
-      { path: 'proveedores', element: <ProveedoresPage /> },
-      { path: 'contratos', element: <ContratosPage /> },
-      { path: 'contratos/:id', element: <ContratosPage /> },
-      { path: 'inventario', element: <InventarioPage /> },
-      { path: 'configuracion', element: <ConfiguracionPage /> }
+      { path: 'agenda', element: lazyRoute(<AgendaPage />) },
+      { path: 'cotizador', element: lazyRoute(<CotizadorPage />) },
+      { path: 'pedidos', element: lazyRoute(<PedidosPage />) },
+      { path: 'pedidos/:id', element: lazyRoute(<PedidosPage />) },
+      { path: 'facturas', element: lazyRoute(<FacturasPage />) },
+      { path: 'facturas/:id', element: lazyRoute(<FacturasPage />) },
+      { path: 'clientes', element: lazyRoute(<ClientesPage />) },
+      { path: 'clientes/:id', element: lazyRoute(<ClientesPage />) },
+      { path: 'clases', element: lazyRoute(<ClasesPage />) },
+      { path: 'finanzas', element: lazyRoute(<FinanzasPage />) },
+      { path: 'proveedores', element: lazyRoute(<ProveedoresPage />) },
+      { path: 'contratos', element: lazyRoute(<ContratosPage />) },
+      { path: 'contratos/:id', element: lazyRoute(<ContratosPage />) },
+      { path: 'inventario', element: lazyRoute(<InventarioPage />) },
+      { path: 'configuracion', element: lazyRoute(<ConfiguracionPage />) }
     ]
   },
-  { path: '/onboarding', element: <OnboardingPage />, errorElement: <AppRouteError /> }
+  {
+    path: '/onboarding',
+    element: lazyRoute(<OnboardingPage />),
+    errorElement: <AppRouteError />
+  }
 ])
 
 function App(): React.JSX.Element {
