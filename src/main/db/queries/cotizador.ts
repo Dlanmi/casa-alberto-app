@@ -8,11 +8,13 @@ import {
   preciosRetablos,
   preciosTapas,
   preciosVidrios,
+  proveedores,
   type PedidoItemMetadata,
   type TipoItemPedido,
   type TipoPaspartu,
   type TipoVidrioLista
 } from '../schema'
+import { redondearPrecioFinal } from '@shared/redondeo'
 
 // ---------------------------------------------------------------------------
 // Tipos de resultado
@@ -154,9 +156,24 @@ export function aplicarPaspartu(
   }
 }
 
+// Sprint 2 · A5 — el porcentaje de materiales sólo admite el rango 5-10% (Fase 2).
+// La versión anterior hacía `Math.max(5, Math.min(10, p))` y pasaba silenciosamente
+// cualquier valor fuera de rango al cálculo, lo que ocultaba bugs en la UI o
+// llamadas IPC mal formadas. Ahora lanzamos error explícito para que el caller
+// se entere y muestre un toast o corrija el input.
+export const PORCENTAJE_MATERIALES_MIN = 5
+export const PORCENTAJE_MATERIALES_MAX = 10
+
 export function aplicarMaterialesAdicionales(subtotal: number, porcentaje: number): number {
-  const p = Math.max(5, Math.min(10, porcentaje))
-  return Math.round(subtotal * (p / 100))
+  if (!Number.isFinite(porcentaje)) {
+    throw new Error('El porcentaje de materiales no es un número válido')
+  }
+  if (porcentaje < PORCENTAJE_MATERIALES_MIN || porcentaje > PORCENTAJE_MATERIALES_MAX) {
+    throw new Error(
+      `El porcentaje de materiales debe estar entre ${PORCENTAJE_MATERIALES_MIN}% y ${PORCENTAJE_MATERIALES_MAX}% (recibido: ${porcentaje}%)`
+    )
+  }
+  return Math.round(subtotal * (porcentaje / 100))
 }
 
 // ---------------------------------------------------------------------------
@@ -186,13 +203,41 @@ export function obtenerMuestraMarco(db: DB, id: number) {
   return db.select().from(muestrasMarcos).where(eq(muestrasMarcos.id, id)).get() ?? null
 }
 
-export function listarMuestrasMarcos(db: DB) {
-  return db
-    .select()
+export type MuestraMarcoConProveedor = {
+  id: number
+  referencia: string
+  colillaCm: number
+  precioMetro: number
+  descripcion: string | null
+  proveedorId: number | null
+  proveedorNombre: string | null
+  proveedorActivo: boolean | null
+  activo: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export function listarMuestrasMarcos(db: DB): MuestraMarcoConProveedor[] {
+  const rows = db
+    .select({
+      id: muestrasMarcos.id,
+      referencia: muestrasMarcos.referencia,
+      colillaCm: muestrasMarcos.colillaCm,
+      precioMetro: muestrasMarcos.precioMetro,
+      descripcion: muestrasMarcos.descripcion,
+      proveedorId: muestrasMarcos.proveedorId,
+      proveedorNombre: proveedores.nombre,
+      proveedorActivo: proveedores.activo,
+      activo: muestrasMarcos.activo,
+      createdAt: muestrasMarcos.createdAt,
+      updatedAt: muestrasMarcos.updatedAt
+    })
     .from(muestrasMarcos)
+    .leftJoin(proveedores, eq(proveedores.id, muestrasMarcos.proveedorId))
     .where(eq(muestrasMarcos.activo, true))
     .orderBy(muestrasMarcos.referencia)
     .all()
+  return rows
 }
 
 // CRUD para muestras de marcos
@@ -201,13 +246,36 @@ export type NuevaMuestraMarco = {
   colillaCm: number
   precioMetro: number
   descripcion?: string | null
+  proveedorId?: number | null
+}
+
+// Sprint 2 · A3 — validación positiva antes de insertar. Las CHECK constraints
+// de la DB (>= 0) atrapan el caso extremo, pero preferimos fallar con un mensaje
+// legible en lugar de un "SQLITE_CONSTRAINT: CHECK". Colilla y precio son valores
+// operativos, así que exigimos > 0 (un marco gratis o con colilla 0 cm es un bug).
+function validarMuestraMarcoData(data: Partial<NuevaMuestraMarco>): void {
+  if (data.colillaCm !== undefined) {
+    if (!Number.isFinite(data.colillaCm) || data.colillaCm <= 0) {
+      throw new Error('La colilla del marco debe ser mayor a 0 cm')
+    }
+  }
+  if (data.precioMetro !== undefined) {
+    if (!Number.isFinite(data.precioMetro) || data.precioMetro <= 0) {
+      throw new Error('El precio por metro debe ser mayor a 0')
+    }
+  }
+  if (data.referencia !== undefined && !data.referencia.trim()) {
+    throw new Error('La referencia del marco es obligatoria')
+  }
 }
 
 export function crearMuestraMarco(db: DB, data: NuevaMuestraMarco) {
+  validarMuestraMarcoData(data)
   return db.insert(muestrasMarcos).values(data).returning().get()
 }
 
 export function actualizarMuestraMarco(db: DB, id: number, data: Partial<NuevaMuestraMarco>) {
+  validarMuestraMarcoData(data)
   return db.update(muestrasMarcos).set(data).where(eq(muestrasMarcos.id, id)).returning().get()
 }
 
@@ -222,9 +290,55 @@ export function desactivarMuestraMarco(db: DB, id: number) {
 
 // CRUD para precios de vidrio
 export function actualizarPrecioVidrio(db: DB, id: number, precioM2: number) {
+  // Sprint 2 · A3 — antes no se validaba el precio en el update; un IPC directo
+  // podía dejar vidrios a $0 o negativo y quebrar cotizaciones posteriores.
+  if (!Number.isFinite(precioM2) || precioM2 <= 0) {
+    throw new Error('El precio por m² debe ser mayor a 0')
+  }
   return db
     .update(preciosVidrios)
     .set({ precioM2 })
+    .where(eq(preciosVidrios.id, id))
+    .returning()
+    .get()
+}
+
+export function crearPrecioVidrio(db: DB, tipo: string, precioM2: number) {
+  // Normalizar tipo para evitar duplicados por capitalización/espacios
+  // ('Claro' y 'claro ' son el mismo tipo desde la UI).
+  const tipoNormalizado = tipo.trim().toLowerCase().replace(/\s+/g, '_')
+  if (!tipoNormalizado) throw new Error('El tipo de vidrio no puede estar vacío')
+  // Sprint 2 · A3 — un vidrio en la lista de precios debe tener precio > 0.
+  // Aceptar 0 o negativos abre la puerta a cotizaciones gratis por error.
+  if (!Number.isFinite(precioM2) || precioM2 <= 0) {
+    throw new Error('El precio por m² debe ser mayor a 0')
+  }
+  const existing = db
+    .select()
+    .from(preciosVidrios)
+    .where(eq(preciosVidrios.tipo, tipoNormalizado))
+    .get()
+  if (existing) {
+    if (existing.activo) throw new Error(`Ya existe un vidrio tipo "${tipoNormalizado}"`)
+    // Reactivar el tipo inactivo en vez de crear duplicado
+    return db
+      .update(preciosVidrios)
+      .set({ activo: true, precioM2 })
+      .where(eq(preciosVidrios.id, existing.id))
+      .returning()
+      .get()
+  }
+  return db
+    .insert(preciosVidrios)
+    .values({ tipo: tipoNormalizado, precioM2 })
+    .returning()
+    .get()
+}
+
+export function eliminarPrecioVidrio(db: DB, id: number) {
+  return db
+    .update(preciosVidrios)
+    .set({ activo: false })
     .where(eq(preciosVidrios.id, id))
     .returning()
     .get()
@@ -557,7 +671,7 @@ export function cotizarVidrioEspejo(db: DB, input: InputVidrioEspejo): Resultado
     items,
     subtotal,
     totalMateriales: 0,
-    precioTotal: subtotal
+    precioTotal: redondearPrecioFinal(subtotal)
   }
 }
 
@@ -584,6 +698,26 @@ export function cotizarTapa(db: DB, input: InputLookupMedida): ResultadoCotizaci
 // CRUD para listas de precios por medida (5 tablas)
 // ---------------------------------------------------------------------------
 
+// Sprint 2 · A3 — validación compartida para todas las tablas medida×precio.
+// Antes los `crear*` aceptaban precios negativos/NaN/cero sin avisar; la UI
+// puede fallar y mandar basura, o un IPC directo podía saltárselo. Ahora toda
+// creación pasa por este guard con mensaje legible.
+function validarMedidaPrecioCreate(data: {
+  anchoCm: number
+  altoCm: number
+  precio: number
+}): void {
+  if (!Number.isFinite(data.anchoCm) || data.anchoCm <= 0) {
+    throw new Error('El ancho debe ser un número mayor a 0')
+  }
+  if (!Number.isFinite(data.altoCm) || data.altoCm <= 0) {
+    throw new Error('El alto debe ser un número mayor a 0')
+  }
+  if (!Number.isFinite(data.precio) || data.precio <= 0) {
+    throw new Error('El precio debe ser un número mayor a 0')
+  }
+}
+
 // Paspartú pintado
 export function listarPreciosPaspartuPintado(db: DB) {
   return db
@@ -597,12 +731,24 @@ export function crearPrecioPaspartuPintado(
   db: DB,
   data: { anchoCm: number; altoCm: number; precio: number; descripcion?: string | null }
 ) {
+  validarMedidaPrecioCreate(data)
   return db.insert(preciosPaspartuPintado).values(data).returning().get()
 }
 export function eliminarPrecioPaspartuPintado(db: DB, id: number) {
   return db
     .update(preciosPaspartuPintado)
     .set({ activo: false })
+    .where(eq(preciosPaspartuPintado.id, id))
+    .returning()
+    .get()
+}
+export function actualizarPrecioPaspartuPintado(db: DB, id: number, precio: number) {
+  if (!Number.isFinite(precio) || precio <= 0) {
+    throw new Error('El precio debe ser mayor a 0')
+  }
+  return db
+    .update(preciosPaspartuPintado)
+    .set({ precio })
     .where(eq(preciosPaspartuPintado.id, id))
     .returning()
     .get()
@@ -621,12 +767,24 @@ export function crearPrecioPaspartuAcrilico(
   db: DB,
   data: { anchoCm: number; altoCm: number; precio: number; descripcion?: string | null }
 ) {
+  validarMedidaPrecioCreate(data)
   return db.insert(preciosPaspartuAcrilico).values(data).returning().get()
 }
 export function eliminarPrecioPaspartuAcrilico(db: DB, id: number) {
   return db
     .update(preciosPaspartuAcrilico)
     .set({ activo: false })
+    .where(eq(preciosPaspartuAcrilico.id, id))
+    .returning()
+    .get()
+}
+export function actualizarPrecioPaspartuAcrilico(db: DB, id: number, precio: number) {
+  if (!Number.isFinite(precio) || precio <= 0) {
+    throw new Error('El precio debe ser mayor a 0')
+  }
+  return db
+    .update(preciosPaspartuAcrilico)
+    .set({ precio })
     .where(eq(preciosPaspartuAcrilico.id, id))
     .returning()
     .get()
@@ -645,12 +803,24 @@ export function crearPrecioRetablo(
   db: DB,
   data: { anchoCm: number; altoCm: number; precio: number }
 ) {
+  validarMedidaPrecioCreate(data)
   return db.insert(preciosRetablos).values(data).returning().get()
 }
 export function eliminarPrecioRetablo(db: DB, id: number) {
   return db
     .update(preciosRetablos)
     .set({ activo: false })
+    .where(eq(preciosRetablos.id, id))
+    .returning()
+    .get()
+}
+export function actualizarPrecioRetablo(db: DB, id: number, precio: number) {
+  if (!Number.isFinite(precio) || precio <= 0) {
+    throw new Error('El precio debe ser mayor a 0')
+  }
+  return db
+    .update(preciosRetablos)
+    .set({ precio })
     .where(eq(preciosRetablos.id, id))
     .returning()
     .get()
@@ -669,12 +839,24 @@ export function crearPrecioBastidor(
   db: DB,
   data: { anchoCm: number; altoCm: number; precio: number }
 ) {
+  validarMedidaPrecioCreate(data)
   return db.insert(preciosBastidores).values(data).returning().get()
 }
 export function eliminarPrecioBastidor(db: DB, id: number) {
   return db
     .update(preciosBastidores)
     .set({ activo: false })
+    .where(eq(preciosBastidores.id, id))
+    .returning()
+    .get()
+}
+export function actualizarPrecioBastidor(db: DB, id: number, precio: number) {
+  if (!Number.isFinite(precio) || precio <= 0) {
+    throw new Error('El precio debe ser mayor a 0')
+  }
+  return db
+    .update(preciosBastidores)
+    .set({ precio })
     .where(eq(preciosBastidores.id, id))
     .returning()
     .get()
@@ -690,12 +872,24 @@ export function listarPreciosTapas(db: DB) {
     .all()
 }
 export function crearPrecioTapa(db: DB, data: { anchoCm: number; altoCm: number; precio: number }) {
+  validarMedidaPrecioCreate(data)
   return db.insert(preciosTapas).values(data).returning().get()
 }
 export function eliminarPrecioTapa(db: DB, id: number) {
   return db
     .update(preciosTapas)
     .set({ activo: false })
+    .where(eq(preciosTapas.id, id))
+    .returning()
+    .get()
+}
+export function actualizarPrecioTapa(db: DB, id: number, precio: number) {
+  if (!Number.isFinite(precio) || precio <= 0) {
+    throw new Error('El precio debe ser mayor a 0')
+  }
+  return db
+    .update(preciosTapas)
+    .set({ precio })
     .where(eq(preciosTapas.id, id))
     .returning()
     .get()
@@ -720,11 +914,14 @@ function finalizarCotizacion(
       subtotal: totalMateriales
     })
   }
+  // `precioTotal` se redondea hacia arriba al múltiplo de $1.000 (silent);
+  // los items y subtotales quedan en bruto. La diferencia (≤ $999) se absorbe
+  // en el TOTAL. Ver src/shared/redondeo.ts para el contexto de la decisión.
   return {
     items,
     subtotal,
     totalMateriales,
-    precioTotal: subtotal + totalMateriales
+    precioTotal: redondearPrecioFinal(subtotal + totalMateriales)
   }
 }
 

@@ -1,6 +1,5 @@
 import {
   Frame,
-  Layers,
   Sofa,
   LayoutGrid,
   RectangleHorizontal,
@@ -24,15 +23,9 @@ type TipoTrabajoItem = {
 const TIPOS: TipoTrabajoItem[] = [
   {
     tipo: 'enmarcacion_estandar',
-    label: 'Enmarcacion Estandar',
-    description: 'Marco + vidrio + respaldo',
+    label: 'Enmarcación',
+    description: 'Marco + vidrio + respaldo. Con paspartú opcional.',
     icon: Frame
-  },
-  {
-    tipo: 'enmarcacion_paspartu',
-    label: 'Con Paspartu',
-    description: 'Marco + paspartu + vidrio',
-    icon: Layers
   },
   {
     tipo: 'acolchado',
@@ -85,7 +78,7 @@ const BLOQUES: {
   {
     title: 'Flujos principales',
     description: 'Los trabajos que más rápido se convierten en pedido.',
-    tipos: ['enmarcacion_estandar', 'enmarcacion_paspartu', 'vidrio_espejo']
+    tipos: ['enmarcacion_estandar', 'vidrio_espejo']
   },
   {
     title: 'Acabados y estructuras',

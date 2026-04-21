@@ -189,10 +189,18 @@ describe('aplicarMaterialesAdicionales', () => {
     expect(aplicarMaterialesAdicionales(100000, 5)).toBe(5000)
   })
 
-  it('clamp al rango 5-10%', () => {
-    // Menor a 5% se clampea a 5%
-    expect(aplicarMaterialesAdicionales(100000, 1)).toBe(5000)
-    // Mayor a 10% se clampea a 10%
-    expect(aplicarMaterialesAdicionales(100000, 20)).toBe(10000)
+  // Sprint 2 · A5 — el clamp silencioso fue reemplazado por error explícito.
+  // Antes la función aceptaba 1% o 20% y los ajustaba a 5% / 10% sin avisar,
+  // lo que tapaba bugs en la UI o payloads IPC mal formados. Ahora debe lanzar.
+  it('rechaza porcentaje por debajo del mínimo (5%)', () => {
+    expect(() => aplicarMaterialesAdicionales(100000, 1)).toThrow(/entre 5% y 10%/i)
+  })
+
+  it('rechaza porcentaje por encima del máximo (10%)', () => {
+    expect(() => aplicarMaterialesAdicionales(100000, 20)).toThrow(/entre 5% y 10%/i)
+  })
+
+  it('rechaza NaN explícitamente', () => {
+    expect(() => aplicarMaterialesAdicionales(100000, NaN)).toThrow(/no es un número válido/i)
   })
 })

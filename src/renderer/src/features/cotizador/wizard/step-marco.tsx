@@ -4,13 +4,13 @@ import { cn } from '@renderer/lib/cn'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Badge } from '@renderer/components/ui/badge'
 import { formatCOP } from '@renderer/lib/format'
-import type { MuestraMarco } from '@shared/types'
+import type { MuestraMarcoConProveedor } from '@shared/types'
 import type { WizardData } from './wizard-shell'
 
 type Props = {
   data: WizardData
   onChange: (partial: Partial<WizardData>) => void
-  marcos: MuestraMarco[]
+  marcos: MuestraMarcoConProveedor[]
 }
 
 export function StepMarco({ data, onChange, marcos }: Props): React.JSX.Element {
@@ -24,7 +24,7 @@ export function StepMarco({ data, onChange, marcos }: Props): React.JSX.Element 
       )
     : marcos
 
-  function selectMarco(marco: MuestraMarco): void {
+  function selectMarco(marco: MuestraMarcoConProveedor): void {
     onChange({ muestraMarcoId: marco.id, muestraMarco: marco })
   }
 
@@ -56,10 +56,10 @@ export function StepMarco({ data, onChange, marcos }: Props): React.JSX.Element 
       {/* AGENT_UX: Tarjetas de marco con icono Frame, referencia en mono,
           colilla como badge, precio destacado, checkmark redondeado en
           selección. Antes eran pure-text rows — ahora son escaneables. */}
-      {/* p-1 evita que border-2 / shadow-2 / hover:-translate-y-0.5 se
-          recorten al tocar el borde del scrollview (bug reportado por el dueño:
-          las cards aparecían "cortadas" por el contenedor). */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto p-1">
+      {/* p-1 deja aire para border-2 / shadow-2 / hover:-translate-y-0.5 sin
+          recortar. El scroll lo lleva <main> del AppShell — un único scroll
+          container evita colisión con el footer sticky del wizard-shell. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-1">
         {filtered.map((marco) => {
           const selected = data.muestraMarcoId === marco.id
           return (

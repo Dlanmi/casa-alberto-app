@@ -1,5 +1,16 @@
 import { Input } from '@renderer/components/ui/input'
+import { useDecimalInput } from '@renderer/lib/use-decimal-input'
 import type { WizardData } from './wizard-shell'
+
+// BR-002 — Fase 2 §A.1: medidas válidas entre 1 y 500 cm. El backend valida,
+// el UI previene: clamp temprano ayuda a que `canContinueFromStep` se actualice
+// correctamente cuando el papá tipea algo absurdo (negativo o NaN).
+const MEDIDA_MAX_CM = 500
+
+// Patrón permisivo para permitir decimales con punto o coma (43.32, 43,32).
+// El teclado móvil se activa con `inputMode="decimal"`; el pattern evita que
+// el navegador marque el campo como inválido mientras el papá escribe.
+const MEDIDA_PATTERN = '[0-9]*[.,]?[0-9]*'
 
 type Props = {
   data: WizardData
@@ -16,6 +27,17 @@ export function StepMedidas({ data, onChange }: Props): React.JSX.Element {
   const cambiaAncho = anchoRedondeado !== data.anchoCm
   const cambiaAlto = altoRedondeado !== data.altoCm
 
+  const ancho = useDecimalInput(
+    data.anchoCm,
+    (n) => onChange({ anchoCm: n }),
+    { max: MEDIDA_MAX_CM }
+  )
+  const alto = useDecimalInput(
+    data.altoCm,
+    (n) => onChange({ altoCm: n }),
+    { max: MEDIDA_MAX_CM }
+  )
+
   return (
     <div>
       <h2 className="text-xl font-bold tracking-tight text-text mb-1">Medidas</h2>
@@ -27,20 +49,24 @@ export function StepMedidas({ data, onChange }: Props): React.JSX.Element {
         <Input
           label="Ancho (cm)"
           type="number"
+          inputMode="decimal"
+          pattern={MEDIDA_PATTERN}
           min={1}
-          max={500}
-          value={data.anchoCm || ''}
-          onChange={(e) => onChange({ anchoCm: Number(e.target.value) || 0 })}
-          placeholder="Ej: 30"
+          max={MEDIDA_MAX_CM}
+          value={ancho.raw}
+          onChange={ancho.handleChange}
+          placeholder="Ej: 43.32"
         />
         <Input
           label="Alto (cm)"
           type="number"
+          inputMode="decimal"
+          pattern={MEDIDA_PATTERN}
           min={1}
-          max={500}
-          value={data.altoCm || ''}
-          onChange={(e) => onChange({ altoCm: Number(e.target.value) || 0 })}
-          placeholder="Ej: 40"
+          max={MEDIDA_MAX_CM}
+          value={alto.raw}
+          onChange={alto.handleChange}
+          placeholder="Ej: 70.5"
         />
       </div>
 

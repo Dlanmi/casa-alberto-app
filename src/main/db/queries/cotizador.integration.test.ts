@@ -6,7 +6,20 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
 import { muestrasMarcos, preciosVidrios } from '../schema'
-import { cotizarAcolchado, cotizarVidrioEspejo } from './cotizador'
+import { redondearPrecioFinal } from '@shared/redondeo'
+import {
+  actualizarPrecioRetablo,
+  actualizarPrecioVidrio,
+  cotizarAcolchado,
+  cotizarVidrioEspejo,
+  crearMuestraMarco,
+  crearPrecioBastidor,
+  crearPrecioPaspartuAcrilico,
+  crearPrecioPaspartuPintado,
+  crearPrecioRetablo,
+  crearPrecioTapa,
+  crearPrecioVidrio
+} from './cotizador'
 
 describe.runIf(nativeAbiAvailable)('cotizarVidrioEspejo (Fase 2 §A.8)', () => {
   let db: DB
@@ -93,7 +106,7 @@ describe.runIf(nativeAbiAvailable)('cotizarAcolchado + marco opcional (Fase 2 §
   })
 
   it('sin marco: sólo aplica la fórmula base (ancho × alto × 15)', () => {
-    // 30×40 → 18000 base + 10% materiales = 19800.
+    // 30×40 → 18000 base + 10% materiales = 19800 → redondeado a 20000 (múltiplo de $1.000).
     const result = cotizarAcolchado(db, {
       anchoCm: 30,
       altoCm: 40,
@@ -104,14 +117,15 @@ describe.runIf(nativeAbiAvailable)('cotizarAcolchado + marco opcional (Fase 2 §
     expect(result.items[0].subtotal).toBe(18000)
     expect(result.subtotal).toBe(18000)
     expect(result.totalMateriales).toBe(1800)
-    expect(result.precioTotal).toBe(19800)
+    expect(result.precioTotal).toBe(20000)
+    expect(result.precioTotal % 1000).toBe(0)
   })
 
   it('con marco: suma acolchado + marco y aplica materiales sobre el combinado', () => {
     // 50×70 acolchado = 50*70*15 = 52500.
     // Marco K473 @ 50×70 colilla 48 $48k/m = (perímetro 240 + 48) = 288 cm = 2.88 m × 48000 = 138240.
     // Subtotal combinado = 52500 + 138240 = 190740.
-    // Materiales 10% = 19074.
+    // Materiales 10% = 19074. Bruto = 209814 → redondeado a 210000 (múltiplo de $1.000).
     const muestra = db.select().from(muestrasMarcos).get()
     expect(muestra).toBeTruthy()
     const result = cotizarAcolchado(db, {
@@ -131,7 +145,9 @@ describe.runIf(nativeAbiAvailable)('cotizarAcolchado + marco opcional (Fase 2 §
     expect(result.subtotal).toBe(52500 + 138240)
     expect(result.totalMateriales).toBe(Math.round(result.subtotal * 0.1))
     expect(materialesItem?.subtotal).toBe(result.totalMateriales)
-    expect(result.precioTotal).toBe(result.subtotal + result.totalMateriales)
+    expect(result.precioTotal).toBe(redondearPrecioFinal(result.subtotal + result.totalMateriales))
+    expect(result.precioTotal).toBe(210000)
+    expect(result.precioTotal % 1000).toBe(0)
   })
 
   it('con muestraMarcoId inexistente: lanza error claro', () => {
@@ -142,5 +158,123 @@ describe.runIf(nativeAbiAvailable)('cotizarAcolchado + marco opcional (Fase 2 §
         muestraMarcoId: 99999
       })
     ).toThrow(/muestra de marco/i)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Sprint 2 · A3 — validación de precios positivos antes del insert.
+// Antes las funciones `crear*` aceptaban silenciosamente precios negativos
+// o cero; bastaba con un IPC mal armado para envenenar la lista de precios.
+// Estos tests garantizan que cada entry point falla con mensaje legible.
+// ---------------------------------------------------------------------------
+
+describe.runIf(nativeAbiAvailable)('cotizador · A3 validar precios > 0', () => {
+  let db: DB
+
+  beforeEach(() => {
+    db = createTestDb().db
+  })
+
+  describe('crearMuestraMarco', () => {
+    it('rechaza colilla 0', () => {
+      expect(() =>
+        crearMuestraMarco(db, { referencia: 'K001', colillaCm: 0, precioMetro: 48000 })
+      ).toThrow(/colilla/i)
+    })
+
+    it('rechaza colilla negativa', () => {
+      expect(() =>
+        crearMuestraMarco(db, { referencia: 'K001', colillaCm: -5, precioMetro: 48000 })
+      ).toThrow(/colilla/i)
+    })
+
+    it('rechaza precioMetro 0', () => {
+      expect(() =>
+        crearMuestraMarco(db, { referencia: 'K001', colillaCm: 48, precioMetro: 0 })
+      ).toThrow(/precio.*metro/i)
+    })
+
+    it('rechaza precioMetro negativo', () => {
+      expect(() =>
+        crearMuestraMarco(db, { referencia: 'K001', colillaCm: 48, precioMetro: -100 })
+      ).toThrow(/precio.*metro/i)
+    })
+
+    it('rechaza referencia vacía', () => {
+      expect(() =>
+        crearMuestraMarco(db, { referencia: '   ', colillaCm: 48, precioMetro: 48000 })
+      ).toThrow(/referencia/i)
+    })
+
+    it('acepta datos válidos', () => {
+      const m = crearMuestraMarco(db, {
+        referencia: 'K001',
+        colillaCm: 48,
+        precioMetro: 48000
+      })
+      expect(m.referencia).toBe('K001')
+    })
+  })
+
+  describe('crearPrecioVidrio', () => {
+    it('rechaza precio 0', () => {
+      expect(() => crearPrecioVidrio(db, 'claro', 0)).toThrow(/mayor a 0/i)
+    })
+
+    it('rechaza precio negativo', () => {
+      expect(() => crearPrecioVidrio(db, 'claro', -1000)).toThrow(/mayor a 0/i)
+    })
+
+    it('rechaza tipo vacío', () => {
+      expect(() => crearPrecioVidrio(db, '   ', 100000)).toThrow(/tipo/i)
+    })
+
+    it('actualizarPrecioVidrio también rechaza valores inválidos', () => {
+      const v = crearPrecioVidrio(db, 'claro', 100000)
+      expect(() => actualizarPrecioVidrio(db, v!.id, 0)).toThrow(/mayor a 0/i)
+      expect(() => actualizarPrecioVidrio(db, v!.id, -1)).toThrow(/mayor a 0/i)
+    })
+  })
+
+  describe('crearPrecioPaspartu/Retablo/Bastidor/Tapa (validarMedidaPrecioCreate)', () => {
+    it('crearPrecioPaspartuPintado rechaza precio 0', () => {
+      expect(() =>
+        crearPrecioPaspartuPintado(db, { anchoCm: 30, altoCm: 40, precio: 0 })
+      ).toThrow(/precio.*mayor a 0/i)
+    })
+
+    it('crearPrecioPaspartuPintado rechaza ancho 0', () => {
+      expect(() =>
+        crearPrecioPaspartuPintado(db, { anchoCm: 0, altoCm: 40, precio: 10000 })
+      ).toThrow(/ancho.*mayor a 0/i)
+    })
+
+    it('crearPrecioPaspartuAcrilico rechaza alto negativo', () => {
+      expect(() =>
+        crearPrecioPaspartuAcrilico(db, { anchoCm: 30, altoCm: -5, precio: 10000 })
+      ).toThrow(/alto.*mayor a 0/i)
+    })
+
+    it('crearPrecioRetablo rechaza precio NaN', () => {
+      expect(() =>
+        crearPrecioRetablo(db, { anchoCm: 30, altoCm: 40, precio: Number.NaN })
+      ).toThrow(/precio.*mayor a 0/i)
+    })
+
+    it('crearPrecioBastidor rechaza todo en 0', () => {
+      expect(() => crearPrecioBastidor(db, { anchoCm: 0, altoCm: 0, precio: 0 })).toThrow(
+        /mayor a 0/i
+      )
+    })
+
+    it('crearPrecioTapa acepta datos válidos', () => {
+      const row = crearPrecioTapa(db, { anchoCm: 30, altoCm: 40, precio: 15000 })
+      expect(row.precio).toBe(15000)
+    })
+
+    it('actualizarPrecioRetablo rechaza precio 0', () => {
+      const r = crearPrecioRetablo(db, { anchoCm: 30, altoCm: 40, precio: 10000 })
+      expect(() => actualizarPrecioRetablo(db, r.id, 0)).toThrow(/mayor a 0/i)
+    })
   })
 })

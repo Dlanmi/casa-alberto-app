@@ -3,6 +3,8 @@ import { ArrowLeft, ArrowRight, Check, Cloud, CloudOff, Loader2, X } from 'lucid
 import { cn } from '@renderer/lib/cn'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
+import { useDecimalInput } from '@renderer/lib/use-decimal-input'
+import { redondearPrecioFinal } from '@shared/redondeo'
 import { StepDots } from '@renderer/components/ui/step-dots'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
@@ -23,7 +25,7 @@ import {
 } from '@renderer/hooks/use-auto-save'
 import type {
   TipoTrabajo,
-  MuestraMarco,
+  MuestraMarcoConProveedor,
   IpcResult,
   PrecioVidrio,
   ResultadoCotizacion,
@@ -34,17 +36,20 @@ export type WizardData = {
   anchoCm: number
   altoCm: number
   muestraMarcoId: number | null
-  muestraMarco: MuestraMarco | null
+  muestraMarco: MuestraMarcoConProveedor | null
   conPaspartu: boolean
   tipoPaspartu: 'pintado' | 'acrilico'
   anchoPaspartuCm: number
   conVidrio: boolean
-  tipoVidrio: 'claro' | 'antirreflectivo'
+  // tipoVidrio es texto libre — el usuario puede crear tipos nuevos en
+  // Listas de precios (ej. "templado", "mate"). La lista de opciones se
+  // lee dinámicamente de la DB en step-opciones.
+  tipoVidrio: string
   porcentajeMateriales: number
   precioManual: number
   descripcionManual: string
   precioInstalacion: number
-  tipoVidrioEspejo: 'claro' | 'antirreflectivo'
+  tipoVidrioEspejo: string
 }
 
 const INITIAL_DATA: WizardData = {
@@ -113,7 +118,7 @@ export function WizardShell({
       d.descripcionManual.length > 0
   })
 
-  const { data: marcos, loading: marcosLoading } = useIpc<MuestraMarco[]>(
+  const { data: marcos, loading: marcosLoading } = useIpc<MuestraMarcoConProveedor[]>(
     () => window.api.cotizador.listarMuestrasMarcos(),
     []
   )
@@ -151,7 +156,7 @@ export function WizardShell({
             ],
             subtotal: data.precioManual,
             totalMateriales: 0,
-            precioTotal: data.precioManual
+            precioTotal: redondearPrecioFinal(data.precioManual)
           })
           return
         }
@@ -173,10 +178,7 @@ export function WizardShell({
 
         let result: IpcResult<ResultadoCotizacion>
 
-        if (
-          tipoTrabajo === 'enmarcacion_paspartu' ||
-          (tipoTrabajo === 'enmarcacion_estandar' && data.conPaspartu)
-        ) {
+        if (tipoTrabajo === 'enmarcacion_estandar' && data.conPaspartu) {
           result = (await window.api.cotizador.enmarcacionPaspartu({
             anchoCm: data.anchoCm,
             altoCm: data.altoCm,
@@ -266,8 +268,7 @@ export function WizardShell({
     data.tipoVidrioEspejo
   ])
 
-  const isEnmarcacion =
-    tipoTrabajo === 'enmarcacion_estandar' || tipoTrabajo === 'enmarcacion_paspartu'
+  const isEnmarcacion = tipoTrabajo === 'enmarcacion_estandar'
   const esManual = tipoTrabajo === 'restauracion'
 
   const visibleSteps: { key: WizardStepKey; label: string }[] = isEnmarcacion
@@ -299,8 +300,12 @@ export function WizardShell({
   const stepGuidance = getStepGuidance(currentStep?.key, data, cotizacion)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    // Grid root: row1 header (auto), row2 scroll-area (1fr).
+    // h-full + min-h-0 hace que el wizard ocupe toda la altura de <main>
+    // sin desbordar — el scroll lo maneja la row 2. Así <main> deja de
+    // scrollear este wizard y se evita el doble scroll container.
+    <div className="grid grid-rows-[auto_1fr] h-full min-h-0">
+      <div className="flex items-center justify-between pb-6">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setShowExitConfirm(true)}>
             <ArrowLeft size={20} />
@@ -327,97 +332,116 @@ export function WizardShell({
         </div>
       </div>
 
-      {/* Barra compacta de precio — visible solo cuando el panel lateral
-          está oculto (pantallas < xl). Muestra el total en una línea. */}
-      {(cotizacion?.precioTotal ?? 0) > 0 && (
-        <div className="lg:hidden flex items-center justify-between rounded-lg border border-border bg-surface-muted px-4 py-3">
-          <span className="text-sm font-medium text-text">Total sugerido</span>
-          <PrecioDisplay value={cotizacion?.precioTotal ?? 0} size="lg" className="text-accent" />
-        </div>
-      )}
-
-      <div className="flex gap-6 lg:gap-8">
-        {/* min-w-0 permite el truncation del flex; el overflow-hidden previo
-            recortaba los focus rings de los inputs y las sombras de las cards
-            cerca del borde. Lo removemos porque los únicos scrolls internos
-            (step-marco) ya tienen su propio overflow-y-auto. */}
-        <div className="flex-1 min-w-0">
-          <div className="mb-6 px-2">
-            <StepDots steps={[...visibleSteps]} current={step} onJump={(index) => setStep(index)} />
+      {/* Row 2 del grid: único scroll container del wizard. min-h-0 es vital
+          para que 1fr respete el overflow en descendientes. El flex interno
+          lleva min-h-full para que el LEFT column siempre tenga al menos la
+          altura del viewport — así el footer al final de la columna queda
+          visible al fondo cuando el contenido es corto. */}
+      <div className="overflow-y-auto min-h-0">
+        {/* Barra compacta de precio — visible solo cuando el panel lateral
+            está oculto (pantallas < lg). Muestra el total en una línea. */}
+        {(cotizacion?.precioTotal ?? 0) > 0 && (
+          <div className="lg:hidden flex items-center justify-between rounded-lg border border-border bg-surface-muted px-4 py-3 mb-6">
+            <span className="text-sm font-medium text-text">Total sugerido</span>
+            <PrecioDisplay value={cotizacion?.precioTotal ?? 0} size="lg" className="text-accent" />
           </div>
+        )}
 
-          <GuidanceHint
-            tone={stepGuidance.tone}
-            title={stepGuidance.title}
-            message={stepGuidance.message}
-            className="mb-6"
-          />
+        <div className="flex gap-6 lg:gap-8 min-h-full">
+          {/* LEFT column: flex-col para anclar el footer al bottom de la
+              columna de forma natural (sin sticky). Content en flex-1, footer
+              como último hijo. Con min-h-full en el flex parent, el footer
+              queda al fondo del viewport cuando hay poco contenido y al final
+              del contenido cuando hay mucho — patrón clásico de wizards. */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex-1">
+              <div className="mb-6 px-2">
+                <StepDots
+                  steps={[...visibleSteps]}
+                  current={step}
+                  onJump={(index) => setStep(index)}
+                />
+              </div>
 
-          {currentStep?.key === 'precio' && (
-            <StepPrecioManual data={data} onChange={updateData} tipoTrabajo={tipoTrabajo} />
-          )}
-          {currentStep?.key === 'medidas' && <StepMedidas data={data} onChange={updateData} />}
-          {currentStep?.key === 'vidrio_tipo' && (
-            <StepVidrioEspejo data={data} onChange={updateData} />
-          )}
-          {currentStep?.key === 'marco' &&
-            (marcosLoading ? (
-              <PageLoader />
-            ) : (
-              <StepMarco data={data} onChange={updateData} marcos={marcos ?? []} />
-            ))}
-          {currentStep?.key === 'opciones' && (
-            <StepOpciones data={data} onChange={updateData} tipoTrabajo={tipoTrabajo} />
-          )}
-          {currentStep?.key === 'materiales' && (
-            <StepMateriales data={data} onChange={updateData} />
-          )}
-          {currentStep?.key === 'resumen' && (
-            <StepResumen
-              data={data}
-              cotizacion={cotizacion}
-              tipoTrabajo={tipoTrabajo}
-              cliente={cliente}
-              onClienteChange={onClienteChange}
-            />
-          )}
+              <GuidanceHint
+                tone={stepGuidance.tone}
+                title={stepGuidance.title}
+                message={stepGuidance.message}
+                className="mb-6"
+              />
 
-          <div className="sticky bottom-0 -mx-2 mt-8 flex justify-between border-t border-border bg-surface/95 px-2 py-4 backdrop-blur">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => setStep((current) => Math.max(0, current - 1))}
-              disabled={step === 0}
-            >
-              <ArrowLeft size={18} />
-              Anterior
-            </Button>
-            {step < visibleSteps.length - 1 ? (
+              {currentStep?.key === 'precio' && (
+                <StepPrecioManual data={data} onChange={updateData} tipoTrabajo={tipoTrabajo} />
+              )}
+              {currentStep?.key === 'medidas' && <StepMedidas data={data} onChange={updateData} />}
+              {currentStep?.key === 'vidrio_tipo' && (
+                <StepVidrioEspejo data={data} onChange={updateData} />
+              )}
+              {currentStep?.key === 'marco' &&
+                (marcosLoading ? (
+                  <PageLoader />
+                ) : (
+                  <StepMarco data={data} onChange={updateData} marcos={marcos ?? []} />
+                ))}
+              {currentStep?.key === 'opciones' && (
+                <StepOpciones data={data} onChange={updateData} tipoTrabajo={tipoTrabajo} />
+              )}
+              {currentStep?.key === 'materiales' && (
+                <StepMateriales data={data} onChange={updateData} />
+              )}
+              {currentStep?.key === 'resumen' && (
+                <StepResumen
+                  data={data}
+                  cotizacion={cotizacion}
+                  tipoTrabajo={tipoTrabajo}
+                  cliente={cliente}
+                  onClienteChange={onClienteChange}
+                />
+              )}
+            </div>
+
+            {/* Footer al bottom del LEFT column — sin sticky. Al ser el último
+                hijo de un flex-col con min-h igual al scroll-area, siempre
+                queda al final visible cuando el contenido cabe, y al final
+                del contenido (accesible vía scroll) cuando no cabe. Nunca se
+                superpone sobre las tarjetas. */}
+            <div className="mt-6 flex items-center justify-between border-t border-border bg-surface px-2 py-4 shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.08)]">
               <Button
+                variant="outline"
                 size="lg"
-                onClick={() => setStep((current) => current + 1)}
-                disabled={!canContinue}
+                onClick={() => setStep((current) => Math.max(0, current - 1))}
+                disabled={step === 0}
               >
-                {canContinue
-                  ? `Siguiente: ${visibleSteps[step + 1]?.label}`
-                  : 'Completa este paso para continuar'}
-                {canContinue && <ArrowRight size={18} />}
+                <ArrowLeft size={18} />
+                Anterior
               </Button>
-            ) : null}
+              {step < visibleSteps.length - 1 ? (
+                <Button
+                  size="lg"
+                  onClick={() => setStep((current) => current + 1)}
+                  disabled={!canContinue}
+                >
+                  {canContinue
+                    ? `Siguiente: ${visibleSteps[step + 1]?.label}`
+                    : 'Completa este paso para continuar'}
+                  {canContinue && <ArrowRight size={18} />}
+                </Button>
+              ) : null}
+            </div>
           </div>
-        </div>
 
-        {/* Panel de precio lateral — solo visible en pantallas anchas (xl: 1280px+)
-            para que el contenido del wizard tenga espacio suficiente. En pantallas
-            normales se muestra la barra compacta de arriba. */}
-        <div className="w-72 shrink-0 hidden lg:block">
-          <PrecioPanel
-            items={cotizacion?.items ?? []}
-            subtotal={cotizacion?.subtotal ?? 0}
-            totalMateriales={cotizacion?.totalMateriales ?? 0}
-            precioTotal={cotizacion?.precioTotal ?? 0}
-            porcentajeMateriales={data.porcentajeMateriales}
-          />
+          {/* Panel de precio lateral — solo visible en pantallas anchas (lg+)
+              para que el contenido del wizard tenga espacio suficiente. En
+              pantallas normales se muestra la barra compacta de arriba. */}
+          <div className="w-72 shrink-0 hidden lg:block">
+            <PrecioPanel
+              items={cotizacion?.items ?? []}
+              subtotal={cotizacion?.subtotal ?? 0}
+              totalMateriales={cotizacion?.totalMateriales ?? 0}
+              precioTotal={cotizacion?.precioTotal ?? 0}
+              porcentajeMateriales={data.porcentajeMateriales}
+            />
+          </div>
         </div>
       </div>
 
@@ -529,7 +553,7 @@ function getStepGuidance(
 }
 
 function needsMarco(tipo: TipoTrabajo): boolean {
-  return tipo === 'enmarcacion_estandar' || tipo === 'enmarcacion_paspartu'
+  return tipo === 'enmarcacion_estandar'
 }
 
 // SPEC-001 — píldora pequeña que muestra el estado del auto-guardado.
@@ -624,6 +648,10 @@ function StepVidrioEspejo({
   const precioUnitario = data.tipoVidrioEspejo === 'claro' ? precioClaro : precioAntirreflectivo
   const precioCalculado = Math.round(areaM2 * precioUnitario)
 
+  const instalacion = useDecimalInput(data.precioInstalacion, (n) =>
+    onChange({ precioInstalacion: n })
+  )
+
   return (
     <div>
       <h2 className="text-xl font-bold tracking-tight text-text mb-1">Tipo de vidrio</h2>
@@ -655,7 +683,7 @@ function StepVidrioEspejo({
                 className={cn(
                   'relative flex flex-col items-start p-4 rounded-lg border-2 cursor-pointer transition-all text-left',
                   data.tipoVidrioEspejo === option.key
-                    ? 'border-accent bg-accent/10 shadow-sm'
+                    ? 'border-accent bg-accent/10 shadow-1'
                     : 'border-border hover:border-border-strong'
                 )}
               >
@@ -702,9 +730,11 @@ function StepVidrioEspejo({
         <Input
           label="Costo de instalación"
           type="number"
+          inputMode="decimal"
+          pattern="[0-9]*[.,]?[0-9]*"
           min={0}
-          value={data.precioInstalacion || ''}
-          onChange={(event) => onChange({ precioInstalacion: Number(event.target.value) || 0 })}
+          value={instalacion.raw}
+          onChange={instalacion.handleChange}
           placeholder="0 si no aplica"
           hint="Incluye transporte y mano de obra de instalación a domicilio."
         />
@@ -723,6 +753,10 @@ function StepPrecioManual({
   tipoTrabajo: TipoTrabajo
 }): React.JSX.Element {
   const esRestauracion = tipoTrabajo === 'restauracion'
+
+  const precio = useDecimalInput(data.precioManual, (n) => onChange({ precioManual: n }), {
+    min: 0
+  })
 
   return (
     <div>
@@ -749,8 +783,8 @@ function StepPrecioManual({
           label="Precio total"
           type="number"
           min={1}
-          value={data.precioManual || ''}
-          onChange={(event) => onChange({ precioManual: Number(event.target.value) || 0 })}
+          value={precio.raw}
+          onChange={precio.handleChange}
           placeholder="Ej: 150000"
           hint="Este es el precio final que se cobrará al cliente."
         />
