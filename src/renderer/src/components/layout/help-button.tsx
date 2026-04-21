@@ -15,10 +15,14 @@ export function HelpButton(): React.JSX.Element {
   const content = getHelpForRoute(location.pathname)
 
   // Cierra al cambiar de ruta para no dejar tips de otra pantalla visibles.
+  // Intencionalmente omitimos `open` de deps: agregarlo (como hacía v1.4.0)
+  // causaba que el effect se re-dispare al abrir y cierre el popover
+  // inmediatamente, haciendo el botón inservible.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (open) setOpen(false)
-  }, [location.pathname, open])
+    setOpen(false)
+  }, [location.pathname])
 
   // Cierra al hacer clic fuera del popover o presionar Escape.
   useEffect(() => {
