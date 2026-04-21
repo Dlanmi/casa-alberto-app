@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
 import { acudientes, clientes, configuracion, estudiantes } from '../schema'
-import { crearEstudiante, listarPagosMes, registrarPagoClase, venderKit } from './clases'
+import {
+  crearEstudiante,
+  generarPagosDelMes,
+  listarPagosMes,
+  registrarPagoClase,
+  venderKit
+} from './clases'
 
 describe.runIf(nativeAbiAvailable)('clases guards (Fase 2 §C, §D)', () => {
   let db: DB
@@ -177,6 +183,11 @@ describe.runIf(nativeAbiAvailable)('clases guards (Fase 2 §C, §D)', () => {
         .values({ clienteId: c3.id, fechaIngreso: '2026-04-01' })
         .returning()
         .get()
+
+      // En producción, el boot llama `generarPagosDelMes` para crear el pago
+      // mensual pendiente de cada estudiante activo (§D.2). Replicamos ese
+      // paso aquí; sin él `listarPagosMes` sólo devolvería a quien ya pagó.
+      generarPagosDelMes(db, '2026-04')
 
       // Ana paga completo, Carlos y María no pagan nada.
       registrarPagoClase(db, {
