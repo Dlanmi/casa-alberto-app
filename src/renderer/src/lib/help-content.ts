@@ -29,12 +29,14 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
         {
           title: 'Al confirmar se crea el pedido',
           description:
-            'Cuando pulsas "Crear pedido", la app te lleva directo al listado con la nueva tarjeta resaltada.'
+            'Cuando pulsas "Crear pedido", la app te lleva directo al listado con la nueva tarjeta resaltada.',
+          to: '/pedidos'
         },
         {
           title: '¿Y si el cliente es nuevo?',
           description:
-            'Puedes agregarlo desde el paso 1 sin salir del cotizador. Solo nombre y teléfono es suficiente.'
+            'Puedes agregarlo desde el paso 1 sin salir del cotizador. Solo nombre y teléfono es suficiente.',
+          to: '/clientes'
         }
       ]
     }
@@ -51,12 +53,19 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
         },
         {
           title: 'Clic en la tarjeta para cobrar',
-          description: 'Al abrir el detalle hay botones rápidos de abono y para generar factura.'
+          description: 'Al abrir el detalle hay botones rápidos de abono y para generar factura.',
+          to: '/facturas'
         },
         {
           title: 'Filtra por lo urgente',
           description:
             'Usa los chips "Atrasados", "Sin abono" o "Próximos" para ver solo lo que requiere acción hoy.'
+        },
+        {
+          title: 'Cotizar un nuevo trabajo',
+          description:
+            'Si el cliente trae algo nuevo para enmarcar, ve al cotizador y al confirmar vuelves aquí con el pedido listo.',
+          to: '/cotizador'
         }
       ]
     }
@@ -86,12 +95,14 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
         {
           title: 'Badge rojo "Con deuda"',
           description:
-            'Cuando aparece junto al nombre, significa que ese cliente tiene pedidos sin abono. Clic para ver cuáles.'
+            'Cuando aparece junto al nombre, significa que ese cliente tiene pedidos sin abono. Clic para ver cuáles.',
+          to: '/facturas'
         },
         {
           title: 'Cotizar o llamar directo',
           description:
-            'Desde la tarjeta del cliente puedes iniciar una cotización o llamarlo con un solo clic.'
+            'Desde la tarjeta del cliente puedes iniciar una cotización o llamarlo con un solo clic.',
+          to: '/cotizador'
         }
       ]
     }
