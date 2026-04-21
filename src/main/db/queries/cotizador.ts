@@ -142,6 +142,42 @@ export function calcularPrecioAcolchado(anchoCm: number, altoCm: number): number
   return Math.round(anchoCm * altoCm * 15)
 }
 
+// Fase 2 §A.6 — Adherido: se pega la lámina directo sobre MDF con pegante Boxer.
+// Técnica standalone (sin marco, sin vidrio, sin paspartú). Dos tarifas según
+// tamaño con frontera inclusiva: si AMBOS lados caen dentro de 55×65 cm se
+// aplica la tarifa pequeña (×10); cualquier lado que supere el límite usa la
+// tarifa grande (×7). Normalizamos min/max para que 55×65 y 65×55 den igual.
+export const TARIFA_ADHERIDO_PEQUENO = 10
+export const TARIFA_ADHERIDO_GRANDE = 7
+export const LIMITE_ADHERIDO_MENOR_CM = 55
+export const LIMITE_ADHERIDO_MAYOR_CM = 65
+
+export function calcularPrecioAdherido(
+  anchoCm: number,
+  altoCm: number
+): { precio: number; multiplicador: number } {
+  validarMedida(anchoCm, 'El ancho')
+  validarMedida(altoCm, 'El alto')
+  const lados = [anchoCm, altoCm].sort((x, y) => x - y)
+  const lado1 = lados[0]!
+  const lado2 = lados[1]!
+  const dentro = lado1 <= LIMITE_ADHERIDO_MENOR_CM && lado2 <= LIMITE_ADHERIDO_MAYOR_CM
+  const multiplicador = dentro ? TARIFA_ADHERIDO_PEQUENO : TARIFA_ADHERIDO_GRANDE
+  return { precio: Math.round(anchoCm * altoCm * multiplicador), multiplicador }
+}
+
+// Fase 2 §A.3 — Suplemento: listón de madera delgado que decora el perímetro
+// interior del paspartú. Se cobra por metro lineal usando las medidas de la
+// obra (las que el paspartú deja ver). No tiene sentido sin paspartú.
+export const PRECIO_SUPLEMENTO_POR_METRO = 15_000
+
+export function calcularPrecioSuplemento(lado1Cm: number, lado2Cm: number): number {
+  validarMedida(lado1Cm, 'El ancho')
+  validarMedida(lado2Cm, 'El alto')
+  const perimetroCm = (lado1Cm + lado2Cm) * 2
+  return Math.round((perimetroCm / 100) * PRECIO_SUPLEMENTO_POR_METRO)
+}
+
 export function aplicarPaspartu(
   anchoCm: number,
   altoCm: number,
@@ -451,6 +487,10 @@ export type InputEnmarcacionPaspartu = {
   muestraMarcoId: number
   tipoVidrio: TipoVidrioLista | 'ninguno'
   porcentajeMateriales?: number
+  // Fase 2 §A.3 — listón de madera delgado que decora el perímetro interior
+  // del paspartú. Se cobra por perímetro de la obra (medidas interiores), a
+  // $15.000/metro lineal. Opt-in desde el wizard (checkbox).
+  conSuplemento?: boolean
 }
 
 export function cotizarEnmarcacionPaspartu(
@@ -480,6 +520,20 @@ export function cotizarEnmarcacionPaspartu(
       altoExteriorCm: altoExterior
     }
   })
+
+  // Suplemento opcional: se calcula con las medidas de la obra (no las
+  // exteriores) porque decora el borde interior del paspartú.
+  if (input.conSuplemento) {
+    const precioSuplemento = calcularPrecioSuplemento(input.anchoCm, input.altoCm)
+    items.push({
+      tipoItem: 'suplemento',
+      descripcion: `Suplemento decorativo ${input.anchoCm}x${input.altoCm}cm`,
+      cantidad: 1,
+      precioUnitario: PRECIO_SUPLEMENTO_POR_METRO,
+      subtotal: precioSuplemento,
+      metadata: { perimetroCm: (input.anchoCm + input.altoCm) * 2 }
+    })
+  }
 
   const marco = obtenerMuestraMarco(db, input.muestraMarcoId)
   if (!marco) throw new Error(`Muestra de marco ${input.muestraMarcoId} no encontrada`)
@@ -571,6 +625,30 @@ export function cotizarAcolchado(db: DB, input: InputAcolchado): ResultadoCotiza
     })
   }
 
+  return finalizarCotizacion(items, input.porcentajeMateriales ?? 10)
+}
+
+export type InputAdherido = {
+  anchoCm: number
+  altoCm: number
+  porcentajeMateriales?: number
+}
+
+// Fase 2 §A.6 — Cotiza un trabajo adherido. Solo lámina pegada sobre MDF; no se
+// combina con marco, vidrio ni paspartú (el wizard salta esos pasos). El
+// porcentaje de materiales cubre MDF, Boxer y cartón de respaldo.
+export function cotizarAdherido(_db: DB, input: InputAdherido): ResultadoCotizacion {
+  const { precio, multiplicador } = calcularPrecioAdherido(input.anchoCm, input.altoCm)
+  const items: CotizacionItem[] = [
+    {
+      tipoItem: 'adherido',
+      descripcion: `Adherido ${input.anchoCm}x${input.altoCm}cm`,
+      cantidad: 1,
+      precioUnitario: null,
+      subtotal: precio,
+      metadata: { multiplicadorAdherido: multiplicador }
+    }
+  ]
   return finalizarCotizacion(items, input.porcentajeMateriales ?? 10)
 }
 

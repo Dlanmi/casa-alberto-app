@@ -133,6 +133,7 @@ export const ESTADOS_TERMINALES_UI: EstadoPedido[] = ['entregado', 'cancelado']
 export const TIPO_TRABAJO_LABEL: Record<TipoTrabajo, string> = {
   enmarcacion_estandar: 'Enmarcación',
   acolchado: 'Acolchado',
+  adherido: 'Adherido',
   retablo: 'Retablo',
   bastidor: 'Bastidor',
   tapa: 'Tapa',

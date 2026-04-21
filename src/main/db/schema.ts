@@ -17,6 +17,7 @@ import {
 export const TIPOS_TRABAJO = [
   'enmarcacion_estandar',
   'acolchado',
+  'adherido',
   'retablo',
   'bastidor',
   'tapa',
@@ -45,6 +46,8 @@ export const TIPOS_ITEM_PEDIDO = [
   'paspartu_pintado',
   'paspartu_acrilico',
   'acolchado',
+  'adherido',
+  'suplemento',
   'retablo',
   'bastidor',
   'tapa',

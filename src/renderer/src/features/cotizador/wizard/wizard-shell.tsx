@@ -40,6 +40,9 @@ export type WizardData = {
   conPaspartu: boolean
   tipoPaspartu: 'pintado' | 'acrilico'
   anchoPaspartuCm: number
+  // Fase 2 §A.3 — listón de madera delgado decorativo en el interior del
+  // paspartú. Solo aplica cuando conPaspartu está activo.
+  conSuplemento: boolean
   conVidrio: boolean
   // tipoVidrio es texto libre — el usuario puede crear tipos nuevos en
   // Listas de precios (ej. "templado", "mate"). La lista de opciones se
@@ -60,6 +63,7 @@ const INITIAL_DATA: WizardData = {
   conPaspartu: false,
   tipoPaspartu: 'pintado',
   anchoPaspartuCm: 5,
+  conSuplemento: false,
   conVidrio: true,
   tipoVidrio: 'claro',
   porcentajeMateriales: 10,
@@ -186,7 +190,8 @@ export function WizardShell({
             tipoPaspartu: data.tipoPaspartu,
             muestraMarcoId: data.muestraMarcoId!,
             tipoVidrio: data.conVidrio ? data.tipoVidrio : 'ninguno',
-            porcentajeMateriales: data.porcentajeMateriales
+            porcentajeMateriales: data.porcentajeMateriales,
+            conSuplemento: data.conSuplemento
           })) as IpcResult<ResultadoCotizacion>
         } else if (tipoTrabajo === 'enmarcacion_estandar') {
           result = (await window.api.cotizador.enmarcacionEstandar({
@@ -204,6 +209,14 @@ export function WizardShell({
             anchoCm: data.anchoCm,
             altoCm: data.altoCm,
             muestraMarcoId: data.muestraMarcoId,
+            porcentajeMateriales: data.porcentajeMateriales
+          })) as IpcResult<ResultadoCotizacion>
+        } else if (tipoTrabajo === 'adherido') {
+          // Fase 2 §A.6 — adherido es standalone: solo lámina pegada sobre MDF
+          // con Boxer. El backend decide la tarifa (x10 vs x7) según el tamaño.
+          result = (await window.api.cotizador.adherido({
+            anchoCm: data.anchoCm,
+            altoCm: data.altoCm,
             porcentajeMateriales: data.porcentajeMateriales
           })) as IpcResult<ResultadoCotizacion>
         } else if (tipoTrabajo === 'retablo') {
@@ -257,6 +270,7 @@ export function WizardShell({
     data.altoCm,
     data.muestraMarcoId,
     data.conPaspartu,
+    data.conSuplemento,
     data.tipoPaspartu,
     data.anchoPaspartuCm,
     data.conVidrio,
@@ -291,9 +305,17 @@ export function WizardShell({
               { key: 'materiales', label: 'Materiales' },
               { key: 'resumen', label: 'Resumen' }
             ]
-          : STEPS.filter(
-              (wizardStep) => wizardStep.key !== 'marco' && wizardStep.key !== 'opciones'
-            )
+          : tipoTrabajo === 'adherido'
+            ? [
+                // Fase 2 §A.6 — adherido no lleva marco/vidrio/paspartú, solo la
+                // lámina pegada al MDF. Flujo mínimo: medidas → materiales → resumen.
+                { key: 'medidas', label: 'Medidas' },
+                { key: 'materiales', label: 'Materiales' },
+                { key: 'resumen', label: 'Resumen' }
+              ]
+            : STEPS.filter(
+                (wizardStep) => wizardStep.key !== 'marco' && wizardStep.key !== 'opciones'
+              )
 
   const currentStep = visibleSteps[step]
   const canContinue = canContinueFromStep(currentStep?.key, data, cotizacion)

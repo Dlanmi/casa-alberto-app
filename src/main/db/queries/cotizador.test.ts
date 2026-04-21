@@ -4,6 +4,8 @@ import {
   redondearArriba10,
   calcularPrecioVidrio,
   calcularPrecioAcolchado,
+  calcularPrecioAdherido,
+  calcularPrecioSuplemento,
   aplicarPaspartu,
   aplicarMaterialesAdicionales
 } from './cotizador'
@@ -120,6 +122,67 @@ describe('calcularPrecioAcolchado', () => {
       const viaMetros = Math.round((ancho / 100) * (alto / 100) * 150000)
       expect(viaMetros).toBe(viaCm)
     }
+  })
+})
+
+describe('calcularPrecioAdherido (Fase 2 §A.6)', () => {
+  it('tarifa pequeña (×10) cuando ambos lados caen dentro del límite 55×65', () => {
+    // 30×40 → ambos lados dentro → multiplicador 10
+    expect(calcularPrecioAdherido(30, 40)).toEqual({ precio: 12000, multiplicador: 10 })
+  })
+
+  it('frontera inclusiva: 55×65 exactos usan tarifa pequeña', () => {
+    // Fase 2 dice "hasta 55×65" — inclusivo.
+    expect(calcularPrecioAdherido(55, 65)).toEqual({ precio: 35750, multiplicador: 10 })
+  })
+
+  it('un solo lado por encima del límite cambia a tarifa grande (×7)', () => {
+    // 56×65 → 56 > 55 → multiplicador 7
+    expect(calcularPrecioAdherido(56, 65)).toEqual({ precio: 25480, multiplicador: 7 })
+  })
+
+  it('tamaño grande (70×100) usa tarifa grande', () => {
+    expect(calcularPrecioAdherido(70, 100)).toEqual({ precio: 49000, multiplicador: 7 })
+  })
+
+  it('orientación no afecta: 65×55 da igual que 55×65', () => {
+    const a = calcularPrecioAdherido(55, 65)
+    const b = calcularPrecioAdherido(65, 55)
+    expect(b).toEqual(a)
+  })
+
+  it('rechaza medidas inválidas', () => {
+    expect(() => calcularPrecioAdherido(0, 40)).toThrow()
+    expect(() => calcularPrecioAdherido(-10, 40)).toThrow()
+    expect(() => calcularPrecioAdherido(30, 0)).toThrow()
+  })
+})
+
+describe('calcularPrecioSuplemento (Fase 2 §A.3)', () => {
+  it('obra de 20×30 genera 1 metro lineal = $15.000', () => {
+    // (20 + 30) × 2 = 100 cm = 1 m → 1 × 15000 = 15000
+    expect(calcularPrecioSuplemento(20, 30)).toBe(15000)
+  })
+
+  it('obra de 50×70 cobra proporcionalmente', () => {
+    // (50 + 70) × 2 = 240 cm = 2.4 m → 2.4 × 15000 = 36000
+    expect(calcularPrecioSuplemento(50, 70)).toBe(36000)
+  })
+
+  it('perímetros fraccionarios se redondean al peso', () => {
+    // (22 + 37) × 2 = 118 cm = 1.18 m → 1.18 × 15000 = 17700 exacto
+    expect(calcularPrecioSuplemento(22, 37)).toBe(17700)
+    // (21 + 33) × 2 = 108 cm = 1.08 m → 1.08 × 15000 = 16200 exacto
+    expect(calcularPrecioSuplemento(21, 33)).toBe(16200)
+  })
+
+  it('simetría: orden de los lados no cambia el resultado', () => {
+    expect(calcularPrecioSuplemento(30, 50)).toBe(calcularPrecioSuplemento(50, 30))
+  })
+
+  it('rechaza medidas inválidas', () => {
+    expect(() => calcularPrecioSuplemento(0, 30)).toThrow()
+    expect(() => calcularPrecioSuplemento(-5, 30)).toThrow()
   })
 })
 

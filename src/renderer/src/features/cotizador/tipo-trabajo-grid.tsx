@@ -2,6 +2,7 @@ import {
   Frame,
   Sofa,
   LayoutGrid,
+  Layers,
   RectangleHorizontal,
   Square,
   Wrench,
@@ -32,6 +33,12 @@ const TIPOS: TipoTrabajoItem[] = [
     label: 'Acolchado',
     description: 'MDF + espuma 2cm + pegado. Precio por area',
     icon: Sofa
+  },
+  {
+    tipo: 'adherido',
+    label: 'Adherido',
+    description: 'Lámina pegada a MDF con Boxer. Sin marco ni vidrio',
+    icon: Layers
   },
   {
     tipo: 'retablo',
@@ -83,7 +90,7 @@ const BLOQUES: {
   {
     title: 'Acabados y estructuras',
     description: 'Opciones por medida para respaldo, bastidor y tapas.',
-    tipos: ['acolchado', 'retablo', 'bastidor', 'tapa']
+    tipos: ['acolchado', 'adherido', 'retablo', 'bastidor', 'tapa']
   },
   {
     title: 'Trabajos especiales',

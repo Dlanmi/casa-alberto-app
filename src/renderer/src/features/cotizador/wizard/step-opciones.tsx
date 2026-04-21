@@ -109,6 +109,37 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
                   }
                   suffix=" cm"
                 />
+
+                {/* Fase 2 §A.3 — Suplemento: listón decorativo interior del paspartú.
+                    Opt-in, se cobra por metro lineal del perímetro de la obra. */}
+                <div className="pt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="pr-3">
+                      <span className="text-sm font-semibold text-text">Suplemento decorativo</span>
+                      <p className="text-sm text-text-muted mt-0.5">
+                        Listón de madera delgado en el borde interior del paspartú. $15.000 por
+                        metro lineal.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => onChange({ conSuplemento: !data.conSuplemento })}
+                      className={cn(
+                        'relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0',
+                        data.conSuplemento ? 'bg-success' : 'bg-border'
+                      )}
+                      aria-label={
+                        data.conSuplemento ? 'Desactivar suplemento' : 'Activar suplemento'
+                      }
+                    >
+                      <span
+                        className={cn(
+                          'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-200',
+                          data.conSuplemento ? 'left-[23px]' : 'left-[3px]'
+                        )}
+                      />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

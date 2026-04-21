@@ -11,6 +11,8 @@ import {
   actualizarPrecioRetablo,
   actualizarPrecioVidrio,
   cotizarAcolchado,
+  cotizarAdherido,
+  cotizarEnmarcacionPaspartu,
   cotizarVidrioEspejo,
   crearMuestraMarco,
   crearPrecioBastidor,
@@ -278,3 +280,231 @@ describe.runIf(nativeAbiAvailable)('cotizador · A3 validar precios > 0', () => 
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Fase 2 §A.6 — Enmarcación Adherida (standalone)
+// ---------------------------------------------------------------------------
+
+describe.runIf(nativeAbiAvailable)('cotizarAdherido (Fase 2 §A.6)', () => {
+  let db: DB
+
+  beforeEach(() => {
+    const testDb = createTestDb()
+    db = testDb.db
+  })
+
+  it('tarifa pequeña (×10) + materiales: 30×40 genera item correcto', () => {
+    // 30×40 → dentro de 55×65 → ×10 → 12.000 base.
+    // Materiales 10% = 1.200. Bruto = 13.200 → redondeado a 14.000 (múltiplo de $1.000).
+    const result = cotizarAdherido(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      porcentajeMateriales: 10
+    })
+
+    const adherido = result.items.find((i) => i.tipoItem === 'adherido')
+    expect(adherido).toBeDefined()
+    expect(adherido!.subtotal).toBe(12000)
+    expect(adherido!.metadata?.multiplicadorAdherido).toBe(10)
+    expect(adherido!.descripcion).toBe('Adherido 30x40cm')
+
+    expect(result.subtotal).toBe(12000)
+    expect(result.totalMateriales).toBe(1200)
+    expect(result.precioTotal).toBe(14000)
+  })
+
+  it('tarifa grande (×7): 70×100 usa multiplicador 7', () => {
+    // 70×100 → fuera de límite → ×7 → 49.000 base.
+    // Materiales 10% = 4.900. Bruto = 53.900 → redondeo al múltiplo de $1.000.
+    const result = cotizarAdherido(db, {
+      anchoCm: 70,
+      altoCm: 100,
+      porcentajeMateriales: 10
+    })
+
+    const adherido = result.items.find((i) => i.tipoItem === 'adherido')
+    expect(adherido!.subtotal).toBe(49000)
+    expect(adherido!.metadata?.multiplicadorAdherido).toBe(7)
+
+    expect(result.subtotal).toBe(49000)
+    expect(result.totalMateriales).toBe(4900)
+    // 53.900 redondeado al próximo múltiplo de $1.000 = 54.000.
+    expect(result.precioTotal).toBe(54000)
+  })
+
+  it('frontera exacta 55×65: queda en tarifa pequeña (×10)', () => {
+    // Garantiza que la regla "ambos lados dentro" sea inclusiva, tal como
+    // confirmó el papá.
+    const result = cotizarAdherido(db, {
+      anchoCm: 55,
+      altoCm: 65,
+      porcentajeMateriales: 10
+    })
+
+    const adherido = result.items.find((i) => i.tipoItem === 'adherido')
+    expect(adherido!.subtotal).toBe(35750)
+    expect(adherido!.metadata?.multiplicadorAdherido).toBe(10)
+  })
+
+  it('cruce del límite: 56×65 salta a tarifa grande', () => {
+    const result = cotizarAdherido(db, {
+      anchoCm: 56,
+      altoCm: 65,
+      porcentajeMateriales: 10
+    })
+    const adherido = result.items.find((i) => i.tipoItem === 'adherido')
+    expect(adherido!.subtotal).toBe(25480)
+    expect(adherido!.metadata?.multiplicadorAdherido).toBe(7)
+  })
+
+  it('50×70 (lado mayor supera 65): tarifa grande aunque el menor sea ≤55', () => {
+    // Este es el caso clave de la ambigüedad original: 50≤55 pero 70>65.
+    // La regla "ambos dentro" → 70>65 descalifica → ×7.
+    const result = cotizarAdherido(db, {
+      anchoCm: 50,
+      altoCm: 70,
+      porcentajeMateriales: 10
+    })
+    const adherido = result.items.find((i) => i.tipoItem === 'adherido')
+    expect(adherido!.subtotal).toBe(24500) // 50 × 70 × 7
+    expect(adherido!.metadata?.multiplicadorAdherido).toBe(7)
+  })
+
+  it('materiales adicionales aplican sobre el subtotal correctamente', () => {
+    // Verificamos que el porcentaje custom funciona (5% en vez del 10% default).
+    const result = cotizarAdherido(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      porcentajeMateriales: 5
+    })
+    expect(result.subtotal).toBe(12000)
+    expect(result.totalMateriales).toBe(600) // 5% de 12000
+    // 12.600 redondeado al próximo múltiplo de $1.000 = 13.000.
+    expect(result.precioTotal).toBe(13000)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Fase 2 §A.3.1 — Suplemento decorativo del paspartú
+// ---------------------------------------------------------------------------
+
+describe.runIf(nativeAbiAvailable)(
+  'cotizarEnmarcacionPaspartu con suplemento (Fase 2 §A.3.1)',
+  () => {
+    let db: DB
+    let muestraMarcoId: number
+
+    beforeEach(() => {
+      const testDb = createTestDb()
+      db = testDb.db
+      // Seed muestra de marco + precio paspartú pintado para que cotizarEnmarcacionPaspartu
+      // tenga los lookups que necesita.
+      const muestra = crearMuestraMarco(db, {
+        referencia: 'K473',
+        colillaCm: 48,
+        precioMetro: 48000
+      })
+      muestraMarcoId = muestra.id
+      // Precio paspartú para obra 60x80 ampliada con paspartú de 5cm → exterior 70x90.
+      crearPrecioPaspartuPintado(db, { anchoCm: 70, altoCm: 90, precio: 22000 })
+      // Precio vidrio.
+      db.insert(preciosVidrios).values({ tipo: 'claro', precioM2: 100000 }).run()
+    })
+
+    it('sin suplemento: el breakdown NO incluye el item de suplemento', () => {
+      const result = cotizarEnmarcacionPaspartu(db, {
+        anchoCm: 60,
+        altoCm: 80,
+        anchoPaspartuCm: 5,
+        tipoPaspartu: 'pintado',
+        muestraMarcoId,
+        tipoVidrio: 'claro',
+        porcentajeMateriales: 10
+      })
+      const suplementoItem = result.items.find((i) => i.tipoItem === 'suplemento')
+      expect(suplementoItem).toBeUndefined()
+    })
+
+    it('con suplemento: agrega item y suma al subtotal', () => {
+      // Obra 60×80 → perímetro (60+80)×2 = 280 cm = 2.8 m → 2.8 × 15000 = 42.000.
+      const sin = cotizarEnmarcacionPaspartu(db, {
+        anchoCm: 60,
+        altoCm: 80,
+        anchoPaspartuCm: 5,
+        tipoPaspartu: 'pintado',
+        muestraMarcoId,
+        tipoVidrio: 'claro',
+        porcentajeMateriales: 10,
+        conSuplemento: false
+      })
+
+      const con = cotizarEnmarcacionPaspartu(db, {
+        anchoCm: 60,
+        altoCm: 80,
+        anchoPaspartuCm: 5,
+        tipoPaspartu: 'pintado',
+        muestraMarcoId,
+        tipoVidrio: 'claro',
+        porcentajeMateriales: 10,
+        conSuplemento: true
+      })
+
+      const suplementoItem = con.items.find((i) => i.tipoItem === 'suplemento')
+      expect(suplementoItem).toBeDefined()
+      expect(suplementoItem!.subtotal).toBe(42000)
+      expect(suplementoItem!.metadata?.perimetroCm).toBe(280)
+
+      // El subtotal 'con' debe ser exactamente el 'sin' + 42.000.
+      expect(con.subtotal).toBe(sin.subtotal + 42000)
+      // Los materiales también suben proporcionalmente (10% sobre el nuevo subtotal).
+      expect(con.totalMateriales).toBe(Math.round(con.subtotal * 0.1))
+    })
+
+    it('suplemento usa medidas de la obra, no las exteriores del paspartú', () => {
+      // Esto es CRÍTICO: el listón va en el borde INTERIOR del paspartú (contra la
+      // obra), así que su perímetro es el de la obra, no el del marco. Ejemplo:
+      // obra 20×30 con paspartú de 5cm → exterior 30×40. El suplemento debe
+      // cobrarse sobre 20×30, no sobre 30×40.
+      // Para testearlo necesitamos un precio paspartú para 30x40 exterior.
+      crearPrecioPaspartuPintado(db, { anchoCm: 30, altoCm: 40, precio: 10000 })
+
+      const result = cotizarEnmarcacionPaspartu(db, {
+        anchoCm: 20,
+        altoCm: 30,
+        anchoPaspartuCm: 5,
+        tipoPaspartu: 'pintado',
+        muestraMarcoId,
+        tipoVidrio: 'ninguno',
+        porcentajeMateriales: 10,
+        conSuplemento: true
+      })
+
+      const sup = result.items.find((i) => i.tipoItem === 'suplemento')!
+      // Perímetro de la obra (20+30)×2 = 100 cm, NO (30+40)×2 = 140.
+      expect(sup.metadata?.perimetroCm).toBe(100)
+      expect(sup.subtotal).toBe(15000) // 1m × 15000
+    })
+
+    it('suplemento: el breakdown mantiene el orden esperado (paspartú → suplemento → marco → vidrio)', () => {
+      const result = cotizarEnmarcacionPaspartu(db, {
+        anchoCm: 60,
+        altoCm: 80,
+        anchoPaspartuCm: 5,
+        tipoPaspartu: 'pintado',
+        muestraMarcoId,
+        tipoVidrio: 'claro',
+        porcentajeMateriales: 10,
+        conSuplemento: true
+      })
+
+      // Ignoramos el item de materiales_adicionales (siempre al final).
+      const sinMateriales = result.items.filter((i) => i.tipoItem !== 'materiales_adicionales')
+      expect(sinMateriales.map((i) => i.tipoItem)).toEqual([
+        'paspartu_pintado',
+        'suplemento',
+        'marco',
+        'vidrio'
+      ])
+    })
+  }
+)

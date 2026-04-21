@@ -35,6 +35,7 @@ import type { TipoTrabajo } from '@shared/types'
 export const TIPO_TRABAJO_ICON: Record<TipoTrabajo, LucideIcon> = {
   enmarcacion_estandar: Frame,
   acolchado: Square,
+  adherido: Layers,
   retablo: ImageIcon,
   bastidor: Grid3x3,
   tapa: Package,
@@ -65,6 +66,8 @@ export const CONCEPTO_ICON: Record<string, LucideIcon> = {
   vidrio: Square,
   paspartu: Layers,
   acolchado: Square,
+  adherido: Layers,
+  suplemento: Ruler,
   retablo: ImageIcon,
   bastidor: Grid3x3,
   tapa: Package,

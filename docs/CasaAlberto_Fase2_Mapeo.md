@@ -87,6 +87,17 @@ El precio del paspartú depende de la medida exterior final (no del ancho del pa
 - Paspartú pintado 60 × 80 según lista: $22.000
 - **Subtotal: $234.640**
 
+#### A.3.1 Suplemento decorativo interior
+
+El **suplemento** es un listón de madera delgado que se instala en el perímetro interior del paspartú (el borde que queda contra la obra). Agrega volumen y contraste al recuadro. Es opcional, se ofrece cuando el cliente lo pide.
+
+```
+Perímetro interior = (Lado₁ + Lado₂) × 2
+Precio = (Perímetro / 100) × $15.000/m
+```
+
+Las medidas usadas son las de la **obra** (las interiores del paspartú, no las exteriores del marco). Ejemplo: obra de 20 × 30 → perímetro 100 cm = 1 m → **$15.000**. Una obra de 50 × 70 → perímetro 240 cm = 2.4 m → **$36.000**.
+
 ### A.4 Cotización de Retablos
 
 El retablo es un tipo de enmarcación que no lleva marco ni vidrio. Consiste en 4 listones y una tapa de MDF pegados que forman la base donde se adhiere o pega el póster u obra.
@@ -119,6 +130,27 @@ Este precio cubre solo la lámina acolchada (MDF + espuma + pegado + mano de obr
 - Verificación en m²: 0.50 × 0.70 × $150.000 = $52.500 ✓
 - Marco (50×70, ref K473): $138.240
 - **Subtotal: $190.740**
+
+### A.5.1 Cotización de Enmarcación Adherida
+
+La enmarcación **adherida** (o "pegada") es una técnica standalone: la lámina (foto, diploma u obra) se pega directamente sobre un MDF usando pegante **Boxer**, sin marco, sin vidrio y sin paspartú. Acabado minimalista y económico.
+
+El precio se calcula por área con dos tarifas según el tamaño:
+
+```
+Si AMBOS lados ≤ 55×65 cm      → Ancho × Alto × 10
+Cualquier lado mayor al límite → Ancho × Alto × 7
+```
+
+La frontera es inclusiva: 55×65 exacto usa la tarifa pequeña (×10). Basta con que un solo lado supere 55 o 65 cm para usar la tarifa grande (×7). La orientación no importa (65×55 da lo mismo que 55×65).
+
+**Ejemplos:**
+- 30 × 40 → ambos lados dentro → 30 × 40 × 10 = **$12.000**
+- 55 × 65 → frontera exacta → 55 × 65 × 10 = **$35.750**
+- 56 × 65 → 56 > 55 → 56 × 65 × 7 = **$25.480**
+- 70 × 100 → lados grandes → 70 × 100 × 7 = **$49.000**
+
+No se combina con marco/vidrio/paspartú. Los materiales adicionales (Boxer, cartón de respaldo, colgadera) se suman vía el porcentaje estándar del cotizador.
 
 ### A.6 Bastidores y Tapas para Portarretratos
 
@@ -170,6 +202,8 @@ La siguiente tabla muestra todos los componentes posibles de una cotización y c
 | Paspartú acrílico | Medida exterior según lista | Lista precios MDF (precio diferente) |
 | Retablo | Medida según lista | Lista de precios retablos |
 | Acolchado | L×L×15 (cm) o L×L×$150.000 (m²) | Fórmula fija (mano de obra) |
+| Adherido | L×L×10 (≤55×65) o L×L×7 (mayor) | Fórmula fija con 2 tarifas |
+| Suplemento paspartú | (L₁+L₂)×2 × $15.000/m | Opcional, solo con paspartú |
 | Bastidores/Tapas | Medida según lista | Lista de precios |
 | Restauración | Cotización individual | Criterio del dueño |
 | Materiales adic. | 5% a 10% sobre subtotal | Porcentaje variable (editable) |

@@ -109,6 +109,8 @@ const api = {
       muestraMarcoId?: number | null
       porcentajeMateriales?: number
     }) => invoke<IpcResult<ResultadoCotizacion>>('cotizador:acolchado', input),
+    adherido: (input: { anchoCm: number; altoCm: number; porcentajeMateriales?: number }) =>
+      invoke<IpcResult<ResultadoCotizacion>>('cotizador:adherido', input),
     retablo: (input: { anchoCm: number; altoCm: number; porcentajeMateriales?: number }) =>
       invoke<IpcResult<ResultadoCotizacion>>('cotizador:retablo', input),
     bastidor: (input: { anchoCm: number; altoCm: number; porcentajeMateriales?: number }) =>

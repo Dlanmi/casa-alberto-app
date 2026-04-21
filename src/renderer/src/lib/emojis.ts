@@ -13,6 +13,7 @@ export const EMOJI_ESTADO_PEDIDO: Record<EstadoPedido, string> = {
 export const EMOJI_TIPO_TRABAJO: Record<TipoTrabajo, string> = {
   enmarcacion_estandar: '🖼️',
   acolchado: '🧵',
+  adherido: '📎',
   retablo: '🪵',
   bastidor: '🖌️',
   tapa: '📐',

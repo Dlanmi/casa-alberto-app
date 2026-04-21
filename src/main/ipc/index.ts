@@ -39,6 +39,7 @@ import { shell } from 'electron'
 import { getBackupsDir } from '../db'
 import {
   cotizarAcolchado,
+  cotizarAdherido,
   cotizarBastidor,
   cotizarEnmarcacionEstandar,
   cotizarEnmarcacionPaspartu,
@@ -293,6 +294,7 @@ export function registerIpcHandlers(db: DB): void {
     wrap(cotizarEnmarcacionPaspartu)(db, input)
   )
   ipcMain.handle('cotizador:acolchado', (_e, input) => wrap(cotizarAcolchado)(db, input))
+  ipcMain.handle('cotizador:adherido', (_e, input) => wrap(cotizarAdherido)(db, input))
   ipcMain.handle('cotizador:retablo', (_e, input) => wrap(cotizarRetablo)(db, input))
   ipcMain.handle('cotizador:bastidor', (_e, input) => wrap(cotizarBastidor)(db, input))
   ipcMain.handle('cotizador:tapa', (_e, input) => wrap(cotizarTapa)(db, input))
