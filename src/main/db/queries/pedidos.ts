@@ -33,6 +33,8 @@ export { TRANSICIONES_VALIDAS }
 
 const ESTADOS_TERMINALES: EstadoPedido[] = ['listo', 'entregado', 'cancelado']
 const ESTADOS_NO_FACTURABLES: EstadoPedido[] = ['cotizado', 'cancelado']
+const ESTADOS_ACTIVOS_MATRIZ: EstadoPedido[] = ['confirmado', 'en_proceso', 'listo']
+const DAY_MS = 24 * 60 * 60 * 1000
 
 // Fase 6 — días tras los cuales un pedido entregado se considera archivado y
 // se oculta por defecto del Kanban. Papá puede ver el histórico con el toggle.
@@ -519,11 +521,76 @@ export type MatrizUrgencia = {
   diasUrgencia: number
 }
 
+export type PedidoUrgenciaLite = {
+  id: number
+  estado: EstadoPedido
+  fechaEntrega: string | null
+}
+
+function inicioDelDiaLocal(base: Date): Date {
+  const dia = new Date(base)
+  dia.setHours(0, 0, 0, 0)
+  return dia
+}
+
+function fechaISOAInicioDiaLocal(fechaISO: string): Date {
+  // Parsear a mediodía evita corrimientos por zona horaria al convertir un
+  // string YYYY-MM-DD; luego lo llevamos al inicio del día para comparar por fecha.
+  return inicioDelDiaLocal(new Date(`${fechaISO}T12:00:00`))
+}
+
+export function clasificarPedidosPorUrgencia(
+  rows: PedidoUrgenciaLite[],
+  sinAbonoPedidoIds: ReadonlySet<number>,
+  diasUrgencia = 2,
+  hoy = new Date()
+): MatrizUrgencia {
+  const pedidosActivos = rows.filter((pedido) => ESTADOS_ACTIVOS_MATRIZ.includes(pedido.estado))
+  const hoyInicio = inicioDelDiaLocal(hoy)
+
+  let urgenteSinAbono = 0
+  let urgenteConAbono = 0
+  let normalSinAbono = 0
+  let normalConAbono = 0
+  let atrasados = 0
+
+  for (const pedido of pedidosActivos) {
+    const sinAbono = sinAbonoPedidoIds.has(pedido.id)
+
+    if (!pedido.fechaEntrega) {
+      if (sinAbono) normalSinAbono++
+      else normalConAbono++
+      continue
+    }
+
+    const entrega = fechaISOAInicioDiaLocal(pedido.fechaEntrega)
+    const diasHastaEntrega = Math.round((entrega.getTime() - hoyInicio.getTime()) / DAY_MS)
+    const esUrgente = diasHastaEntrega <= diasUrgencia
+
+    if (entrega.getTime() < hoyInicio.getTime()) atrasados++
+
+    if (esUrgente && sinAbono) urgenteSinAbono++
+    else if (esUrgente) urgenteConAbono++
+    else if (sinAbono) normalSinAbono++
+    else normalConAbono++
+  }
+
+  return {
+    urgenteSinAbono,
+    urgenteConAbono,
+    normalSinAbono,
+    normalConAbono,
+    atrasados,
+    total: pedidosActivos.length,
+    diasUrgencia
+  }
+}
+
 export function obtenerMatrizUrgencia(db: DB, diasUrgencia = 2): MatrizUrgencia {
   const activos = db
     .select()
     .from(pedidos)
-    .where(inArray(pedidos.estado, ['confirmado', 'en_proceso', 'listo']))
+    .where(inArray(pedidos.estado, ESTADOS_ACTIVOS_MATRIZ))
     .all()
 
   // Conjunto de pedidoId que SÍ tienen factura activa pero sin pagos.
@@ -539,7 +606,7 @@ export function obtenerMatrizUrgencia(db: DB, diasUrgencia = 2): MatrizUrgencia 
     .leftJoin(pagos, eq(pagos.facturaId, facturas.id))
     .where(
       and(
-        inArray(pedidos.estado, ['confirmado', 'en_proceso', 'listo']),
+        inArray(pedidos.estado, ESTADOS_ACTIVOS_MATRIZ),
         not(eq(facturas.estado, 'anulada')),
         isNotNull(facturas.id)
       )
@@ -549,37 +616,5 @@ export function obtenerMatrizUrgencia(db: DB, diasUrgencia = 2): MatrizUrgencia 
     .all()
   const sinAbonoSet = new Set(sinAbonoRows.map((r) => r.pedidoId))
 
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  const limiteUrgente = hoy.getTime() + diasUrgencia * 86400000
-
-  let urgenteSinAbono = 0
-  let urgenteConAbono = 0
-  let normalSinAbono = 0
-  let normalConAbono = 0
-  let atrasados = 0
-
-  for (const p of activos) {
-    const sinAbono = sinAbonoSet.has(p.id)
-    let esUrgente = false
-    if (p.fechaEntrega) {
-      const entrega = new Date(`${p.fechaEntrega}T12:00:00`).getTime()
-      esUrgente = entrega <= limiteUrgente
-      if (entrega < hoy.getTime()) atrasados++
-    }
-    if (esUrgente && sinAbono) urgenteSinAbono++
-    else if (esUrgente) urgenteConAbono++
-    else if (sinAbono) normalSinAbono++
-    else normalConAbono++
-  }
-
-  return {
-    urgenteSinAbono,
-    urgenteConAbono,
-    normalSinAbono,
-    normalConAbono,
-    atrasados,
-    total: activos.length,
-    diasUrgencia
-  }
+  return clasificarPedidosPorUrgencia(activos, sinAbonoSet, diasUrgencia)
 }
