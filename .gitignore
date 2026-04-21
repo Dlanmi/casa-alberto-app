@@ -16,7 +16,7 @@ AUDIT*.md
 TESTER_*.md
 SMOKE_TEST_MANUAL.md
 FINAL_REPORT.md
-CasaAlberto_Fase*.md
+/CasaAlberto_Fase*.md
 DESIGN.md
 .claude/
 .conductor/
