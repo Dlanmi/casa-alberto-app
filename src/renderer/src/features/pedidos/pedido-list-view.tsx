@@ -15,6 +15,9 @@ type PedidoListViewProps = {
   pedidos: Pedido[]
   onRowClick: (pedido: Pedido) => void
   clienteMap?: Map<number, string>
+  // Map pedidoId → {total, pagado} para poblar la columna "Pago" con la
+  // proporción real. Si falta (undefined), usamos precioTotal y pagado=0.
+  saldosInfoMap?: Map<number, { total: number; pagado: number }>
   highlightedId?: number | null
 }
 
@@ -22,6 +25,7 @@ export function PedidoListView({
   pedidos,
   onRowClick,
   clienteMap,
+  saldosInfoMap,
   highlightedId = null
 }: PedidoListViewProps): React.JSX.Element {
   if (pedidos.length === 0) {
@@ -84,7 +88,10 @@ export function PedidoListView({
                 <PrecioDisplay value={p.precioTotal} size="sm" />
               </Td>
               <Td className="min-w-30">
-                <PagoBar total={p.precioTotal} pagado={0} />
+                <PagoBar
+                  total={saldosInfoMap?.get(p.id)?.total ?? p.precioTotal}
+                  pagado={saldosInfoMap?.get(p.id)?.pagado ?? 0}
+                />
               </Td>
               <Td>
                 <EstadoPedidoDot estado={p.estado} />

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, Clock, Calendar } from 'lucide-react'
+import { AlertTriangle, Clock, Calendar, UserX, DollarSign } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
 import { EstadoPedidoBadge } from '@renderer/components/shared/estado-badge'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
@@ -17,6 +17,10 @@ type KanbanCardProps = {
   // — el detail panel es quien muestra el dato real). Pasar 0 explícito
   // solo cuando realmente sepamos que no hay pagos.
   pagado?: number
+  // Fase 2 — saldo pendiente calculado por el backend en una sola query.
+  // Cuando >0 mostramos badge rojo "Debe $XXX" para que papá vea de un vistazo
+  // quién tiene cuentas pendientes sin abrir el detalle.
+  saldoPendiente?: number
   onClick: () => void
   // Fase 3 — si true, renderiza un ring acento para destacar el pedido
   // recién creado tras auto-navegación desde el cotizador.
@@ -36,6 +40,7 @@ export function KanbanCard({
   pedido,
   clienteNombre,
   pagado,
+  saldoPendiente,
   onClick,
   highlighted = false
 }: KanbanCardProps) {
@@ -44,19 +49,24 @@ export function KanbanCard({
   const atrasado = dias !== null && dias < 0
   const urgente = dias !== null && dias <= 2 && dias >= 0
   const TipoIcon = TIPO_TRABAJO_ICON[pedido.tipoTrabajo]
+  // Fase 9 — si el cliente fue eliminado/desactivado, el clienteMap no lo
+  // trae. Mostramos "Cliente eliminado" con tooltip explicativo en vez del
+  // fallback silencioso "Cliente #N" que confunde al usuario.
+  const clienteEliminado = !clienteNombre
   const displayName = clienteNombre ?? `Cliente #${pedido.clienteId}`
 
   const fechaIcon = atrasado ? AlertTriangle : urgente ? Clock : Calendar
   const FechaIcon = fechaIcon
 
-  // Fase 3 — badge "hace N días" solo cuando el pedido lleva > 3 días en
-  // estados activos. Ayuda a papá a detectar trabajos que se quedaron
-  // estancados sin tener que abrir el detalle.
+  // Fase 3 — badge "hace N días" cuando el pedido lleva demasiado tiempo sin
+  // moverse. Umbral más agresivo (>2) para estado `listo` porque ahí ya debería
+  // estar llamando al cliente; >3 para el resto.
   const diasEnTablero =
     pedido.estado === 'confirmado' || pedido.estado === 'en_proceso' || pedido.estado === 'listo'
       ? diasDesde(pedido.updatedAt)
       : 0
-  const muestraDiasEstado = diasEnTablero > 3
+  const umbralDias = pedido.estado === 'listo' ? 2 : 3
+  const muestraDiasEstado = diasEnTablero > umbralDias
 
   return (
     // AGENT_UX: Card visual con avatar de iniciales, icono del tipo de
@@ -80,7 +90,20 @@ export function KanbanCard({
       <div className="mb-3 flex items-start gap-2.5">
         <InitialsAvatar nombre={displayName} id={pedido.clienteId} size="sm" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-text">{displayName}</p>
+          <p
+            className={cn(
+              'truncate text-sm font-semibold text-text flex items-center gap-1',
+              clienteEliminado && 'text-text-muted italic'
+            )}
+            title={
+              clienteEliminado
+                ? 'Cliente eliminado o desactivado — solo queda referencia histórica'
+                : undefined
+            }
+          >
+            {clienteEliminado ? 'Cliente eliminado' : displayName}
+            {clienteEliminado && <UserX size={12} className="shrink-0 text-warning-strong" />}
+          </p>
           <p className="mt-0.5 text-xs font-medium tabular-nums text-text-muted">{pedido.numero}</p>
         </div>
       </div>
@@ -124,6 +147,19 @@ export function KanbanCard({
 
       {/* Payment progress — solo si tenemos data real de pagos cargada */}
       {pagado !== undefined && <PagoBar total={pedido.precioTotal} pagado={pagado} />}
+
+      {/* Fase 2 — Badge de saldo pendiente. Destacado en rojo solo cuando
+          realmente hay deuda. Papá puede verlo sin abrir el detalle — el
+          caso más común de crítica visual en v1.2.0. */}
+      {saldoPendiente !== undefined && saldoPendiente > 0 && (
+        <div
+          className="mt-2 flex items-center gap-1 rounded-sm bg-error-bg px-2 py-1 text-xs font-semibold text-error-strong"
+          title={`Falta cobrar $${saldoPendiente.toLocaleString('es-CO')} de este pedido`}
+        >
+          <DollarSign size={11} className="shrink-0" />
+          <span className="tabular-nums">Debe ${saldoPendiente.toLocaleString('es-CO')}</span>
+        </div>
+      )}
 
       {/* Footer: state badge + días en estado si lleva demasiado */}
       <div className="mt-3 flex items-center justify-between gap-2">

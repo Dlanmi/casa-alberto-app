@@ -73,6 +73,12 @@ export function PedidoDetailPanel({
   const closeRef = useRef<HTMLButtonElement>(null)
   useSlidePanel({ onClose, closeRef })
   const [pagandoMonto, setPagandoMonto] = useState<number | null>(null)
+  // C3 — Lock sincrónico para evitar double-submit en quick-pay. El estado
+  // React se actualiza en el siguiente tick, así que clicks rapidísimos (o
+  // bubbling de mouse) podían disparar 2+ registrarPago antes de que el
+  // disabled={pagandoMonto !== null} se reflejara en el DOM. Este ref se
+  // setea antes del await, en el mismo tick del handler, como guard real.
+  const payingRef = useRef(false)
   const [editingFecha, setEditingFecha] = useState(false)
   const [fechaInput, setFechaInput] = useState(pedido.fechaEntrega ?? '')
   const [savingFecha, setSavingFecha] = useState(false)
@@ -112,6 +118,10 @@ export function PedidoDetailPanel({
   // tanto facturas como saldo para que la pago-bar se actualice al instante.
   const handleQuickPay = async (montoSolicitado: number): Promise<void> => {
     if (!facturaActiva || saldoPendiente <= 0) return
+    // C3 — Guard sincrónico contra double-submit. Si ya hay un pago en vuelo
+    // lo ignoramos antes de tocar el servidor o el estado React.
+    if (payingRef.current) return
+    payingRef.current = true
     const monto = Math.min(montoSolicitado, saldoPendiente)
     setPagandoMonto(montoSolicitado)
     try {
@@ -130,6 +140,10 @@ export function PedidoDetailPanel({
         })
         refetchFacturas()
         refetchSaldo()
+        // Sincroniza con el kanban: refresca saldosMap del parent para que
+        // el badge "Debe $X" y el bloqueo de "entregar" desaparezcan sin
+        // tener que esperar al polling de 10s.
+        onPedidoUpdated?.()
       } else {
         showToast({
           tone: 'error',
@@ -145,6 +159,7 @@ export function PedidoDetailPanel({
       })
     } finally {
       setPagandoMonto(null)
+      payingRef.current = false
     }
   }
 
@@ -424,11 +439,31 @@ export function PedidoDetailPanel({
 
       <div className="px-6 py-4 border-t border-border shrink-0 space-y-3">
         <div className="flex gap-3">
-          {nextEstado && (
-            <Button className="flex-1" onClick={() => onChangeEstado(pedido.id, nextEstado)}>
-              Mover a {ESTADO_PEDIDO_LABEL[nextEstado]}
-            </Button>
-          )}
+          {nextEstado &&
+            (() => {
+              // Fase 3 — bloqueo visual: no permitir marcar "entregado"
+              // mientras quede saldo pendiente. Misma regla que el kanban
+              // via handleChangeEstado; aquí además deshabilitamos el
+              // botón y lo explicamos con un title para que papá sepa por
+              // qué no puede avanzar.
+              const bloquearPorSaldo = nextEstado === 'entregado' && saldoPendiente > 0
+              return (
+                <Button
+                  className="flex-1"
+                  disabled={bloquearPorSaldo}
+                  onClick={() => onChangeEstado(pedido.id, nextEstado)}
+                  title={
+                    bloquearPorSaldo
+                      ? `Falta cobrar $${saldoPendiente.toLocaleString('es-CO')} antes de entregar`
+                      : undefined
+                  }
+                >
+                  {bloquearPorSaldo
+                    ? `Cobra $${saldoPendiente.toLocaleString('es-CO')} para entregar`
+                    : `Mover a ${ESTADO_PEDIDO_LABEL[nextEstado]}`}
+                </Button>
+              )
+            })()}
           {facturasDelPedido.length === 0 &&
             pedido.estado !== 'cotizado' &&
             pedido.estado !== 'cancelado' && (

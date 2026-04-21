@@ -28,7 +28,8 @@ import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { MetricCard, OperationalBoard, PageSection } from '@renderer/components/layout/page-frame'
 import { CategoryBreakdown } from './category-breakdown'
-import { CATEGORIA_FIN_ICON } from '@renderer/lib/iconography'
+import { CATEGORIA_FIN_ICON, TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
+import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { EMOJI_CATEGORIA_FINANZAS } from '@renderer/lib/emojis'
 import { useEmojis } from '@renderer/contexts/emojis-context'
 import { formatCOP, mesActualISO, hoyISO } from '@renderer/lib/format'
@@ -37,9 +38,25 @@ import type {
   MovimientoFinanciero,
   TipoMovimientoFin,
   CategoriaMovimiento,
+  TipoTrabajo,
   IpcResult
 } from '@shared/types'
 import { TIPOS_MOVIMIENTO_FIN, CATEGORIAS_MOVIMIENTO } from '@shared/types'
+
+type FilaMargenTipo = {
+  tipoTrabajo: TipoTrabajo | 'sin_asignar'
+  ingresos: number
+  gastos: number
+  margen: number
+}
+
+type ReporteMargenPorTipo = {
+  mes: string
+  filas: FilaMargenTipo[]
+  totalIngresos: number
+  totalGastos: number
+  margenTotal: number
+}
 
 type ResumenMensual = {
   mes: string
@@ -110,6 +127,11 @@ export default function FinanzasPage(): React.JSX.Element {
     loading: loadingResumen,
     refetch: refetchResumen
   } = useIpc<ResumenMensual>(() => window.api.finanzas.resumenMensual(mes), [mes])
+
+  const { data: margen, refetch: refetchMargen } = useIpc<ReporteMargenPorTipo>(
+    () => window.api.finanzas.reporteMargenPorTipo(mes),
+    [mes]
+  )
 
   const desde = `${mes}-01`
   const hasta = `${mes}-31`
@@ -255,6 +277,78 @@ export default function FinanzasPage(): React.JSX.Element {
         </PageSection>
       )}
 
+      {margen && margen.filas.length > 0 && (
+        <PageSection
+          title="Margen por tipo de trabajo"
+          description="Ingresos de pagos, gastos atribuidos y margen del mes."
+        >
+          <Card padding="md" className="border-border bg-surface">
+            <Table>
+              <Thead>
+                <Tr>
+                  <Th>Tipo de trabajo</Th>
+                  <Th className="text-right">Ingresos</Th>
+                  <Th className="text-right">Gastos</Th>
+                  <Th className="text-right">Margen</Th>
+                  <Th className="text-right">%</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {margen.filas.map((fila) => {
+                  const Icon =
+                    fila.tipoTrabajo === 'sin_asignar'
+                      ? DollarSign
+                      : (TIPO_TRABAJO_ICON[fila.tipoTrabajo] ?? DollarSign)
+                  const label =
+                    fila.tipoTrabajo === 'sin_asignar'
+                      ? 'Gastos sin asignar'
+                      : (TIPO_TRABAJO_LABEL[fila.tipoTrabajo] ?? fila.tipoTrabajo)
+                  const pct =
+                    fila.ingresos > 0 ? Math.round((fila.margen / fila.ingresos) * 100) : null
+                  return (
+                    <Tr key={fila.tipoTrabajo}>
+                      <Td>
+                        <span className="inline-flex items-center gap-2 text-text">
+                          <Icon size={16} className="text-accent-strong" />
+                          {label}
+                        </span>
+                      </Td>
+                      <Td className="text-right tabular-nums text-success-strong">
+                        {formatCOP(fila.ingresos)}
+                      </Td>
+                      <Td className="text-right tabular-nums text-error-strong">
+                        {fila.gastos > 0 ? `−${formatCOP(fila.gastos)}` : formatCOP(0)}
+                      </Td>
+                      <Td
+                        className={cn(
+                          'text-right tabular-nums font-semibold',
+                          fila.margen >= 0 ? 'text-text' : 'text-error-strong'
+                        )}
+                      >
+                        {formatCOP(fila.margen)}
+                      </Td>
+                      <Td className="text-right tabular-nums text-text-muted">
+                        {pct === null ? '—' : `${pct}%`}
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </Tbody>
+            </Table>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3 text-sm">
+              <span className="text-text-muted">Totales del mes</span>
+              <span className="tabular-nums font-semibold text-text">
+                Ingresos {formatCOP(margen.totalIngresos)} · Gastos{' '}
+                {formatCOP(margen.totalGastos)} ·{' '}
+                <span className={margen.margenTotal >= 0 ? 'text-success-strong' : 'text-error-strong'}>
+                  Margen {formatCOP(margen.margenTotal)}
+                </span>
+              </span>
+            </div>
+          </Card>
+        </PageSection>
+      )}
+
       <PageSection
         title="Movimientos"
         description={
@@ -383,6 +477,7 @@ export default function FinanzasPage(): React.JSX.Element {
             setShowModal(false)
             refetchResumen()
             refetchMov()
+            refetchMargen()
             showToast('success', 'Movimiento registrado')
           }}
         />

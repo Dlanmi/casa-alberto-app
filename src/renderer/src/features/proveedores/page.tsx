@@ -20,15 +20,38 @@ import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
 import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
+import { Select } from '@renderer/components/ui/select'
+import { Badge } from '@renderer/components/ui/badge'
 import { EmptyState } from '@renderer/components/ui/empty-state'
 import { TruckIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { DirectoryScreen, MetricCard, PageSection } from '@renderer/components/layout/page-frame'
 import { formatTelefono } from '@renderer/lib/format'
-import type { Proveedor } from '@shared/types'
+import { TIPOS_PROVEEDOR, type Proveedor, type TipoProveedor } from '@shared/types'
+
+const TIPO_LABELS: Record<TipoProveedor, string> = {
+  marco: 'Marcos',
+  vidrio: 'Vidrios',
+  paspartu_material: 'Paspartú / Materiales',
+  otro: 'Otros'
+}
+
+const TIPO_BADGE_COLOR: Record<TipoProveedor, 'info' | 'success' | 'warning' | 'neutral'> = {
+  marco: 'info',
+  vidrio: 'success',
+  paspartu_material: 'warning',
+  otro: 'neutral'
+}
+
+const TIPO_OPTIONS = TIPOS_PROVEEDOR.map((value) => ({ value, label: TIPO_LABELS[value] }))
+const TIPO_FILTER_OPTIONS = [
+  { value: '', label: 'Todos los tipos' },
+  ...TIPO_OPTIONS
+]
 
 export default function ProveedoresPage(): React.JSX.Element {
   const [search, setSearch] = useState('')
+  const [tipoFilter, setTipoFilter] = useState<'' | TipoProveedor>('')
   const [showModal, setShowModal] = useState(false)
   const [editProveedor, setEditProveedor] = useState<Proveedor | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -42,12 +65,13 @@ export default function ProveedoresPage(): React.JSX.Element {
 
   const filtered = useMemo(() => {
     if (!proveedores) return []
-    if (!search.trim()) return proveedores
-    const q = search.toLowerCase()
-    return proveedores.filter(
-      (p) => p.nombre.toLowerCase().includes(q) || p.producto?.toLowerCase().includes(q)
-    )
-  }, [proveedores, search])
+    const q = search.trim().toLowerCase()
+    return proveedores.filter((p) => {
+      if (tipoFilter && p.tipo !== tipoFilter) return false
+      if (!q) return true
+      return p.nombre.toLowerCase().includes(q) || p.producto?.toLowerCase().includes(q) === true
+    })
+  }, [proveedores, search, tipoFilter])
 
   const selectedProveedor = useMemo(
     () => proveedores?.find((p) => p.id === selectedId) ?? null,
@@ -88,12 +112,21 @@ export default function ProveedoresPage(): React.JSX.Element {
         icon: Plus
       }}
       filters={
-        <SearchInput
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onClear={() => setSearch('')}
-          placeholder="Buscar por nombre, producto o forma de pago..."
-        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <SearchInput
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onClear={() => setSearch('')}
+            placeholder="Buscar por nombre, producto o forma de pago..."
+          />
+          <Select
+            aria-label="Filtrar por tipo de proveedor"
+            value={tipoFilter}
+            onChange={(e) => setTipoFilter(e.target.value as '' | TipoProveedor)}
+            options={TIPO_FILTER_OPTIONS}
+            className="sm:w-56"
+          />
+        </div>
       }
     >
       <div className="grid gap-4 md:grid-cols-3">
@@ -151,7 +184,12 @@ export default function ProveedoresPage(): React.JSX.Element {
                 className="space-y-3 border-border bg-surface"
               >
                 <div>
-                  <p className="text-sm font-semibold text-text">{p.nombre}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-text">{p.nombre}</p>
+                    <Badge color={TIPO_BADGE_COLOR[p.tipo]} size="sm">
+                      {TIPO_LABELS[p.tipo]}
+                    </Badge>
+                  </div>
                   {p.producto && (
                     <div className="mt-1 flex items-center gap-1.5">
                       <Package size={14} className="text-text-soft" />
@@ -249,7 +287,12 @@ function ProveedorDetailPanel({
                 <Truck size={24} />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-text">{proveedor.nombre}</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-semibold text-text">{proveedor.nombre}</h2>
+                  <Badge color={TIPO_BADGE_COLOR[proveedor.tipo]} size="sm">
+                    {TIPO_LABELS[proveedor.tipo]}
+                  </Badge>
+                </div>
                 {proveedor.producto && (
                   <p className="text-sm text-text-muted">{proveedor.producto}</p>
                 )}
@@ -377,6 +420,7 @@ function ProveedorFormModal({
   const [form, setForm] = useState({
     nombre: proveedor?.nombre ?? '',
     producto: proveedor?.producto ?? '',
+    tipo: (proveedor?.tipo ?? 'otro') as TipoProveedor,
     telefono: proveedor?.telefono ?? '',
     diasPedido: proveedor?.diasPedido ?? '',
     formaPago: proveedor?.formaPago ?? '',
@@ -386,12 +430,15 @@ function ProveedorFormModal({
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const { execute: crear, loading: creando } = useIpcMutation(
-    useCallback((data: Record<string, string | null>) => window.api.proveedores.crear(data), [])
+    useCallback(
+      (data: Record<string, string | null | TipoProveedor>) => window.api.proveedores.crear(data),
+      []
+    )
   )
 
   const { execute: actualizar, loading: actualizando } = useIpcMutation(
     useCallback(
-      (id: number, data: Record<string, string | null>) =>
+      (id: number, data: Record<string, string | null | TipoProveedor>) =>
         window.api.proveedores.actualizar(id, data),
       []
     )
@@ -416,6 +463,7 @@ function ProveedorFormModal({
     const data = {
       nombre: form.nombre,
       producto: form.producto || null,
+      tipo: form.tipo,
       telefono: form.telefono || null,
       diasPedido: form.diasPedido || null,
       formaPago: form.formaPago || null,
@@ -454,6 +502,14 @@ function ProveedorFormModal({
           value={form.producto}
           onChange={(e) => handleChange('producto', e.target.value)}
           placeholder="Qué producto suministra"
+        />
+        <Select
+          label="Tipo"
+          value={form.tipo}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, tipo: e.target.value as TipoProveedor }))
+          }
+          options={TIPO_OPTIONS}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input

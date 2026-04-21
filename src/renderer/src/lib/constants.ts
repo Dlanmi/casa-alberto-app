@@ -79,9 +79,17 @@ export const ESTADO_PEDIDO_LABEL: Record<EstadoPedido, string> = {
   cancelado: 'Cancelado'
 }
 
+// Estados "activos" desde el punto de vista del seguimiento diario — usamos
+// este set para calcular estancamiento y saldos relevantes. Excluye cotizado
+// (todavía no es trabajo en curso) y los terminales (entregado/cancelado).
+export const ESTADOS_EN_SEGUIMIENTO: EstadoPedido[] = ['confirmado', 'en_proceso', 'listo']
+
+// Estados terminales para la UI — ocultos por defecto cuando papá filtra "Solo
+// activos". sin_reclamar NO es terminal (aún puede moverse a entregado/cancelado).
+export const ESTADOS_TERMINALES_UI: EstadoPedido[] = ['entregado', 'cancelado']
+
 export const TIPO_TRABAJO_LABEL: Record<TipoTrabajo, string> = {
-  enmarcacion_estandar: 'Enmarcación estándar',
-  enmarcacion_paspartu: 'Con paspartú',
+  enmarcacion_estandar: 'Enmarcación',
   acolchado: 'Acolchado',
   retablo: 'Retablo',
   bastidor: 'Bastidor',

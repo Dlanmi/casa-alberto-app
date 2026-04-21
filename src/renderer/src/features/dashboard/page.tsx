@@ -7,6 +7,7 @@ import {
   Clock,
   CircleDollarSign,
   CalendarClock,
+  PackageCheck,
   TrendingUp,
   Truck
 } from 'lucide-react'
@@ -79,6 +80,10 @@ export default function DashboardPage(): React.JSX.Element {
     () => window.api.pedidos.alertas.sinAbono(),
     []
   )
+  const { data: listosSinRecoger } = useIpc<PedidoAlertaRow[]>(
+    () => window.api.pedidos.alertas.listosSinRecoger(2),
+    []
+  )
   const { data: resumenMensual, loading: loadingResumen } = useIpc<ResumenMensual>(
     () => window.api.finanzas.resumenMensual(mes),
     [mes]
@@ -98,6 +103,7 @@ export default function DashboardPage(): React.JSX.Element {
   const safeAtrasados = normalizePedidoAlertas(atrasados)
   const safeProximos = normalizePedidoAlertas(proximos)
   const safeSinAbono = normalizePedidoAlertas(sinAbono)
+  const safeListosSinRecoger = normalizePedidoAlertas(listosSinRecoger)
 
   const ingresosHoy =
     movimientosHoy
@@ -120,7 +126,11 @@ export default function DashboardPage(): React.JSX.Element {
   )
 
   const totalAlertas =
-    safeAtrasados.length + safeSinAbono.length + safeProximos.length + proveedoresHoy.length
+    safeAtrasados.length +
+    safeSinAbono.length +
+    safeProximos.length +
+    safeListosSinRecoger.length +
+    proveedoresHoy.length
 
   const goPedidos = (focus?: string): void => {
     navigate(focus ? `/pedidos?focus=${focus}` : '/pedidos')
@@ -291,6 +301,25 @@ export default function DashboardPage(): React.JSX.Element {
                         </p>
                       </div>
                       <span className="text-sm font-medium text-info-strong">Ver &gt;</span>
+                    </button>
+                  )}
+
+                  {safeListosSinRecoger.length > 0 && (
+                    <button
+                      onClick={() => goPedidos('listo-sin-recoger')}
+                      className="flex w-full items-center gap-3 rounded-lg border-l-[3px] border-warning bg-surface px-4 py-4 shadow-1 cursor-pointer transition-colors hover:bg-warning-bg/40"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-bg">
+                        <PackageCheck size={16} className="text-warning-strong" />
+                      </div>
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="text-sm font-semibold text-text">
+                          {safeListosSinRecoger.length} pedido
+                          {safeListosSinRecoger.length > 1 ? 's' : ''} listo
+                          {safeListosSinRecoger.length > 1 ? 's' : ''} hace &gt;2 días
+                        </p>
+                      </div>
+                      <span className="text-sm font-medium text-warning-strong">Llamar &gt;</span>
                     </button>
                   )}
                 </div>

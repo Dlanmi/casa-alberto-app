@@ -49,6 +49,53 @@ type ClienteEstadisticas = {
   ultimoPedido: { numero: string; fechaIngreso: string; estado: string } | null
 }
 
+// Sprint 2 · A1/A2/A4 — espejo de `normalizarTelefono`/`normalizarCedula`/
+// `validarNombreCliente` en src/main/db/queries/clientes.ts. Mantenemos las
+// reglas aquí para dar feedback inline antes del submit (el backend sigue
+// siendo la fuente de verdad; si divergen, el backend gana).
+const NOMBRE_MAX = 200
+
+function validarNombre(raw: string): string | null {
+  const limpio = raw.trim()
+  if (limpio.length === 0) return 'El nombre es obligatorio'
+  if (limpio.length < 2) return 'El nombre debe tener al menos 2 caracteres'
+  if (limpio.length > NOMBRE_MAX) return `El nombre no puede superar ${NOMBRE_MAX} caracteres`
+  return null
+}
+
+function validarTelefonoCliente(raw: string): string | null {
+  const limpio = raw.replace(/[\s()+\-.]/g, '')
+  if (!limpio) return null
+  if (!/^\d{7,15}$/.test(limpio)) {
+    return 'El teléfono debe tener entre 7 y 15 dígitos'
+  }
+  return null
+}
+
+function validarCedulaCliente(raw: string): string | null {
+  const limpio = raw.replace(/[\s.\-]/g, '')
+  if (!limpio) return null
+  if (!/^\d{6,15}$/.test(limpio)) {
+    return 'La cédula debe tener entre 6 y 15 dígitos'
+  }
+  return null
+}
+
+function validarFormCliente(form: {
+  nombre: string
+  telefono: string
+  cedula: string
+}): Record<string, string> {
+  const errors: Record<string, string> = {}
+  const nombreError = validarNombre(form.nombre)
+  if (nombreError) errors.nombre = nombreError
+  const telefonoError = validarTelefonoCliente(form.telefono)
+  if (telefonoError) errors.telefono = telefonoError
+  const cedulaError = validarCedulaCliente(form.cedula)
+  if (cedulaError) errors.cedula = cedulaError
+  return errors
+}
+
 const AVATAR_COLORS = [
   'bg-accent/10 text-accent',
   'bg-success-bg text-success',
@@ -266,7 +313,6 @@ function ClienteCard({
   onVerDeuda: () => void
 }): React.JSX.Element {
   const stopPropagation = (e: React.MouseEvent): void => e.stopPropagation()
-  const clienteScore = scoreCliente(cliente)
 
   return (
     <Card hoverable padding="md" onClick={onOpen} className="group relative overflow-hidden">
@@ -300,16 +346,6 @@ function ClienteCard({
                 <AlertCircle size={11} />
                 Con deuda
               </button>
-            )}
-            {clienteScore && (
-              <span
-                className={cn(
-                  'shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm',
-                  clienteScore.className
-                )}
-              >
-                {clienteScore.label}
-              </span>
             )}
           </div>
           {cliente.telefono && (
@@ -363,24 +399,6 @@ function ClienteCard({
       </div>
     </Card>
   )
-}
-
-type ClienteScore = { label: string; className: string } | null
-
-// AGENT_UX (PRO-005): Scoring informal — VIP, Regular, Nuevo según el
-// número de pedidos (placeholder hasta que biz agent agregue stats en
-// card). Por ahora usamos un heurístico conservador con el campo `esMenor`
-// deshabilitado y un score neutro. biz puede refinar.
-// AGENT_UX_NEEDS_BIZ: necesitamos `totalPedidos` o `totalFacturado` en el
-// row cliente (no solo en /estadisticas) para scoring real en el grid.
-function scoreCliente(cliente: Cliente): ClienteScore {
-  // Por ahora devolvemos null hasta que biz exponga el conteo en el row.
-  // Cuando biz agregue cliente.totalPedidos o cliente.totalGastado, usar:
-  //   if (totalGastado > 500_000) return { label: 'VIP', className: 'bg-accent/10 text-accent-strong' }
-  //   if (totalPedidos >= 5) return { label: 'Regular', className: 'bg-info-bg text-info-strong' }
-  //   if (totalPedidos < 3) return { label: 'Nuevo', className: 'bg-success-bg text-success-strong' }
-  void cliente
-  return null
 }
 
 /* ------------------------------------------------------------------ */
@@ -673,8 +691,7 @@ function CreateClienteModal({
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault()
-    const newErrors: Record<string, string> = {}
-    if (!form.nombre.trim()) newErrors.nombre = 'El nombre es obligatorio'
+    const newErrors = validarFormCliente(form)
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
@@ -702,19 +719,24 @@ function CreateClienteModal({
           onChange={(e) => handleChange('nombre', e.target.value)}
           error={errors.nombre}
           placeholder="Nombre completo del cliente"
+          maxLength={NOMBRE_MAX}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Teléfono"
             value={form.telefono}
             onChange={(e) => handleChange('telefono', e.target.value)}
+            error={errors.telefono}
             placeholder="300 123 4567"
+            inputMode="tel"
           />
           <Input
             label="Cédula"
             value={form.cedula}
             onChange={(e) => handleChange('cedula', e.target.value)}
+            error={errors.cedula}
             placeholder="1234567890"
+            inputMode="numeric"
           />
         </div>
         <Input
@@ -781,8 +803,7 @@ function EditClienteModal({
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault()
-    const newErrors: Record<string, string> = {}
-    if (!form.nombre.trim()) newErrors.nombre = 'El nombre es obligatorio'
+    const newErrors = validarFormCliente(form)
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
@@ -824,19 +845,24 @@ function EditClienteModal({
           onChange={(e) => handleChange('nombre', e.target.value)}
           error={errors.nombre}
           placeholder="Nombre completo del cliente"
+          maxLength={NOMBRE_MAX}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Teléfono"
             value={form.telefono}
             onChange={(e) => handleChange('telefono', e.target.value)}
+            error={errors.telefono}
             placeholder="300 123 4567"
+            inputMode="tel"
           />
           <Input
             label="Cédula"
             value={form.cedula}
             onChange={(e) => handleChange('cedula', e.target.value)}
+            error={errors.cedula}
             placeholder="1234567890"
+            inputMode="numeric"
           />
         </div>
         <Input

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { LayoutGrid, List, ClipboardList, Calculator } from 'lucide-react'
+import { LayoutGrid, List, ClipboardList, Calculator, Archive } from 'lucide-react'
 import { OperationalBoard } from '@renderer/components/layout/page-frame'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { useIpc } from '@renderer/hooks/use-ipc'
@@ -16,6 +16,8 @@ import { KanbanBoard } from './kanban-board'
 import { PedidoListView } from './pedido-list-view'
 import { PedidoDetailPanel } from './pedido-detail-panel'
 import type { Pedido, EstadoPedido, IpcResult, Cliente } from '@shared/types'
+
+type SaldoPedido = { pedidoId: number; total: number; pagado: number; saldo: number }
 
 type FocusKey =
   | 'todos'
@@ -44,6 +46,10 @@ export default function PedidosPage(): React.JSX.Element {
   const [selected, setSelected] = useState<Pedido | null>(null)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [search, setSearch] = useState('')
+  // Fase 6 — toggle "Ver archivados". Por defecto oculta entregados de hace
+  // más de 30 días para no inflar el kanban con histórico; papá puede
+  // habilitarlo cuando necesita revisar o reimprimir facturas viejas.
+  const [incluirArchivados, setIncluirArchivados] = useState(false)
 
   // Fase 3 — highlight: tras crear un pedido en el cotizador, la URL trae
   // ?highlight=ID. Resaltamos la tarjeta/fila correspondiente por 3s para que
@@ -86,10 +92,21 @@ export default function PedidosPage(): React.JSX.Element {
     data: pedidos,
     loading,
     refetch
-  } = useIpc<Pedido[]>(() => window.api.pedidos.listar({}), [])
+  } = useIpc<Pedido[]>(
+    () => window.api.pedidos.listar({ incluirArchivados }),
+    [incluirArchivados]
+  )
 
   const { data: clientes } = useIpc<Cliente[]>(
     () => window.api.clientes.listar({ soloActivos: false }),
+    []
+  )
+
+  // Fase 2 — saldos por pedido. Se refetchan junto con pedidos para que el
+  // badge "Debe $XXX" refleje abonos hechos desde el detail panel o en el
+  // módulo de facturas.
+  const { data: saldos, refetch: refetchSaldos } = useIpc<SaldoPedido[]>(
+    () => window.api.pedidos.saldos(),
     []
   )
 
@@ -113,6 +130,21 @@ export default function PedidosPage(): React.JSX.Element {
     clientes?.forEach((cliente) => map.set(cliente.id, cliente.nombre))
     return map
   }, [clientes])
+
+  const saldosMap = useMemo(() => {
+    const map = new Map<number, number>()
+    saldos?.forEach((s) => map.set(s.pedidoId, s.saldo))
+    return map
+  }, [saldos])
+
+  // Map paralelo con {total, pagado} para que la vista lista pueda pintar
+  // la PagoBar con proporciones reales (el total puede venir de la factura
+  // activa, no necesariamente de precioTotal).
+  const saldosInfoMap = useMemo(() => {
+    const map = new Map<number, { total: number; pagado: number }>()
+    saldos?.forEach((s) => map.set(s.pedidoId, { total: s.total, pagado: s.pagado }))
+    return map
+  }, [saldos])
 
   const atrasadosIds = useMemo(() => extractPedidoIds(atrasados), [atrasados])
   const proximosIds = useMemo(() => extractPedidoIds(proximos), [proximos])
@@ -170,6 +202,22 @@ export default function PedidosPage(): React.JSX.Element {
       const oldPedido = pedidos?.find((p) => p.id === pedidoId)
       if (!oldPedido) return
 
+      // Fase 3 — bloqueo duro: no permitir mover a "entregado" si la factura
+      // todavía tiene saldo pendiente. Evita que papá entregue un cuadro
+      // sin haber terminado de cobrarlo. Si no hay factura aún, saldo es
+      // `undefined` y no bloqueamos (ese caso es escalamiento normal).
+      if (nuevoEstado === 'entregado') {
+        const saldoPendiente = saldosMap.get(pedidoId)
+        if (saldoPendiente !== undefined && saldoPendiente > 0) {
+          showToast({
+            tone: 'error',
+            title: 'No se puede entregar sin cobrar el saldo',
+            message: `Falta cobrar $${saldoPendiente.toLocaleString('es-CO')} del pedido ${oldPedido.numero}. Registra el abono antes de marcar entregado.`
+          })
+          return
+        }
+      }
+
       if (
         sinAbonoIds.has(pedidoId) &&
         ['confirmado', 'en_proceso', 'listo'].includes(nuevoEstado)
@@ -187,6 +235,14 @@ export default function PedidosPage(): React.JSX.Element {
       )) as IpcResult<Pedido>
 
       if (result.ok) {
+        // Fase 8 — si el pedido movido ya no encaja en el filtro activo,
+        // mostramos acción "Ver todos" para que papá no piense que
+        // "desapareció". Ej: estaba en "Listos" y lo marca Entregado.
+        const saleDelFoco = !pedidoCumpleFoco(result.data, currentFocus, {
+          atrasadosIds,
+          proximosIds,
+          sinAbonoIds
+        })
         const titleEmoji =
           nuevoEstado === 'entregado'
             ? EMOJI_TOAST.pedido_entregado
@@ -194,36 +250,94 @@ export default function PedidosPage(): React.JSX.Element {
         showToast({
           tone: 'success',
           title: `${emoji(titleEmoji)} Pedido ${oldPedido.numero} actualizado`.trim(),
-          message: getEstadoMessage(nuevoEstado),
-          actionLabel: getEstadoActionLabel(nuevoEstado),
+          message: saleDelFoco
+            ? `Ya no aparece en "${FOCUS_LABEL[currentFocus]}" porque cambió de estado. ${getEstadoMessage(nuevoEstado)}`
+            : getEstadoMessage(nuevoEstado),
+          actionLabel: saleDelFoco ? 'Ver todos' : getEstadoActionLabel(nuevoEstado),
           onAction: () => {
+            if (saleDelFoco) {
+              setSearchParams({})
+              return
+            }
             if (nuevoEstado === 'listo') {
               navigate('/facturas')
               return
             }
-
+            // Deshacer: devolver al estado anterior. El refetch se hace en
+            // .then() para que el kanban se resincronice con el backend.
             window.api.pedidos
               .cambiarEstado(pedidoId, oldPedido.estado)
-              .then(() => refetch())
+              .then(() => {
+                refetch()
+                refetchSaldos()
+              })
               .catch(() => {})
           }
         })
         refetch()
+        refetchSaldos()
         if (selected?.id === pedidoId) {
           setSelected(result.data)
         }
       } else {
+        // Fase 7 — rollback: si el backend rechazó el cambio (transición
+        // inválida, error de transacción, etc.) refetchamos para asegurar
+        // que la UI vuelva al estado real. Sin esto, si hubo un cambio
+        // visual optimista, quedaría desincronizado.
         showToast({
           tone: 'error',
           title: 'No se pudo actualizar el pedido',
           message: result.error
         })
+        refetch()
+        refetchSaldos()
       }
     },
-    [emoji, navigate, pedidos, refetch, selected, showToast, sinAbonoIds]
+    [
+      atrasadosIds,
+      currentFocus,
+      emoji,
+      navigate,
+      pedidos,
+      proximosIds,
+      refetch,
+      refetchSaldos,
+      saldosMap,
+      selected,
+      setSearchParams,
+      showToast,
+      sinAbonoIds
+    ]
   )
 
-  if (loading) return <PageLoader />
+  // Fase 11 — polling two-tab sync: si papá tiene la app abierta en varias
+  // ventanas (o cambia en facturas y vuelve a pedidos), refetchamos cada
+  // 10s. Solo cuando la pestaña está visible para no gastar CPU en second.
+  // Además refetch inmediato al ganar visibilidad (document.visibilityState).
+  useEffect(() => {
+    const tick = (): void => {
+      if (document.visibilityState !== 'visible') return
+      refetch()
+      refetchSaldos()
+    }
+    const handleVis = (): void => {
+      if (document.visibilityState === 'visible') tick()
+    }
+    const id = window.setInterval(tick, 10_000)
+    document.addEventListener('visibilitychange', handleVis)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', handleVis)
+    }
+  }, [refetch, refetchSaldos])
+
+  // Solo mostramos el loader en la carga inicial (cuando aún no hay datos).
+  // En refetches (polling de 10s, cambios de estado, abono rápido) el hook
+  // vuelve a poner loading=true brevemente, pero conservamos el kanban en
+  // pantalla porque `pedidos` sigue sosteniendo los datos previos — el
+  // refetch es transparente para papá. Antes, cada tick del polling
+  // reemplazaba el tablero completo por el spinner → parecía recarga.
+  if (loading && !pedidos) return <PageLoader />
 
   return (
     <OperationalBoard
@@ -276,6 +390,25 @@ export default function PedidosPage(): React.JSX.Element {
                 placeholder="Buscar por número, cliente o descripción..."
               />
             </div>
+            {/* Fase 6 — toggle Ver archivados */}
+            <button
+              type="button"
+              onClick={() => setIncluirArchivados((prev) => !prev)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer',
+                incluirArchivados
+                  ? 'border-accent bg-accent/10 text-accent-strong'
+                  : 'border-border bg-surface text-text-muted hover:bg-surface-muted'
+              )}
+              title={
+                incluirArchivados
+                  ? 'Mostrando entregados de más de 30 días. Clic para ocultar.'
+                  : 'Mostrar también pedidos entregados hace más de 30 días.'
+              }
+            >
+              <Archive size={15} />
+              {incluirArchivados ? 'Archivados visibles' : 'Ver archivados'}
+            </button>
             <div className="flex bg-surface-muted rounded-md p-0.5">
               <button
                 type="button"
@@ -321,6 +454,7 @@ export default function PedidosPage(): React.JSX.Element {
         <KanbanBoard
           pedidos={filteredPedidos}
           clienteMap={clienteMap}
+          saldosMap={saldosMap}
           onCardClick={setSelected}
           onChangeEstado={handleChangeEstado}
           highlightedId={highlightedId}
@@ -330,6 +464,7 @@ export default function PedidosPage(): React.JSX.Element {
           pedidos={filteredPedidos}
           onRowClick={setSelected}
           clienteMap={clienteMap}
+          saldosInfoMap={saldosInfoMap}
           highlightedId={highlightedId}
         />
       )}
@@ -341,6 +476,7 @@ export default function PedidosPage(): React.JSX.Element {
           onChangeEstado={handleChangeEstado}
           onPedidoUpdated={async () => {
             refetch()
+            refetchSaldos()
             // Refresh the selected pedido so the panel shows updated data
             const updated = (await window.api.pedidos.obtener(
               selected.id
@@ -367,4 +503,24 @@ function getEstadoActionLabel(estado: EstadoPedido): string | undefined {
   if (estado === 'listo') return 'Ir a facturas'
   if (estado === 'confirmado' || estado === 'en_proceso') return 'Deshacer'
   return undefined
+}
+
+// Fase 8 — determina si un pedido recién actualizado sigue perteneciendo al
+// foco activo. Reutilizamos la misma lógica del filtrado de la vista para
+// mantener consistencia — si los criterios cambian, se actualizan en un solo
+// lugar.
+function pedidoCumpleFoco(
+  pedido: Pedido,
+  focus: FocusKey,
+  ids: { atrasadosIds: Set<number>; proximosIds: Set<number>; sinAbonoIds: Set<number> }
+): boolean {
+  if (focus === 'todos') return true
+  if (focus === 'listos') return pedido.estado === 'listo'
+  if (focus === 'atrasados') return ids.atrasadosIds.has(pedido.id)
+  if (focus === 'proximos') return ids.proximosIds.has(pedido.id)
+  if (focus === 'sin_abono') return ids.sinAbonoIds.has(pedido.id)
+  if (focus === 'urgente_sin_abono')
+    return ids.proximosIds.has(pedido.id) && ids.sinAbonoIds.has(pedido.id)
+  // requiere_accion
+  return (['confirmado', 'en_proceso', 'listo'] as EstadoPedido[]).includes(pedido.estado)
 }

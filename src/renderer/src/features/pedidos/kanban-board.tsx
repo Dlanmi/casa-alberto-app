@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import type { EstadoPedido, Pedido } from '@shared/types'
+import { TRANSICIONES_VALIDAS } from '@shared/pedido-transitions'
 import { cn } from '@renderer/lib/cn'
 import { KanbanColumn } from './kanban-column'
 
@@ -12,22 +13,12 @@ const VISIBLE_ESTADOS: EstadoPedido[] = [
   'sin_reclamar'
 ]
 
-// SPEC-005 — mismo diccionario que `TRANSICIONES_VALIDAS` en backend (pedidos.ts).
-// Lo mantenemos sincronizado aquí para dar feedback visual instantáneo al
-// arrastrar una tarjeta: resaltamos los destinos válidos y apagamos los inválidos.
-const TRANSICIONES_VALIDAS: Record<EstadoPedido, EstadoPedido[]> = {
-  cotizado: ['confirmado', 'cancelado'],
-  confirmado: ['en_proceso', 'cancelado'],
-  en_proceso: ['listo', 'cancelado'],
-  listo: ['entregado', 'sin_reclamar', 'cancelado'],
-  entregado: [],
-  sin_reclamar: ['entregado', 'cancelado'],
-  cancelado: []
-}
-
 type KanbanBoardProps = {
   pedidos: Pedido[]
   clienteMap: Map<number, string>
+  // Fase 2 — map global pedidoId → saldo pendiente. El board lo pasa a las
+  // columnas para que cada card pueda mostrar el badge rojo "Debe $XXX".
+  saldosMap?: Map<number, number>
   onCardClick: (pedido: Pedido) => void
   onChangeEstado: (pedidoId: number, nuevoEstado: EstadoPedido) => void
   highlightedId?: number | null
@@ -36,6 +27,7 @@ type KanbanBoardProps = {
 export function KanbanBoard({
   pedidos,
   clienteMap,
+  saldosMap,
   onCardClick,
   onChangeEstado,
   highlightedId = null
@@ -74,6 +66,22 @@ export function KanbanBoard({
     }
   }, [updateScrollState])
 
+  // Fase 10 — si el usuario suelta la tarjeta fuera del browser (ej. sobre
+  // otra app) el dragend de la tarjeta se dispara pero a veces el setState
+  // queda pendiente. Un listener global a nivel window garantiza que
+  // SIEMPRE se limpie el dragState aunque la interacción termine fuera de
+  // nuestro árbol de eventos — previene el "estado fantasma" que dejaba
+  // columnas atenuadas cuando ya no había drag activo.
+  useEffect(() => {
+    const handleWindowDragEnd = (): void => setDragState(null)
+    window.addEventListener('dragend', handleWindowDragEnd)
+    window.addEventListener('drop', handleWindowDragEnd)
+    return () => {
+      window.removeEventListener('dragend', handleWindowDragEnd)
+      window.removeEventListener('drop', handleWindowDragEnd)
+    }
+  }, [])
+
   const grouped = VISIBLE_ESTADOS.reduce(
     (acc, estado) => {
       acc[estado] = pedidos.filter((p) => p.estado === estado)
@@ -107,6 +115,7 @@ export function KanbanBoard({
             estado={estado}
             pedidos={grouped[estado] ?? []}
             clienteMap={clienteMap}
+            saldosMap={saldosMap}
             onCardClick={onCardClick}
             onDrop={(pedidoId) => onChangeEstado(pedidoId, estado)}
             onDragStart={(pedidoId, estadoOrigen) => setDragState({ pedidoId, estadoOrigen })}

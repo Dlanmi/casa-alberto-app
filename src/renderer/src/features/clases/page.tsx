@@ -165,6 +165,7 @@ export default function ClasesPage(): React.JSX.Element {
 
     async function loadAttendance(): Promise<void> {
       const newAttendance: Record<number, boolean> = {}
+      let huboError = false
       for (const clase of clasesDelDia) {
         try {
           const res = (await window.api.asistencias.listar({
@@ -176,13 +177,24 @@ export default function ClasesPage(): React.JSX.Element {
             res.data.forEach((a) => {
               newAttendance[a.estudianteId] = a.presente
             })
+          } else if (!cancelled && !res.ok) {
+            huboError = true
           }
         } catch {
-          // silently ignore
+          huboError = true
         }
       }
       if (!cancelled) {
         setAttendance(newAttendance)
+        // Antes se tragaba el error en silencio: si la consulta fallaba,
+        // los checkboxes aparecían con el default y papá no se enteraba
+        // de que no se había cargado el estado real.
+        if (huboError) {
+          showToast(
+            'error',
+            'No se pudo cargar la asistencia previa. Verifica cada estudiante antes de guardar.'
+          )
+        }
       }
     }
 
@@ -211,7 +223,12 @@ export default function ClasesPage(): React.JSX.Element {
     const estudiantesClase = (estudiantes ?? []).filter((e) => e.claseId === claseId)
     const items = estudiantesClase.map((est) => ({
       estudianteId: est.id,
-      presente: attendance[est.id] ?? true
+      // Default `false` (ausente) a propósito: el default `true` causaba
+      // que si papá abría la tab sin tocar nada y pulsaba guardar, TODOS
+      // quedaran marcados como presentes aunque no hubieran venido. Ahora
+      // el flujo es explícito: marcar presentes (o usar "Marcar todos
+      // presentes" si fue el caso típico).
+      presente: attendance[est.id] ?? false
     }))
     try {
       const res = (await window.api.asistencias.registrarGrupal(
@@ -410,7 +427,7 @@ export default function ClasesPage(): React.JSX.Element {
                             <div className="space-y-1">
                               {estudiantesClase.map((est) => {
                                 const nombre = clienteMap.get(est.clienteId) ?? 'Sin nombre'
-                                const checked = attendance[est.id] ?? true
+                                const checked = attendance[est.id] ?? false
                                 return (
                                   <label
                                     key={est.id}
@@ -440,7 +457,22 @@ export default function ClasesPage(): React.JSX.Element {
                           )}
 
                           {estudiantesClase.length > 0 && (
-                            <div className="mt-3 flex justify-end border-t border-border pt-3">
+                            <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  setAttendance((prev) => {
+                                    const next = { ...prev }
+                                    estudiantesClase.forEach((e) => {
+                                      next[e.id] = true
+                                    })
+                                    return next
+                                  })
+                                }
+                              >
+                                Marcar todos presentes
+                              </Button>
                               <Button size="sm" onClick={() => guardarAsistencia(clase.id)}>
                                 Guardar asistencia
                               </Button>

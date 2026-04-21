@@ -151,6 +151,17 @@ dialog[open] {
   outline-offset: 2px;
 }
 
+/* Inputs/selects/textareas tienen su propio affordance de focus
+   (border-accent) y además están típicamente dentro de layouts ajustados
+   (grids, max-w-md). El outline global a 2px de offset + la shorthand
+   heredada de Tailwind v4 hacen que el halo "se salga del padre".
+   Los excluimos aquí y dejamos que el componente Input maneje su focus. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
 /* Electron custom scrollbar — visible only on hover */
 ::-webkit-scrollbar {
   width: 5px;

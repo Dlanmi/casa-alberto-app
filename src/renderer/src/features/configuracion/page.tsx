@@ -293,7 +293,7 @@ function AparienciaSection(): React.JSX.Element {
         >
           <span
             className={cn(
-              'inline-block h-5 w-5 transform rounded-full bg-white shadow-1 transition-transform',
+              'inline-block h-5 w-5 transform rounded-full bg-surface shadow-1 transition-transform',
               enabled ? 'translate-x-6' : 'translate-x-1'
             )}
           />
