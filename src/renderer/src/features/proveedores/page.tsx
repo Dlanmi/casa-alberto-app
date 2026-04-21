@@ -44,10 +44,7 @@ const TIPO_BADGE_COLOR: Record<TipoProveedor, 'info' | 'success' | 'warning' | '
 }
 
 const TIPO_OPTIONS = TIPOS_PROVEEDOR.map((value) => ({ value, label: TIPO_LABELS[value] }))
-const TIPO_FILTER_OPTIONS = [
-  { value: '', label: 'Todos los tipos' },
-  ...TIPO_OPTIONS
-]
+const TIPO_FILTER_OPTIONS = [{ value: '', label: 'Todos los tipos' }, ...TIPO_OPTIONS]
 
 export default function ProveedoresPage(): React.JSX.Element {
   const [search, setSearch] = useState('')
@@ -506,9 +503,7 @@ function ProveedorFormModal({
         <Select
           label="Tipo"
           value={form.tipo}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, tipo: e.target.value as TipoProveedor }))
-          }
+          onChange={(e) => setForm((prev) => ({ ...prev, tipo: e.target.value as TipoProveedor }))}
           options={TIPO_OPTIONS}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

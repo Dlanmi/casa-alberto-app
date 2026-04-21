@@ -1,9 +1,6 @@
 import type { IllustrationProps } from './types'
 
-export function BoxesIllustration({
-  size = 160,
-  className
-}: IllustrationProps): React.JSX.Element {
+export function BoxesIllustration({ size = 160, className }: IllustrationProps): React.JSX.Element {
   return (
     <svg
       width={size}
@@ -45,9 +42,37 @@ export function BoxesIllustration({
       <rect x="91" y="98" width="10" height="1.5" rx="0.5" fill="#a8a29e" opacity="0.5" />
 
       {/* Outlines to keep shapes readable */}
-      <rect x="24" y="74" width="56" height="56" rx="2" stroke="#b45309" strokeWidth="1.25" fill="none" />
-      <rect x="80" y="66" width="52" height="64" rx="2" stroke="#b45309" strokeWidth="1.25" fill="none" />
-      <rect x="90" y="58" width="42" height="44" rx="2" stroke="#b45309" strokeWidth="1" fill="none" opacity="0.6" />
+      <rect
+        x="24"
+        y="74"
+        width="56"
+        height="56"
+        rx="2"
+        stroke="#b45309"
+        strokeWidth="1.25"
+        fill="none"
+      />
+      <rect
+        x="80"
+        y="66"
+        width="52"
+        height="64"
+        rx="2"
+        stroke="#b45309"
+        strokeWidth="1.25"
+        fill="none"
+      />
+      <rect
+        x="90"
+        y="58"
+        width="42"
+        height="44"
+        rx="2"
+        stroke="#b45309"
+        strokeWidth="1"
+        fill="none"
+        opacity="0.6"
+      />
     </svg>
   )
 }

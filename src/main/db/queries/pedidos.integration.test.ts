@@ -251,7 +251,11 @@ describe.runIf(nativeAbiAvailable)('cambiarEstadoPedido · saldo al entregar (Sp
       .run()
     expect(() => cambiarEstadoPedido(db, pedidoId, 'entregado')).toThrow(/saldo pendiente/i)
     // Y el estado del pedido no cambió.
-    const actual = db.select().from(pedidos).where(sql`${pedidos.id} = ${pedidoId}`).get()
+    const actual = db
+      .select()
+      .from(pedidos)
+      .where(sql`${pedidos.id} = ${pedidoId}`)
+      .get()
     expect(actual?.estado).toBe('listo')
   })
 

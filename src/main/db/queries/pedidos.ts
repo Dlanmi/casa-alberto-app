@@ -195,10 +195,7 @@ export function obtenerSaldosPorPedido(
       total: sql<number>`sum(${pagos.monto})`.as('pago_total')
     })
     .from(pagos)
-    .innerJoin(
-      facturas,
-      and(eq(facturas.id, pagos.facturaId), not(eq(facturas.estado, 'anulada')))
-    )
+    .innerJoin(facturas, and(eq(facturas.id, pagos.facturaId), not(eq(facturas.estado, 'anulada'))))
     .groupBy(facturas.pedidoId)
     .all()
 

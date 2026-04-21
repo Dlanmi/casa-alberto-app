@@ -187,6 +187,7 @@ export function WelcomeTour(): React.JSX.Element | null {
 }
 
 // Permite reiniciar el tour desde Configuración.
+// eslint-disable-next-line react-refresh/only-export-components
 export function resetWelcomeTour(): void {
   localStorage.removeItem(STORAGE_KEY)
   window.location.reload()

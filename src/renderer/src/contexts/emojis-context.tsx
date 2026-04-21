@@ -49,10 +49,7 @@ export function EmojisProvider({ children }: { children: ReactNode }): React.JSX
     setEnabledState(value)
   }, [])
 
-  const emoji = useCallback(
-    (char: string): string => (enabled ? char : ''),
-    [enabled]
-  )
+  const emoji = useCallback((char: string): string => (enabled ? char : ''), [enabled])
 
   const value = useMemo<EmojisContextValue>(
     () => ({ enabled, setEnabled, emoji }),

@@ -264,17 +264,15 @@ function AparienciaSection(): React.JSX.Element {
     <Card padding="md" className="space-y-4 border-border bg-surface">
       <div>
         <CardTitle>Apariencia</CardTitle>
-        <p className="text-sm text-text-muted mt-1">
-          Ajustes visuales de la aplicación.
-        </p>
+        <p className="text-sm text-text-muted mt-1">Ajustes visuales de la aplicación.</p>
       </div>
 
       <div className="flex items-start justify-between gap-4 rounded-md border border-transparent px-3 py-2.5 hover:border-border hover:bg-surface-muted transition-colors">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-text">Mostrar emojis</p>
           <p className="text-xs text-text-muted mt-0.5">
-            Activa íconos cálidos en estados, categorías y notificaciones. Desactívalo si
-            prefieres vista sobria.
+            Activa íconos cálidos en estados, categorías y notificaciones. Desactívalo si prefieres
+            vista sobria.
           </p>
         </div>
         <button

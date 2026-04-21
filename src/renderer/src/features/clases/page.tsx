@@ -202,6 +202,7 @@ export default function ClasesPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asistenciaFecha, clasesDelDia])
 
   const openPagoModal = useCallback((estudianteId?: number) => {

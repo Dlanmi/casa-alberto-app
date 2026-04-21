@@ -16,8 +16,9 @@ export function HelpButton(): React.JSX.Element {
 
   // Cierra al cambiar de ruta para no dejar tips de otra pantalla visibles.
   useEffect(() => {
-    setOpen(false)
-  }, [location.pathname])
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open) setOpen(false)
+  }, [location.pathname, open])
 
   // Cierra al hacer clic fuera del popover o presionar Escape.
   useEffect(() => {

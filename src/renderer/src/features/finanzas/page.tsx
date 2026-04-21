@@ -338,9 +338,11 @@ export default function FinanzasPage(): React.JSX.Element {
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3 text-sm">
               <span className="text-text-muted">Totales del mes</span>
               <span className="tabular-nums font-semibold text-text">
-                Ingresos {formatCOP(margen.totalIngresos)} · Gastos{' '}
-                {formatCOP(margen.totalGastos)} ·{' '}
-                <span className={margen.margenTotal >= 0 ? 'text-success-strong' : 'text-error-strong'}>
+                Ingresos {formatCOP(margen.totalIngresos)} · Gastos {formatCOP(margen.totalGastos)}{' '}
+                ·{' '}
+                <span
+                  className={margen.margenTotal >= 0 ? 'text-success-strong' : 'text-error-strong'}
+                >
                   Margen {formatCOP(margen.margenTotal)}
                 </span>
               </span>

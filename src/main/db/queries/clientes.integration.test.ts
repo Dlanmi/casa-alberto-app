@@ -6,12 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
-import {
-  actualizarCliente,
-  crearCliente,
-  normalizarCedula,
-  normalizarTelefono
-} from './clientes'
+import { actualizarCliente, crearCliente, normalizarCedula, normalizarTelefono } from './clientes'
 
 describe.runIf(nativeAbiAvailable)('clientes · A1 validar teléfono (7–15 dígitos)', () => {
   let db: DB
@@ -36,9 +31,7 @@ describe.runIf(nativeAbiAvailable)('clientes · A1 validar teléfono (7–15 dí
   })
 
   it('rechaza teléfono con menos de 7 dígitos', () => {
-    expect(() => crearCliente(db, { nombre: 'Alberto', telefono: '12345' })).toThrow(
-      /teléfono/i
-    )
+    expect(() => crearCliente(db, { nombre: 'Alberto', telefono: '12345' })).toThrow(/teléfono/i)
   })
 
   it('rechaza teléfono con letras', () => {
@@ -48,9 +41,9 @@ describe.runIf(nativeAbiAvailable)('clientes · A1 validar teléfono (7–15 dí
   })
 
   it('rechaza teléfono con más de 15 dígitos', () => {
-    expect(() =>
-      crearCliente(db, { nombre: 'Alberto', telefono: '1234567890123456' })
-    ).toThrow(/teléfono/i)
+    expect(() => crearCliente(db, { nombre: 'Alberto', telefono: '1234567890123456' })).toThrow(
+      /teléfono/i
+    )
   })
 
   it('teléfono vacío o nulo queda como null (no obligatorio)', () => {
@@ -86,28 +79,24 @@ describe.runIf(nativeAbiAvailable)('clientes · A2 validar cédula + UNIQUE', ()
   })
 
   it('rechaza cédula con menos de 6 dígitos', () => {
-    expect(() => crearCliente(db, { nombre: 'Alberto', cedula: '12345' })).toThrow(
-      /cédula/i
-    )
+    expect(() => crearCliente(db, { nombre: 'Alberto', cedula: '12345' })).toThrow(/cédula/i)
   })
 
   it('rechaza cédula con más de 15 dígitos', () => {
-    expect(() =>
-      crearCliente(db, { nombre: 'Alberto', cedula: '1234567890123456' })
-    ).toThrow(/cédula/i)
+    expect(() => crearCliente(db, { nombre: 'Alberto', cedula: '1234567890123456' })).toThrow(
+      /cédula/i
+    )
   })
 
   it('rechaza cédula con letras o símbolos', () => {
-    expect(() => crearCliente(db, { nombre: 'Alberto', cedula: '12abc456' })).toThrow(
-      /cédula/i
-    )
+    expect(() => crearCliente(db, { nombre: 'Alberto', cedula: '12abc456' })).toThrow(/cédula/i)
   })
 
   it('el UNIQUE de cédula bloquea duplicados con mensaje legible', () => {
     crearCliente(db, { nombre: 'Alberto', cedula: '1234567890' })
-    expect(() =>
-      crearCliente(db, { nombre: 'Otro Alberto', cedula: '1234567890' })
-    ).toThrow(/ya hay otro cliente registrado con la cédula 1234567890/i)
+    expect(() => crearCliente(db, { nombre: 'Otro Alberto', cedula: '1234567890' })).toThrow(
+      /ya hay otro cliente registrado con la cédula 1234567890/i
+    )
   })
 
   it('permite múltiples clientes sin cédula (NULL ≠ NULL en UNIQUE)', () => {

@@ -20,11 +20,29 @@ export function ContractIllustration({
 
       {/* Paper back sheet (offset for depth) */}
       <rect x="40" y="28" width="78" height="104" rx="3" fill="#e7e5e4" />
-      <rect x="40" y="28" width="78" height="104" rx="3" stroke="#a8a29e" strokeWidth="1" fill="none" />
+      <rect
+        x="40"
+        y="28"
+        width="78"
+        height="104"
+        rx="3"
+        stroke="#a8a29e"
+        strokeWidth="1"
+        fill="none"
+      />
 
       {/* Paper main sheet */}
       <rect x="34" y="22" width="78" height="104" rx="3" fill="#f5f5f4" />
-      <rect x="34" y="22" width="78" height="104" rx="3" stroke="#78716f" strokeWidth="1.25" fill="none" />
+      <rect
+        x="34"
+        y="22"
+        width="78"
+        height="104"
+        rx="3"
+        stroke="#78716f"
+        strokeWidth="1.25"
+        fill="none"
+      />
 
       {/* Header band */}
       <rect x="42" y="32" width="28" height="3" rx="1" fill="#b45309" />

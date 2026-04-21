@@ -13,9 +13,7 @@ type Props = {
 }
 
 function labelVidrio(tipo: string): string {
-  return tipo
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  return tipo.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.Element {
@@ -165,9 +163,7 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
                           <Check size={12} className="text-white" />
                         </div>
                       )}
-                      <span className="text-sm font-semibold text-text">
-                        {labelVidrio(v.tipo)}
-                      </span>
+                      <span className="text-sm font-semibold text-text">{labelVidrio(v.tipo)}</span>
                       <span className="text-xs font-medium text-accent-strong mt-1">
                         {formatCOP(v.precioM2)}/m²
                       </span>

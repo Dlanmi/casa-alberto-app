@@ -328,11 +328,7 @@ export function crearPrecioVidrio(db: DB, tipo: string, precioM2: number) {
       .returning()
       .get()
   }
-  return db
-    .insert(preciosVidrios)
-    .values({ tipo: tipoNormalizado, precioM2 })
-    .returning()
-    .get()
+  return db.insert(preciosVidrios).values({ tipo: tipoNormalizado, precioM2 }).returning().get()
 }
 
 export function eliminarPrecioVidrio(db: DB, id: number) {
@@ -887,12 +883,7 @@ export function actualizarPrecioTapa(db: DB, id: number, precio: number) {
   if (!Number.isFinite(precio) || precio <= 0) {
     throw new Error('El precio debe ser mayor a 0')
   }
-  return db
-    .update(preciosTapas)
-    .set({ precio })
-    .where(eq(preciosTapas.id, id))
-    .returning()
-    .get()
+  return db.update(preciosTapas).set({ precio }).where(eq(preciosTapas.id, id)).returning().get()
 }
 
 // ---------------------------------------------------------------------------

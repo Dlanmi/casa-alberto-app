@@ -81,7 +81,7 @@ export function normalizarTelefono(raw: string | undefined | null): string | nul
 const CEDULA_REGEX = /^\d{6,15}$/
 
 export function normalizarCedula(raw: string | undefined | null): string | null {
-  const limpio = (raw ?? '').replace(/[\s.\-]/g, '')
+  const limpio = (raw ?? '').replace(/[\s.-]/g, '')
   if (!limpio) return null
   if (!CEDULA_REGEX.test(limpio)) {
     throw new Error('La cédula debe tener entre 6 y 15 dígitos.')

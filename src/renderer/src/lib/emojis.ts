@@ -1,9 +1,4 @@
-import type {
-  CategoriaMovimiento,
-  EstadoFactura,
-  EstadoPedido,
-  TipoTrabajo
-} from '@shared/types'
+import type { CategoriaMovimiento, EstadoFactura, EstadoPedido, TipoTrabajo } from '@shared/types'
 
 export const EMOJI_ESTADO_PEDIDO: Record<EstadoPedido, string> = {
   cotizado: '📝',

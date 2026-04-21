@@ -94,16 +94,76 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
   // La colilla es el desperdicio TOTAL de la muestra (ej: K473 = 48cm). Se suma UNA vez al perímetro.
   // Cada marco viene de un proveedor fijo (primeros 5 a Alberto, últimos 5 a Edimol).
   const marcos = [
-    { referencia: 'RN-001', colillaCm: 32, precioMetro: 28000, descripcion: 'Roble Natural',   proveedorId: provs.alberto },
-    { referencia: 'RO-002', colillaCm: 36, precioMetro: 32000, descripcion: 'Roble Oscuro',    proveedorId: provs.alberto },
-    { referencia: 'CE-003', colillaCm: 40, precioMetro: 35000, descripcion: 'Cedro',           proveedorId: provs.alberto },
-    { referencia: 'PA-004', colillaCm: 44, precioMetro: 42000, descripcion: 'Plata Antigua',   proveedorId: provs.alberto },
-    { referencia: 'DC-005', colillaCm: 48, precioMetro: 48000, descripcion: 'Dorado Clasico',  proveedorId: provs.alberto },
-    { referencia: 'NM-006', colillaCm: 28, precioMetro: 26000, descripcion: 'Negro Mate',      proveedorId: provs.edimol },
-    { referencia: 'BL-007', colillaCm: 30, precioMetro: 30000, descripcion: 'Blanco Liso',     proveedorId: provs.edimol },
-    { referencia: 'WE-008', colillaCm: 38, precioMetro: 38000, descripcion: 'Wengue',          proveedorId: provs.edimol },
-    { referencia: 'CH-009', colillaCm: 26, precioMetro: 25000, descripcion: 'Chapilla Pino',   proveedorId: provs.edimol },
-    { referencia: 'TA-010', colillaCm: 52, precioMetro: 55000, descripcion: 'Tallado Premium', proveedorId: provs.edimol }
+    {
+      referencia: 'RN-001',
+      colillaCm: 32,
+      precioMetro: 28000,
+      descripcion: 'Roble Natural',
+      proveedorId: provs.alberto
+    },
+    {
+      referencia: 'RO-002',
+      colillaCm: 36,
+      precioMetro: 32000,
+      descripcion: 'Roble Oscuro',
+      proveedorId: provs.alberto
+    },
+    {
+      referencia: 'CE-003',
+      colillaCm: 40,
+      precioMetro: 35000,
+      descripcion: 'Cedro',
+      proveedorId: provs.alberto
+    },
+    {
+      referencia: 'PA-004',
+      colillaCm: 44,
+      precioMetro: 42000,
+      descripcion: 'Plata Antigua',
+      proveedorId: provs.alberto
+    },
+    {
+      referencia: 'DC-005',
+      colillaCm: 48,
+      precioMetro: 48000,
+      descripcion: 'Dorado Clasico',
+      proveedorId: provs.alberto
+    },
+    {
+      referencia: 'NM-006',
+      colillaCm: 28,
+      precioMetro: 26000,
+      descripcion: 'Negro Mate',
+      proveedorId: provs.edimol
+    },
+    {
+      referencia: 'BL-007',
+      colillaCm: 30,
+      precioMetro: 30000,
+      descripcion: 'Blanco Liso',
+      proveedorId: provs.edimol
+    },
+    {
+      referencia: 'WE-008',
+      colillaCm: 38,
+      precioMetro: 38000,
+      descripcion: 'Wengue',
+      proveedorId: provs.edimol
+    },
+    {
+      referencia: 'CH-009',
+      colillaCm: 26,
+      precioMetro: 25000,
+      descripcion: 'Chapilla Pino',
+      proveedorId: provs.edimol
+    },
+    {
+      referencia: 'TA-010',
+      colillaCm: 52,
+      precioMetro: 55000,
+      descripcion: 'Tallado Premium',
+      proveedorId: provs.edimol
+    }
   ]
   db.insert(muestrasMarcos).values(marcos).run()
 

@@ -165,9 +165,9 @@ const api = {
       invoke<IpcResult<MatrizUrgencia>>('pedidos:matrizUrgencia', diasUrgencia),
     reclasificar: () => invoke<IpcResult<number>>('pedidos:reclasificar'),
     saldos: () =>
-      invoke<
-        IpcResult<Array<{ pedidoId: number; total: number; pagado: number; saldo: number }>>
-      >('pedidos:saldos'),
+      invoke<IpcResult<Array<{ pedidoId: number; total: number; pagado: number; saldo: number }>>>(
+        'pedidos:saldos'
+      ),
     alertas: {
       atrasados: () => invoke('pedidos:alertas:atrasados'),
       entregaProxima: (dias?: number) => invoke('pedidos:alertas:entregaProxima', dias),

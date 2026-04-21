@@ -27,16 +27,10 @@ export function StepMedidas({ data, onChange }: Props): React.JSX.Element {
   const cambiaAncho = anchoRedondeado !== data.anchoCm
   const cambiaAlto = altoRedondeado !== data.altoCm
 
-  const ancho = useDecimalInput(
-    data.anchoCm,
-    (n) => onChange({ anchoCm: n }),
-    { max: MEDIDA_MAX_CM }
-  )
-  const alto = useDecimalInput(
-    data.altoCm,
-    (n) => onChange({ altoCm: n }),
-    { max: MEDIDA_MAX_CM }
-  )
+  const ancho = useDecimalInput(data.anchoCm, (n) => onChange({ anchoCm: n }), {
+    max: MEDIDA_MAX_CM
+  })
+  const alto = useDecimalInput(data.altoCm, (n) => onChange({ altoCm: n }), { max: MEDIDA_MAX_CM })
 
   return (
     <div>

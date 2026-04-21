@@ -31,7 +31,10 @@ export function Breadcrumbs({ items, className }: BreadcrumbsProps): React.JSX.E
                 {item.label}
               </Link>
             ) : (
-              <span className={cn(isLast && 'font-medium text-text')} aria-current={isLast ? 'page' : undefined}>
+              <span
+                className={cn(isLast && 'font-medium text-text')}
+                aria-current={isLast ? 'page' : undefined}
+              >
                 {item.label}
               </span>
             )}

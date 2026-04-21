@@ -140,9 +140,7 @@ export function ListasPrecios({ onBack }: Props): React.JSX.Element {
             desc="Tapas de reemplazo. Precio por medida."
             listarFn={() => window.api.precios.listarTapas()}
             crearFn={(data: unknown) => window.api.precios.crearTapa(data)}
-            editarFn={(id: number, precio: number) =>
-              window.api.precios.actualizarTapa(id, precio)
-            }
+            editarFn={(id: number, precio: number) => window.api.precios.actualizarTapa(id, precio)}
             eliminarFn={(id: number) => window.api.precios.eliminarTapa(id)}
           />
         )}
@@ -665,12 +663,7 @@ function TabVidrios(): React.JSX.Element {
       )}
 
       {showCreate && (
-        <Modal
-          open
-          onClose={() => setShowCreate(false)}
-          title="Nuevo tipo de vidrio"
-          size="sm"
-        >
+        <Modal open onClose={() => setShowCreate(false)} title="Nuevo tipo de vidrio" size="sm">
           <form onSubmit={handleCreate} className="space-y-4">
             <Input
               label="Tipo"
@@ -897,11 +890,7 @@ function TabMedidaPrecio({
                       >
                         Cancelar
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => saveEdit(item.id)}
-                        disabled={savingEdit}
-                      >
+                      <Button size="sm" onClick={() => saveEdit(item.id)} disabled={savingEdit}>
                         {savingEdit ? 'Guardando...' : 'Guardar'}
                       </Button>
                     </div>

@@ -238,9 +238,9 @@ describe.runIf(nativeAbiAvailable)('cotizador · A3 validar precios > 0', () => 
 
   describe('crearPrecioPaspartu/Retablo/Bastidor/Tapa (validarMedidaPrecioCreate)', () => {
     it('crearPrecioPaspartuPintado rechaza precio 0', () => {
-      expect(() =>
-        crearPrecioPaspartuPintado(db, { anchoCm: 30, altoCm: 40, precio: 0 })
-      ).toThrow(/precio.*mayor a 0/i)
+      expect(() => crearPrecioPaspartuPintado(db, { anchoCm: 30, altoCm: 40, precio: 0 })).toThrow(
+        /precio.*mayor a 0/i
+      )
     })
 
     it('crearPrecioPaspartuPintado rechaza ancho 0', () => {
@@ -256,9 +256,9 @@ describe.runIf(nativeAbiAvailable)('cotizador · A3 validar precios > 0', () => 
     })
 
     it('crearPrecioRetablo rechaza precio NaN', () => {
-      expect(() =>
-        crearPrecioRetablo(db, { anchoCm: 30, altoCm: 40, precio: Number.NaN })
-      ).toThrow(/precio.*mayor a 0/i)
+      expect(() => crearPrecioRetablo(db, { anchoCm: 30, altoCm: 40, precio: Number.NaN })).toThrow(
+        /precio.*mayor a 0/i
+      )
     })
 
     it('crearPrecioBastidor rechaza todo en 0', () => {

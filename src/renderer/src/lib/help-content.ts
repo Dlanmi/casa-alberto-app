@@ -51,8 +51,7 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
         },
         {
           title: 'Clic en la tarjeta para cobrar',
-          description:
-            'Al abrir el detalle hay botones rápidos de abono y para generar factura.'
+          description: 'Al abrir el detalle hay botones rápidos de abono y para generar factura.'
         },
         {
           title: 'Filtra por lo urgente',
@@ -163,8 +162,7 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
       tips: [
         {
           title: 'Vista semanal o diaria',
-          description:
-            'Cambia entre vistas para planear tu semana o enfocarte en lo del día.'
+          description: 'Cambia entre vistas para planear tu semana o enfocarte en lo del día.'
         },
         {
           title: 'Entregas pendientes',

@@ -73,7 +73,7 @@ function validarTelefonoCliente(raw: string): string | null {
 }
 
 function validarCedulaCliente(raw: string): string | null {
-  const limpio = raw.replace(/[\s.\-]/g, '')
+  const limpio = raw.replace(/[\s.-]/g, '')
   if (!limpio) return null
   if (!/^\d{6,15}$/.test(limpio)) {
     return 'La cédula debe tener entre 6 y 15 dígitos'

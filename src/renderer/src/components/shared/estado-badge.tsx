@@ -35,10 +35,7 @@ const PEDIDO_ICON: Record<EstadoPedido, LucideIcon> = {
 export function EstadoPedidoBadge({ estado }: { estado: EstadoPedido }) {
   const { enabled } = useEmojis()
   return (
-    <Badge
-      color={ESTADO_PEDIDO_COLOR[estado]}
-      icon={enabled ? undefined : PEDIDO_ICON[estado]}
-    >
+    <Badge color={ESTADO_PEDIDO_COLOR[estado]} icon={enabled ? undefined : PEDIDO_ICON[estado]}>
       {enabled && <span aria-hidden="true">{EMOJI_ESTADO_PEDIDO[estado]}</span>}
       {ESTADO_PEDIDO_LABEL[estado]}
     </Badge>
@@ -74,10 +71,7 @@ export function EstadoPedidoDot({ estado }: { estado: EstadoPedido }): React.JSX
   const color = ESTADO_PEDIDO_COLOR[estado]
   return (
     <span className="inline-flex items-center gap-2" title={label}>
-      <span
-        aria-hidden="true"
-        className={cn('h-2 w-2 shrink-0 rounded-full', DOT_BG[color])}
-      />
+      <span aria-hidden="true" className={cn('h-2 w-2 shrink-0 rounded-full', DOT_BG[color])} />
       <span className="text-sm text-text-muted">{label}</span>
     </span>
   )
@@ -88,10 +82,7 @@ export function EstadoFacturaDot({ estado }: { estado: EstadoFactura }): React.J
   const color = ESTADO_FACTURA_COLOR[estado] as StatusColor
   return (
     <span className="inline-flex items-center gap-2" title={label}>
-      <span
-        aria-hidden="true"
-        className={cn('h-2 w-2 shrink-0 rounded-full', DOT_BG[color])}
-      />
+      <span aria-hidden="true" className={cn('h-2 w-2 shrink-0 rounded-full', DOT_BG[color])} />
       <span className="text-sm text-text-muted">{label}</span>
     </span>
   )

@@ -92,10 +92,7 @@ export default function PedidosPage(): React.JSX.Element {
     data: pedidos,
     loading,
     refetch
-  } = useIpc<Pedido[]>(
-    () => window.api.pedidos.listar({ incluirArchivados }),
-    [incluirArchivados]
-  )
+  } = useIpc<Pedido[]>(() => window.api.pedidos.listar({ incluirArchivados }), [incluirArchivados])
 
   const { data: clientes } = useIpc<Cliente[]>(
     () => window.api.clientes.listar({ soloActivos: false }),

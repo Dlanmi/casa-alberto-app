@@ -1,9 +1,6 @@
 import type { IllustrationProps } from './types'
 
-export function TruckIllustration({
-  size = 160,
-  className
-}: IllustrationProps): React.JSX.Element {
+export function TruckIllustration({ size = 160, className }: IllustrationProps): React.JSX.Element {
   return (
     <svg
       width={size}
@@ -20,17 +17,22 @@ export function TruckIllustration({
 
       {/* Cargo box */}
       <rect x="24" y="52" width="72" height="62" rx="3" fill="#e7c68a" />
-      <rect x="24" y="52" width="72" height="62" rx="3" stroke="#b45309" strokeWidth="1.5" fill="none" />
+      <rect
+        x="24"
+        y="52"
+        width="72"
+        height="62"
+        rx="3"
+        stroke="#b45309"
+        strokeWidth="1.5"
+        fill="none"
+      />
       {/* Cargo box panel lines */}
       <line x1="60" y1="52" x2="60" y2="114" stroke="#b45309" strokeWidth="1" opacity="0.45" />
       <line x1="24" y1="82" x2="96" y2="82" stroke="#b45309" strokeWidth="1" opacity="0.35" />
 
       {/* Cab */}
-      <path
-        d="M96 68 L120 68 L132 84 L132 114 L96 114 Z"
-        fill="#b45309"
-        opacity="0.85"
-      />
+      <path d="M96 68 L120 68 L132 84 L132 114 L96 114 Z" fill="#b45309" opacity="0.85" />
       <path
         d="M96 68 L120 68 L132 84 L132 114 L96 114 Z"
         stroke="#78716f"
@@ -53,9 +55,36 @@ export function TruckIllustration({
       <circle cx="112" cy="116" r="4" fill="#a8a29e" />
 
       {/* Motion lines */}
-      <line x1="6" y1="66" x2="18" y2="66" stroke="#78716f" strokeWidth="2" strokeLinecap="round" opacity="0.45" />
-      <line x1="2" y1="78" x2="20" y2="78" stroke="#78716f" strokeWidth="2" strokeLinecap="round" opacity="0.45" />
-      <line x1="8" y1="90" x2="18" y2="90" stroke="#78716f" strokeWidth="2" strokeLinecap="round" opacity="0.45" />
+      <line
+        x1="6"
+        y1="66"
+        x2="18"
+        y2="66"
+        stroke="#78716f"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.45"
+      />
+      <line
+        x1="2"
+        y1="78"
+        x2="20"
+        y2="78"
+        stroke="#78716f"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.45"
+      />
+      <line
+        x1="8"
+        y1="90"
+        x2="18"
+        y2="90"
+        stroke="#78716f"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.45"
+      />
     </svg>
   )
 }
