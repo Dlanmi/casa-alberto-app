@@ -244,6 +244,8 @@ const api = {
   },
   updater: {
     getStatus: () => invoke('updater:getStatus'),
+    quitAndInstall: () => invoke('updater:quitAndInstall'),
+    checkNow: () => invoke('updater:checkNow'),
     onStatusChange: (callback: (status: unknown) => void) => {
       ipcRenderer.on('updater:status', (_e, status) => callback(status))
       return () => {

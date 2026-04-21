@@ -26,6 +26,27 @@ export function getUpdateStatus(): UpdateStatus {
   return currentStatus
 }
 
+// Fuerza un re-check inmediato (p. ej. botón "Buscar actualizaciones" en ajustes).
+// No se expone al renderer todavía; el IPC handler ya queda listo por si se agrega
+// la UI en el futuro.
+export function checkForUpdatesNow(): void {
+  if (!app.isPackaged) return
+  autoUpdater.checkForUpdates().catch((err) => {
+    console.error('[updater] check manual falló:', err.message)
+  })
+}
+
+// Llamado desde el botón "Reiniciar ahora" cuando el update está descargado.
+// electron-updater cierra la app e instala el paquete; al volver a abrir queda
+// en la nueva versión. Solo tiene sentido en state === 'downloaded'.
+export function quitAndInstall(): void {
+  if (currentStatus.state !== 'downloaded') {
+    console.warn('[updater] quitAndInstall ignorado — estado:', currentStatus.state)
+    return
+  }
+  autoUpdater.quitAndInstall()
+}
+
 export function initAutoUpdater(): void {
   if (!app.isPackaged) {
     console.log('[updater] omitido — app no empaquetada (dev mode)')

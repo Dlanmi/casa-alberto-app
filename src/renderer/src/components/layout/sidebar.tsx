@@ -5,7 +5,8 @@ import { cn } from '@renderer/lib/cn'
 import { SIDEBAR_ITEMS, SIDEBAR_GROUP_LABEL } from '@renderer/lib/constants'
 import type { SidebarGroup, SidebarItem } from '@renderer/lib/constants'
 import { Tooltip } from '@renderer/components/ui/tooltip'
-import type { BackupInfo, IpcResult, Pedido, UpdateStatus } from '@shared/types'
+import type { BackupInfo, IpcResult, Pedido } from '@shared/types'
+import { useUpdateStatus } from '@renderer/hooks/use-update-status'
 
 // C-02 — formateo relativo humano para "hace X horas" del indicador de
 // backup. `now` se pasa explícitamente para que la función sea pura (no
@@ -41,15 +42,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
   // C-02 — último backup, para mostrar "Respaldo: hace Xh" en la parte
   // inferior del sidebar. Se refresca cada 5 minutos.
   const [ultimoBackup, setUltimoBackup] = useState<BackupInfo | null>(null)
-  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ state: 'idle' })
-
-  // Suscribirse a cambios de estado del auto-updater
-  useEffect(() => {
-    const unsub = window.api.updater.onStatusChange((status) =>
-      setUpdateStatus(status as UpdateStatus)
-    )
-    return () => unsub()
-  }, [])
+  const { status: updateStatus } = useUpdateStatus()
 
   useEffect(() => {
     let mounted = true

@@ -28,7 +28,7 @@ import {
   marcarOnboardingCompleto
 } from '../db/queries/configuracion'
 import { seedDemo, clearDemoData } from '../db/seed'
-import { getUpdateStatus } from '../updater'
+import { checkForUpdatesNow, getUpdateStatus, quitAndInstall } from '../updater'
 import {
   crearBackupAhora,
   listarBackups,
@@ -426,8 +426,10 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('excel:exportarListasPrecios', () => wrap(exportarListasPrecios)(db))
   ipcMain.handle('excel:importarMarcos', () => wrap(importarMarcosDesdeExcel)(db))
 
-  // updater — estado del auto-updater (solo lectura)
+  // updater — estado del auto-updater (solo lectura) + acciones
   ipcMain.handle('updater:getStatus', () => wrap(getUpdateStatus)())
+  ipcMain.handle('updater:quitAndInstall', () => wrap(quitAndInstall)())
+  ipcMain.handle('updater:checkNow', () => wrap(checkForUpdatesNow)())
 
   console.log('[ipc] handlers registered')
 }
