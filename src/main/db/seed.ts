@@ -89,20 +89,21 @@ function seedConfiguracion(db: DB): void {
   }
 }
 
-function seedListasPrecios(db: DB) {
+function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
   // Muestras de marcos — según Fase 2 (A.1): referencia, colilla (cm), precio/metro
   // La colilla es el desperdicio TOTAL de la muestra (ej: K473 = 48cm). Se suma UNA vez al perímetro.
+  // Cada marco viene de un proveedor fijo (primeros 5 a Alberto, últimos 5 a Edimol).
   const marcos = [
-    { referencia: 'RN-001', colillaCm: 32, precioMetro: 28000, descripcion: 'Roble Natural' },
-    { referencia: 'RO-002', colillaCm: 36, precioMetro: 32000, descripcion: 'Roble Oscuro' },
-    { referencia: 'CE-003', colillaCm: 40, precioMetro: 35000, descripcion: 'Cedro' },
-    { referencia: 'PA-004', colillaCm: 44, precioMetro: 42000, descripcion: 'Plata Antigua' },
-    { referencia: 'DC-005', colillaCm: 48, precioMetro: 48000, descripcion: 'Dorado Clasico' },
-    { referencia: 'NM-006', colillaCm: 28, precioMetro: 26000, descripcion: 'Negro Mate' },
-    { referencia: 'BL-007', colillaCm: 30, precioMetro: 30000, descripcion: 'Blanco Liso' },
-    { referencia: 'WE-008', colillaCm: 38, precioMetro: 38000, descripcion: 'Wengue' },
-    { referencia: 'CH-009', colillaCm: 26, precioMetro: 25000, descripcion: 'Chapilla Pino' },
-    { referencia: 'TA-010', colillaCm: 52, precioMetro: 55000, descripcion: 'Tallado Premium' }
+    { referencia: 'RN-001', colillaCm: 32, precioMetro: 28000, descripcion: 'Roble Natural',   proveedorId: provs.alberto },
+    { referencia: 'RO-002', colillaCm: 36, precioMetro: 32000, descripcion: 'Roble Oscuro',    proveedorId: provs.alberto },
+    { referencia: 'CE-003', colillaCm: 40, precioMetro: 35000, descripcion: 'Cedro',           proveedorId: provs.alberto },
+    { referencia: 'PA-004', colillaCm: 44, precioMetro: 42000, descripcion: 'Plata Antigua',   proveedorId: provs.alberto },
+    { referencia: 'DC-005', colillaCm: 48, precioMetro: 48000, descripcion: 'Dorado Clasico',  proveedorId: provs.alberto },
+    { referencia: 'NM-006', colillaCm: 28, precioMetro: 26000, descripcion: 'Negro Mate',      proveedorId: provs.edimol },
+    { referencia: 'BL-007', colillaCm: 30, precioMetro: 30000, descripcion: 'Blanco Liso',     proveedorId: provs.edimol },
+    { referencia: 'WE-008', colillaCm: 38, precioMetro: 38000, descripcion: 'Wengue',          proveedorId: provs.edimol },
+    { referencia: 'CH-009', colillaCm: 26, precioMetro: 25000, descripcion: 'Chapilla Pino',   proveedorId: provs.edimol },
+    { referencia: 'TA-010', colillaCm: 52, precioMetro: 55000, descripcion: 'Tallado Premium', proveedorId: provs.edimol }
   ]
   db.insert(muestrasMarcos).values(marcos).run()
 
@@ -206,12 +207,16 @@ function seedClientes(db: DB): number[] {
   return rows.map((r) => r.id)
 }
 
-function seedProveedores(db: DB): void {
-  db.insert(proveedores)
+export type ProveedoresSeed = { alberto: number; edimol: number; homecenter: number }
+
+function seedProveedores(db: DB): ProveedoresSeed {
+  const rows = db
+    .insert(proveedores)
     .values([
       {
         nombre: 'Alberto',
         producto: 'Marcos a medida',
+        tipo: 'marco',
         telefono: '3101234567',
         diasPedido: 'lunes,miercoles',
         formaPago: 'Contra entrega',
@@ -221,6 +226,7 @@ function seedProveedores(db: DB): void {
       {
         nombre: 'Edimol',
         producto: 'Marcos a medida',
+        tipo: 'marco',
         telefono: '3109876543',
         diasPedido: 'lunes,miercoles',
         formaPago: 'Contra entrega',
@@ -230,6 +236,7 @@ function seedProveedores(db: DB): void {
       {
         nombre: 'Homecenter',
         producto: 'MDF, carton para paspartu',
+        tipo: 'paspartu_material',
         telefono: '',
         diasPedido: '',
         formaPago: 'De contado',
@@ -237,7 +244,14 @@ function seedProveedores(db: DB): void {
         notas: 'MDF y carton se compran cuando se agotan.'
       }
     ])
-    .run()
+    .returning()
+    .all()
+  const byName = new Map(rows.map((r) => [r.nombre, r.id]))
+  return {
+    alberto: byName.get('Alberto')!,
+    edimol: byName.get('Edimol')!,
+    homecenter: byName.get('Homecenter')!
+  }
 }
 
 function seedInventario(db: DB): void {
@@ -375,7 +389,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
     db,
     {
       clienteId: carlos,
-      tipoTrabajo: 'enmarcacion_paspartu',
+      tipoTrabajo: 'enmarcacion_estandar',
       descripcion: 'Acuarela 20x30 con paspartú',
       anchoCm: 20,
       altoCm: 30,
@@ -660,9 +674,9 @@ export function seedDemo(db: DB): void {
   db.transaction((tx) => {
     const txDb = tx as unknown as DB
     seedConfiguracion(txDb) // idempotente
-    seedListasPrecios(txDb)
+    const provs = seedProveedores(txDb)
+    seedListasPrecios(txDb, provs)
     const clienteIds = seedClientes(txDb)
-    seedProveedores(txDb)
     seedInventario(txDb)
     const pedidoIds = seedPedidos(txDb, clienteIds)
     seedFacturasYPagos(txDb, pedidoIds)

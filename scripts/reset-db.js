@@ -2,7 +2,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 
-const APP_NAME = 'casa-alberto-app'
+const APP_NAME = 'Casa Alberto'
 
 function userDataDir() {
   const home = os.homedir()

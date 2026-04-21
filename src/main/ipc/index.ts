@@ -52,20 +52,27 @@ import {
   desactivarMuestraMarco,
   listarPreciosVidrio,
   actualizarPrecioVidrio,
+  crearPrecioVidrio,
+  eliminarPrecioVidrio,
   listarPreciosPaspartuPintado,
   crearPrecioPaspartuPintado,
+  actualizarPrecioPaspartuPintado,
   eliminarPrecioPaspartuPintado,
   listarPreciosPaspartuAcrilico,
   crearPrecioPaspartuAcrilico,
+  actualizarPrecioPaspartuAcrilico,
   eliminarPrecioPaspartuAcrilico,
   listarPreciosRetablos,
   crearPrecioRetablo,
+  actualizarPrecioRetablo,
   eliminarPrecioRetablo,
   listarPreciosBastidores,
   crearPrecioBastidor,
+  actualizarPrecioBastidor,
   eliminarPrecioBastidor,
   listarPreciosTapas,
   crearPrecioTapa,
+  actualizarPrecioTapa,
   eliminarPrecioTapa
 } from '../db/queries/cotizador'
 import {
@@ -76,9 +83,11 @@ import {
   obtenerMatrizUrgencia,
   obtenerPedido,
   obtenerPedidoPorNumero,
+  obtenerSaldosPorPedido,
   pedidosAtrasados,
   pedidosEntregaProxima,
   pedidosPorRangoFecha,
+  pedidosListosSinRecoger,
   pedidosSinAbono,
   pedidosSinReclamar,
   reclasificarPedidos,
@@ -114,6 +123,7 @@ import {
 import {
   listarMovimientos,
   registrarMovimientoManual,
+  reporteMargenPorTipo,
   resumenMensual
 } from '../db/queries/finanzas'
 import {
@@ -228,10 +238,19 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('cotizador:actualizarPrecioVidrio', (_e, id: number, precioM2: number) =>
     wrap(actualizarPrecioVidrio)(db, id, precioM2)
   )
+  ipcMain.handle('cotizador:crearPrecioVidrio', (_e, tipo: string, precioM2: number) =>
+    wrap(crearPrecioVidrio)(db, tipo, precioM2)
+  )
+  ipcMain.handle('cotizador:eliminarPrecioVidrio', (_e, id: number) =>
+    wrap(eliminarPrecioVidrio)(db, id)
+  )
   // Listas de precios — CRUD (5 tablas por medida)
   ipcMain.handle('precios:listarPaspartuPintado', () => wrap(listarPreciosPaspartuPintado)(db))
   ipcMain.handle('precios:crearPaspartuPintado', (_e, data) =>
     wrap(crearPrecioPaspartuPintado)(db, data)
+  )
+  ipcMain.handle('precios:actualizarPaspartuPintado', (_e, id: number, precio: number) =>
+    wrap(actualizarPrecioPaspartuPintado)(db, id, precio)
   )
   ipcMain.handle('precios:eliminarPaspartuPintado', (_e, id: number) =>
     wrap(eliminarPrecioPaspartuPintado)(db, id)
@@ -240,19 +259,31 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('precios:crearPaspartuAcrilico', (_e, data) =>
     wrap(crearPrecioPaspartuAcrilico)(db, data)
   )
+  ipcMain.handle('precios:actualizarPaspartuAcrilico', (_e, id: number, precio: number) =>
+    wrap(actualizarPrecioPaspartuAcrilico)(db, id, precio)
+  )
   ipcMain.handle('precios:eliminarPaspartuAcrilico', (_e, id: number) =>
     wrap(eliminarPrecioPaspartuAcrilico)(db, id)
   )
   ipcMain.handle('precios:listarRetablos', () => wrap(listarPreciosRetablos)(db))
   ipcMain.handle('precios:crearRetablo', (_e, data) => wrap(crearPrecioRetablo)(db, data))
+  ipcMain.handle('precios:actualizarRetablo', (_e, id: number, precio: number) =>
+    wrap(actualizarPrecioRetablo)(db, id, precio)
+  )
   ipcMain.handle('precios:eliminarRetablo', (_e, id: number) => wrap(eliminarPrecioRetablo)(db, id))
   ipcMain.handle('precios:listarBastidores', () => wrap(listarPreciosBastidores)(db))
   ipcMain.handle('precios:crearBastidor', (_e, data) => wrap(crearPrecioBastidor)(db, data))
+  ipcMain.handle('precios:actualizarBastidor', (_e, id: number, precio: number) =>
+    wrap(actualizarPrecioBastidor)(db, id, precio)
+  )
   ipcMain.handle('precios:eliminarBastidor', (_e, id: number) =>
     wrap(eliminarPrecioBastidor)(db, id)
   )
   ipcMain.handle('precios:listarTapas', () => wrap(listarPreciosTapas)(db))
   ipcMain.handle('precios:crearTapa', (_e, data) => wrap(crearPrecioTapa)(db, data))
+  ipcMain.handle('precios:actualizarTapa', (_e, id: number, precio: number) =>
+    wrap(actualizarPrecioTapa)(db, id, precio)
+  )
   ipcMain.handle('precios:eliminarTapa', (_e, id: number) => wrap(eliminarPrecioTapa)(db, id))
 
   ipcMain.handle('cotizador:enmarcacionEstandar', (_e, input) =>
@@ -290,6 +321,9 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('pedidos:alertas:sinReclamar', (_e, dias?: number) =>
     wrap(pedidosSinReclamar)(db, dias)
   )
+  ipcMain.handle('pedidos:alertas:listosSinRecoger', (_e, dias?: number) =>
+    wrap(pedidosListosSinRecoger)(db, dias)
+  )
   ipcMain.handle('pedidos:resumenEstado', () => wrap(resumenPedidosPorEstado)(db))
   ipcMain.handle('pedidos:matrizUrgencia', (_e, diasUrgencia?: number) =>
     wrap(obtenerMatrizUrgencia)(db, diasUrgencia)
@@ -298,6 +332,8 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('pedidos:porRangoFecha', (_e, desde: string, hasta: string) =>
     wrap(pedidosPorRangoFecha)(db, desde, hasta)
   )
+  // Fase 1 — saldos por pedido (LEFT JOIN facturas+pagos en una sola query)
+  ipcMain.handle('pedidos:saldos', () => wrap(obtenerSaldosPorPedido)(db))
 
   // facturas
   ipcMain.handle('facturas:crear', (_e, data) => wrap(crearFactura)(db, data))
@@ -348,6 +384,9 @@ export function registerIpcHandlers(db: DB): void {
     wrap(registrarMovimientoManual)(db, data)
   )
   ipcMain.handle('finanzas:resumenMensual', (_e, mes: string) => wrap(resumenMensual)(db, mes))
+  ipcMain.handle('finanzas:reporteMargenPorTipo', (_e, mes: string) =>
+    wrap(reporteMargenPorTipo)(db, mes)
+  )
 
   // inventario
   ipcMain.handle('inventario:listar', (_e, soloActivos?: boolean) =>

@@ -1,10 +1,11 @@
 import { and, eq, like, or, sql, type SQL } from 'drizzle-orm'
 import type { DB } from '../index'
-import { proveedores } from '../schema'
+import { proveedores, type TipoProveedor } from '../schema'
 
 export type NuevoProveedor = {
   nombre: string
   producto?: string | null
+  tipo?: TipoProveedor
   telefono?: string | null
   diasPedido?: string | null
   formaPago?: string | null
@@ -14,9 +15,13 @@ export type NuevoProveedor = {
 
 export type ActualizarProveedor = Partial<NuevoProveedor> & { activo?: boolean }
 
-export function listarProveedores(db: DB, opts: { busqueda?: string; soloActivos?: boolean } = {}) {
+export function listarProveedores(
+  db: DB,
+  opts: { busqueda?: string; soloActivos?: boolean; tipo?: TipoProveedor } = {}
+) {
   const conditions: SQL[] = []
   if (opts.soloActivos !== false) conditions.push(eq(proveedores.activo, true))
+  if (opts.tipo) conditions.push(eq(proveedores.tipo, opts.tipo))
   if (opts.busqueda) {
     const q = `%${opts.busqueda}%`
     conditions.push(or(like(proveedores.nombre, q), like(proveedores.producto, q))!)
@@ -35,6 +40,7 @@ export function crearProveedor(db: DB, data: NuevoProveedor) {
     .values({
       nombre: data.nombre,
       producto: data.producto ?? null,
+      tipo: data.tipo ?? 'otro',
       telefono: data.telefono ?? null,
       diasPedido: data.diasPedido ?? null,
       formaPago: data.formaPago ?? null,

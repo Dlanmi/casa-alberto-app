@@ -22,6 +22,20 @@
       "when": 1776212305104,
       "tag": "0002_marvelous_triathlon",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1776455121926,
+      "tag": "0003_marcos_proveedor",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1776782971332,
+      "tag": "0004_factura_unique_activa",
+      "breakpoints": true
     }
   ]
 }

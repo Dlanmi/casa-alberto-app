@@ -44,6 +44,7 @@ import type {
 import type {
   InputEnmarcacionEstandar,
   InputEnmarcacionPaspartu,
+  MuestraMarcoConProveedor,
   NuevaMuestraMarco,
   ResultadoCotizacion
 } from '../main/db/queries/cotizador'
@@ -82,6 +83,7 @@ export type {
   TipoPaspartu,
   TipoVidrio,
   TipoVidrioLista,
+  TipoProveedor,
   EstadoFactura,
   MetodoPago,
   DiaSemana,
@@ -97,6 +99,8 @@ export type {
   EstadoCuentaCobro,
   PedidoItemMetadata
 } from '../main/db/schema'
+
+export { TIPOS_PROVEEDOR } from '../main/db/schema'
 
 // Tipos inferidos por tabla
 export type Cliente = typeof clientes.$inferSelect
@@ -145,6 +149,9 @@ export type PedidoListarFiltros = {
   estado?: EstadoPedido
   clienteId?: number
   limit?: number
+  // Fase 6 — cuando true incluye pedidos entregados hace más de 30 días.
+  // Por defecto se esconden para no inflar el kanban con histórico.
+  incluirArchivados?: boolean
 }
 
 export type FacturaListarFiltros = {
@@ -206,6 +213,7 @@ export type {
   InputEnmarcacionEstandar,
   InputEnmarcacionPaspartu,
   MatrizUrgencia,
+  MuestraMarcoConProveedor,
   NuevaMuestraMarco,
   NuevoPedidoDatos,
   NuevaFactura,

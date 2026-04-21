@@ -13,6 +13,7 @@ import type {
   InputEnmarcacionPaspartu,
   MatrizUrgencia,
   MuestraMarco,
+  MuestraMarcoConProveedor,
   NuevaFactura,
   NuevaMuestraMarco,
   NuevaDevolucion,
@@ -81,7 +82,8 @@ const api = {
     abrirCarpeta: () => invoke<IpcResult<void>>('backup:abrirCarpeta')
   },
   cotizador: {
-    listarMuestrasMarcos: () => invoke<IpcResult<MuestraMarco[]>>('cotizador:listarMuestrasMarcos'),
+    listarMuestrasMarcos: () =>
+      invoke<IpcResult<MuestraMarcoConProveedor[]>>('cotizador:listarMuestrasMarcos'),
     obtenerMuestraMarco: (id: number) =>
       invoke<IpcResult<MuestraMarco | null>>('cotizador:obtenerMuestraMarco', id),
     crearMuestraMarco: (data: NuevaMuestraMarco) =>
@@ -93,6 +95,10 @@ const api = {
     listarPreciosVidrio: () => invoke<IpcResult<PrecioVidrio[]>>('cotizador:listarPreciosVidrio'),
     actualizarPrecioVidrio: (id: number, precioM2: number) =>
       invoke<IpcResult<PrecioVidrio>>('cotizador:actualizarPrecioVidrio', id, precioM2),
+    crearPrecioVidrio: (tipo: string, precioM2: number) =>
+      invoke<IpcResult<PrecioVidrio>>('cotizador:crearPrecioVidrio', tipo, precioM2),
+    eliminarPrecioVidrio: (id: number) =>
+      invoke<IpcResult<PrecioVidrio>>('cotizador:eliminarPrecioVidrio', id),
     enmarcacionEstandar: (input: InputEnmarcacionEstandar) =>
       invoke<IpcResult<ResultadoCotizacion>>('cotizador:enmarcacionEstandar', input),
     enmarcacionPaspartu: (input: InputEnmarcacionPaspartu) =>
@@ -112,7 +118,7 @@ const api = {
     vidrioEspejo: (input: {
       anchoCm: number
       altoCm: number
-      tipoVidrio: 'claro' | 'antirreflectivo'
+      tipoVidrio: string
       precioInstalacion?: number
       descripcion?: string | null
     }) => invoke<IpcResult<ResultadoCotizacion>>('cotizador:vidrioEspejo', input)
@@ -120,18 +126,27 @@ const api = {
   precios: {
     listarPaspartuPintado: () => invoke('precios:listarPaspartuPintado'),
     crearPaspartuPintado: (data: unknown) => invoke('precios:crearPaspartuPintado', data),
+    actualizarPaspartuPintado: (id: number, precio: number) =>
+      invoke('precios:actualizarPaspartuPintado', id, precio),
     eliminarPaspartuPintado: (id: number) => invoke('precios:eliminarPaspartuPintado', id),
     listarPaspartuAcrilico: () => invoke('precios:listarPaspartuAcrilico'),
     crearPaspartuAcrilico: (data: unknown) => invoke('precios:crearPaspartuAcrilico', data),
+    actualizarPaspartuAcrilico: (id: number, precio: number) =>
+      invoke('precios:actualizarPaspartuAcrilico', id, precio),
     eliminarPaspartuAcrilico: (id: number) => invoke('precios:eliminarPaspartuAcrilico', id),
     listarRetablos: () => invoke('precios:listarRetablos'),
     crearRetablo: (data: unknown) => invoke('precios:crearRetablo', data),
+    actualizarRetablo: (id: number, precio: number) =>
+      invoke('precios:actualizarRetablo', id, precio),
     eliminarRetablo: (id: number) => invoke('precios:eliminarRetablo', id),
     listarBastidores: () => invoke('precios:listarBastidores'),
     crearBastidor: (data: unknown) => invoke('precios:crearBastidor', data),
+    actualizarBastidor: (id: number, precio: number) =>
+      invoke('precios:actualizarBastidor', id, precio),
     eliminarBastidor: (id: number) => invoke('precios:eliminarBastidor', id),
     listarTapas: () => invoke('precios:listarTapas'),
     crearTapa: (data: unknown) => invoke('precios:crearTapa', data),
+    actualizarTapa: (id: number, precio: number) => invoke('precios:actualizarTapa', id, precio),
     eliminarTapa: (id: number) => invoke('precios:eliminarTapa', id)
   },
   pedidos: {
@@ -149,11 +164,16 @@ const api = {
     matrizUrgencia: (diasUrgencia?: number) =>
       invoke<IpcResult<MatrizUrgencia>>('pedidos:matrizUrgencia', diasUrgencia),
     reclasificar: () => invoke<IpcResult<number>>('pedidos:reclasificar'),
+    saldos: () =>
+      invoke<
+        IpcResult<Array<{ pedidoId: number; total: number; pagado: number; saldo: number }>>
+      >('pedidos:saldos'),
     alertas: {
       atrasados: () => invoke('pedidos:alertas:atrasados'),
       entregaProxima: (dias?: number) => invoke('pedidos:alertas:entregaProxima', dias),
       sinAbono: () => invoke('pedidos:alertas:sinAbono'),
-      sinReclamar: (dias?: number) => invoke('pedidos:alertas:sinReclamar', dias)
+      sinReclamar: (dias?: number) => invoke('pedidos:alertas:sinReclamar', dias),
+      listosSinRecoger: (dias?: number) => invoke('pedidos:alertas:listosSinRecoger', dias)
     },
     porRangoFecha: (desde: string, hasta: string) => invoke('pedidos:porRangoFecha', desde, hasta)
   },
@@ -197,7 +217,8 @@ const api = {
   finanzas: {
     listarMovimientos: (opts?: unknown) => invoke('finanzas:listarMovimientos', opts),
     registrarManual: (data: unknown) => invoke('finanzas:registrarManual', data),
-    resumenMensual: (mes: string) => invoke('finanzas:resumenMensual', mes)
+    resumenMensual: (mes: string) => invoke('finanzas:resumenMensual', mes),
+    reporteMargenPorTipo: (mes: string) => invoke('finanzas:reporteMargenPorTipo', mes)
   },
   inventario: {
     listar: (soloActivos?: boolean) => invoke('inventario:listar', soloActivos),

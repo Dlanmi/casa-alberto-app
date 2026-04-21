@@ -224,3 +224,91 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
     })
   })
 })
+
+// Sprint 1 · A9 — UNIQUE partial index en facturas(pedido_id) WHERE estado != 'anulada'.
+// Los tests de `facturas guards` pre-insertan una factura con número hardcodeado
+// antes de cada test, lo que colisionaría con el consecutivo auto-generado. Por
+// eso esta suite vive fuera con su propio beforeEach limpio.
+describe.runIf(nativeAbiAvailable)('facturas UNIQUE partial index (Sprint 1 A9)', () => {
+  let db: DB
+
+  beforeEach(() => {
+    db = createTestDb().db
+  })
+
+  function insertClientePedido(
+    nombreCliente: string,
+    numeroPedido: string
+  ): { clienteId: number; pedidoId: number } {
+    const cliente = db.insert(clientes).values({ nombre: nombreCliente }).returning().get()
+    const pedido = db
+      .insert(pedidos)
+      .values({
+        numero: numeroPedido,
+        clienteId: cliente.id,
+        tipoTrabajo: 'enmarcacion_estandar',
+        precioTotal: 50000,
+        estado: 'confirmado',
+        fechaIngreso: '2026-04-01'
+      })
+      .returning()
+      .get()
+    return { clienteId: cliente.id, pedidoId: pedido.id }
+  }
+
+  it('rechaza crear dos facturas activas para el mismo pedido (app-level)', () => {
+    const { clienteId, pedidoId } = insertClientePedido('Cliente Dup', 'P-DUP')
+    crearFactura(db, { pedidoId, clienteId, fecha: '2026-04-01', total: 50000 })
+    expect(() =>
+      crearFactura(db, { pedidoId, clienteId, fecha: '2026-04-01', total: 50000 })
+    ).toThrow(/factura activa/i)
+  })
+
+  it('DB UNIQUE index bloquea un INSERT directo saltándose el app-level', () => {
+    // Garantía real: aunque un bug salte el guard de app, el índice parcial
+    // del schema impide dos facturas activas por pedido.
+    const { clienteId, pedidoId } = insertClientePedido('Cliente DB', 'P-DB-DUP')
+    db.insert(facturas)
+      .values({
+        numero: 'F-DB-1',
+        pedidoId,
+        clienteId,
+        fecha: '2026-04-01',
+        total: 50000,
+        estado: 'pendiente'
+      })
+      .run()
+    expect(() =>
+      db
+        .insert(facturas)
+        .values({
+          numero: 'F-DB-2',
+          pedidoId,
+          clienteId,
+          fecha: '2026-04-01',
+          total: 50000,
+          estado: 'pendiente'
+        })
+        .run()
+    ).toThrow(/unique|idx_facturas_pedido_activa/i)
+  })
+
+  it('permite una factura activa tras anular la anterior', () => {
+    const { clienteId, pedidoId } = insertClientePedido('Cliente Reemplazo', 'P-REP')
+    const primera = crearFactura(db, {
+      pedidoId,
+      clienteId,
+      fecha: '2026-04-01',
+      total: 50000
+    })
+    anularFactura(db, primera.id)
+    const segunda = crearFactura(db, {
+      pedidoId,
+      clienteId,
+      fecha: '2026-04-02',
+      total: 50000
+    })
+    expect(segunda.estado).toBe('pendiente')
+    expect(segunda.pedidoId).toBe(pedidoId)
+  })
+})

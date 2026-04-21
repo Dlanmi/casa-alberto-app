@@ -16,6 +16,7 @@ import type { DB } from '../index'
 import { generarConsecutivo } from '../consecutivos'
 import {
   clientes,
+  devoluciones,
   facturas,
   historialCambios,
   pagos,
@@ -26,9 +27,18 @@ import {
   type TipoTrabajo
 } from '../schema'
 import type { ResultadoCotizacion } from './cotizador'
+import { TRANSICIONES_VALIDAS } from '@shared/pedido-transitions'
+
+export { TRANSICIONES_VALIDAS }
 
 const ESTADOS_TERMINALES: EstadoPedido[] = ['listo', 'entregado', 'cancelado']
 const ESTADOS_NO_FACTURABLES: EstadoPedido[] = ['cotizado', 'cancelado']
+
+// Fase 6 — días tras los cuales un pedido entregado se considera archivado y
+// se oculta por defecto del Kanban. Papá puede ver el histórico con el toggle.
+// Declarado antes de listarPedidos para evitar TDZ si la función se llamara
+// durante inicialización del módulo (ej. desde un test helper o seed eager).
+const DIAS_ARCHIVADO = 30
 
 export type NuevoPedidoDatos = {
   clienteId: number
@@ -38,7 +48,7 @@ export type NuevoPedidoDatos = {
   altoCm?: number | null
   anchoPaspartuCm?: number | null
   tipoPaspartu?: 'pintado' | 'acrilico' | null
-  tipoVidrio?: 'claro' | 'antirreflectivo' | 'ninguno' | null
+  tipoVidrio?: string | null
   porcentajeMateriales?: number
   tipoEntrega?: TipoEntrega
   fechaIngreso: string
@@ -103,7 +113,15 @@ export function crearPedidoDesdeCotizacion(
 
 export function listarPedidos(
   db: DB,
-  opts: { estado?: EstadoPedido; clienteId?: number; limit?: number } = {}
+  opts: {
+    estado?: EstadoPedido
+    clienteId?: number
+    limit?: number
+    // Fase 6 — por defecto excluye pedidos entregados hace más de DIAS_ARCHIVADO
+    // días para no inflar el Kanban con histórico. El toggle "Ver archivados"
+    // de la UI pone esto en true cuando papá quiere ver el histórico completo.
+    incluirArchivados?: boolean
+  } = {}
 ) {
   // Asegura que la reclasificación automática (listo → sin_reclamar tras +15 días)
   // esté aplicada antes de devolver resultados. Idempotente, sin costo si no hay
@@ -112,10 +130,93 @@ export function listarPedidos(
   const conds: SQL[] = []
   if (opts.estado) conds.push(eq(pedidos.estado, opts.estado))
   if (opts.clienteId) conds.push(eq(pedidos.clienteId, opts.clienteId))
+  if (!opts.incluirArchivados) {
+    // Esconde entregados con updatedAt de hace más de 30 días. No afecta a
+    // cancelados ni a ningún estado activo — solo al "cementerio" de entregados.
+    conds.push(
+      or(
+        not(eq(pedidos.estado, 'entregado')),
+        sql`julianday('now') - julianday(${pedidos.updatedAt}) <= ${DIAS_ARCHIVADO}`
+      )!
+    )
+  }
   const where = conds.length > 0 ? and(...conds) : undefined
   const q = db.select().from(pedidos).where(where).orderBy(desc(pedidos.createdAt))
   if (opts.limit) return q.limit(opts.limit).all()
   return q.all()
+}
+
+/**
+ * Fase 1 — Devuelve saldo por pedido para todos los pedidos en una query-trip.
+ * Antes el kanban-card no mostraba pago porque habría requerido N queries de
+ * factura + saldo individuales.
+ *
+ * Implementación: en vez de un LEFT JOIN triple que sufre row fan-out cuando
+ * un pedido tiene N facturas × M pagos (auditoría adversarial detectó este
+ * bug: `sum(pagos)` se multiplicaba por la cantidad de facturas), hacemos
+ * dos agregaciones independientes y las unimos en memoria. Es correcto, fácil
+ * de leer y el costo extra es despreciable (≤3 queries sin joins vs 1 con
+ * joins complejos). Papá tiene pocos miles de pedidos como máximo.
+ *
+ * Reglas de cálculo:
+ *   - Solo consideramos facturas NO anuladas.
+ *   - Pedido sin factura activa → total = precioTotal, pagado = 0, saldo = precioTotal.
+ *   - Pedido con factura(s) activa(s) → total = sum(facturas.total), pagado = sum(pagos.monto).
+ */
+export function obtenerSaldosPorPedido(
+  db: DB
+): Array<{ pedidoId: number; total: number; pagado: number; saldo: number }> {
+  const pedidosList = db
+    .select({ id: pedidos.id, precioTotal: pedidos.precioTotal })
+    .from(pedidos)
+    .all()
+
+  // Total facturado por pedido (suma de facturas activas). Agrupación simple
+  // sobre la tabla de facturas — no hay fan-out posible.
+  const facturaTotals = db
+    .select({
+      pedidoId: facturas.pedidoId,
+      total: sql<number>`sum(${facturas.total})`.as('factura_total'),
+      count: sql<number>`count(*)`.as('factura_count')
+    })
+    .from(facturas)
+    .where(not(eq(facturas.estado, 'anulada')))
+    .groupBy(facturas.pedidoId)
+    .all()
+
+  // Total pagado por pedido. INNER JOIN con facturas garantiza que excluimos
+  // pagos de facturas anuladas. Agrupado por pedido_id (via factura.pedidoId)
+  // para que no haya duplicación.
+  const pagoTotals = db
+    .select({
+      pedidoId: facturas.pedidoId,
+      total: sql<number>`sum(${pagos.monto})`.as('pago_total')
+    })
+    .from(pagos)
+    .innerJoin(
+      facturas,
+      and(eq(facturas.id, pagos.facturaId), not(eq(facturas.estado, 'anulada')))
+    )
+    .groupBy(facturas.pedidoId)
+    .all()
+
+  const facturaMap = new Map<number, { total: number; count: number }>()
+  for (const f of facturaTotals) {
+    facturaMap.set(f.pedidoId, { total: Number(f.total), count: Number(f.count) })
+  }
+  const pagoMap = new Map<number, number>()
+  for (const p of pagoTotals) {
+    pagoMap.set(p.pedidoId, Number(p.total))
+  }
+
+  return pedidosList.map((p) => {
+    const facturaInfo = facturaMap.get(p.id)
+    const pagado = pagoMap.get(p.id) ?? 0
+    // Sin factura activa → saldo = precio total (falta cobrar todo).
+    const total = facturaInfo ? facturaInfo.total : Number(p.precioTotal)
+    const saldo = Math.max(0, total - pagado)
+    return { pedidoId: p.id, total, pagado, saldo }
+  })
 }
 
 export function obtenerPedido(db: DB, id: number) {
@@ -132,16 +233,6 @@ export function obtenerPedidoPorNumero(db: DB, numero: string) {
   return { ...pedido, items }
 }
 
-export const TRANSICIONES_VALIDAS: Record<EstadoPedido, EstadoPedido[]> = {
-  cotizado: ['confirmado', 'cancelado'],
-  confirmado: ['en_proceso', 'cancelado'],
-  en_proceso: ['listo', 'cancelado'],
-  listo: ['entregado', 'sin_reclamar', 'cancelado'],
-  entregado: [],
-  sin_reclamar: ['entregado', 'cancelado'],
-  cancelado: []
-}
-
 export function cambiarEstadoPedido(db: DB, id: number, nuevoEstado: EstadoPedido) {
   return db.transaction((tx) => {
     const prev = tx.select().from(pedidos).where(eq(pedidos.id, id)).get()
@@ -151,6 +242,36 @@ export function cambiarEstadoPedido(db: DB, id: number, nuevoEstado: EstadoPedid
     const permitidos = TRANSICIONES_VALIDAS[prev.estado as EstadoPedido]
     if (!permitidos || !permitidos.includes(nuevoEstado)) {
       throw new Error(`No se puede pasar de "${prev.estado}" a "${nuevoEstado}"`)
+    }
+
+    // C2 — Garantía de backend: no permitimos entregar un pedido si su factura
+    // activa tiene saldo pendiente. El UI ya bloquea el botón, pero esta es la
+    // última defensa contra IPC directo o clientes maliciosos que salten el UI.
+    // Si el pedido no tiene factura activa, asumimos pago externo y permitimos.
+    if (nuevoEstado === 'entregado') {
+      const facturaActiva = tx
+        .select()
+        .from(facturas)
+        .where(and(eq(facturas.pedidoId, id), not(eq(facturas.estado, 'anulada'))))
+        .get()
+      if (facturaActiva) {
+        const totPagos = tx
+          .select({ sum: sql<number>`coalesce(sum(${pagos.monto}), 0)` })
+          .from(pagos)
+          .where(eq(pagos.facturaId, facturaActiva.id))
+          .get()
+        const totDev = tx
+          .select({ sum: sql<number>`coalesce(sum(${devoluciones.monto}), 0)` })
+          .from(devoluciones)
+          .where(eq(devoluciones.facturaId, facturaActiva.id))
+          .get()
+        const saldo = facturaActiva.total - (totPagos?.sum ?? 0) + (totDev?.sum ?? 0)
+        if (saldo > 0) {
+          throw new Error(
+            `No se puede entregar: la factura ${facturaActiva.numero} tiene saldo pendiente de ${saldo}.`
+          )
+        }
+      }
     }
 
     const updated = tx
@@ -292,6 +413,24 @@ export function pedidosSinReclamar(db: DB, diasLimite = 15) {
           eq(pedidos.estado, 'listo'),
           sql`julianday('now') - julianday(${pedidos.updatedAt}) > ${diasLimite}`
         )
+      )
+    )
+    .orderBy(pedidos.updatedAt)
+    .all()
+}
+
+export function pedidosListosSinRecoger(db: DB, dias = 2) {
+  // Pedidos en estado `listo` que llevan más de N días sin moverse. Alerta
+  // intermedia antes de que reclasificarPedidos() los pase a sin_reclamar a
+  // los 15 días — ayuda a papá a llamar al cliente a tiempo.
+  return db
+    .select()
+    .from(pedidos)
+    .innerJoin(clientes, eq(clientes.id, pedidos.clienteId))
+    .where(
+      and(
+        eq(pedidos.estado, 'listo'),
+        sql`julianday('now') - julianday(${pedidos.updatedAt}) > ${dias}`
       )
     )
     .orderBy(pedidos.updatedAt)

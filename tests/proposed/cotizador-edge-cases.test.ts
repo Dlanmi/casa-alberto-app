@@ -141,15 +141,18 @@ describe('[proposed] aplicarPaspartu — cambio de dimensiones por paspartú', (
   })
 })
 
-describe('[proposed] aplicarMaterialesAdicionales — clamp 5–10%', () => {
-  it('clampea porcentajes debajo de 5% a exactamente 5%', () => {
-    expect(aplicarMaterialesAdicionales(100000, 0)).toBe(5000)
-    expect(aplicarMaterialesAdicionales(100000, -99)).toBe(5000)
-    expect(aplicarMaterialesAdicionales(100000, 4.9)).toBe(5000)
+describe('[proposed] aplicarMaterialesAdicionales — rango 5–10% estricto', () => {
+  // Sprint 2 · A5 — el clamp silencioso fue reemplazado por error explícito
+  // para que valores fuera de rango (UI mal construida, payload IPC corrupto)
+  // fallen ruidosamente en vez de propagar un precio mal calculado.
+  it('rechaza porcentajes por debajo de 5%', () => {
+    expect(() => aplicarMaterialesAdicionales(100000, 0)).toThrow(/entre 5% y 10%/i)
+    expect(() => aplicarMaterialesAdicionales(100000, -99)).toThrow(/entre 5% y 10%/i)
+    expect(() => aplicarMaterialesAdicionales(100000, 4.9)).toThrow(/entre 5% y 10%/i)
   })
-  it('clampea porcentajes sobre 10% a exactamente 10%', () => {
-    expect(aplicarMaterialesAdicionales(100000, 10.1)).toBe(10000)
-    expect(aplicarMaterialesAdicionales(100000, 100)).toBe(10000)
+  it('rechaza porcentajes sobre 10%', () => {
+    expect(() => aplicarMaterialesAdicionales(100000, 10.1)).toThrow(/entre 5% y 10%/i)
+    expect(() => aplicarMaterialesAdicionales(100000, 100)).toThrow(/entre 5% y 10%/i)
   })
   it('maneja subtotales grandes (cuadros grandes → 5%)', () => {
     expect(aplicarMaterialesAdicionales(5_000_000, 5)).toBe(250000)

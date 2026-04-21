@@ -1,5 +1,14 @@
 import { sql, relations } from 'drizzle-orm'
-import { sqliteTable, integer, text, real, index, check } from 'drizzle-orm/sqlite-core'
+import {
+  sqliteTable,
+  integer,
+  text,
+  real,
+  index,
+  uniqueIndex,
+  check,
+  type AnySQLiteColumn
+} from 'drizzle-orm/sqlite-core'
 
 // ============================================================================
 // Enums (as TS consts — enforced at CHECK-constraint level in SQLite)
@@ -7,7 +16,6 @@ import { sqliteTable, integer, text, real, index, check } from 'drizzle-orm/sqli
 
 export const TIPOS_TRABAJO = [
   'enmarcacion_estandar',
-  'enmarcacion_paspartu',
   'acolchado',
   'retablo',
   'bastidor',
@@ -50,11 +58,15 @@ export type TipoItemPedido = (typeof TIPOS_ITEM_PEDIDO)[number]
 export const TIPOS_PASPARTU = ['pintado', 'acrilico'] as const
 export type TipoPaspartu = (typeof TIPOS_PASPARTU)[number]
 
+// TIPOS_VIDRIO se mantiene como lista de referencia del seed; el pedido acepta
+// cualquier string (para soportar tipos creados por el usuario) + 'ninguno'.
 export const TIPOS_VIDRIO = ['claro', 'antirreflectivo', 'ninguno'] as const
-export type TipoVidrio = (typeof TIPOS_VIDRIO)[number]
+export type TipoVidrio = string
 
+// Tipos de vidrio precargados en el seed. El tipo es texto libre en la DB
+// — el usuario puede agregar más tipos desde la UI de Listas de precios.
 export const TIPOS_VIDRIO_LISTA = ['claro', 'antirreflectivo'] as const
-export type TipoVidrioLista = (typeof TIPOS_VIDRIO_LISTA)[number]
+export type TipoVidrioLista = string
 
 export const ESTADOS_FACTURA = ['pendiente', 'pagada', 'anulada'] as const
 export type EstadoFactura = (typeof ESTADOS_FACTURA)[number]
@@ -171,12 +183,18 @@ export const muestrasMarcos = sqliteTable(
     colillaCm: real('colilla_cm').notNull(),
     precioMetro: real('precio_metro').notNull(),
     descripcion: text('descripcion'),
+    // Cada muestra viene de un proveedor fijo (Alberto o Edimol). Nullable para
+    // que el usuario pueda crear marcos sin proveedor y no romper al borrar uno.
+    proveedorId: integer('proveedor_id').references((): AnySQLiteColumn => proveedores.id, {
+      onDelete: 'set null'
+    }),
     activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull().default(now),
     updatedAt: text('updated_at').notNull().default(now)
   },
   (t) => [
     index('idx_marcos_referencia').on(t.referencia),
+    index('idx_marcos_proveedor').on(t.proveedorId),
     check('muestras_marcos_precio_positivo', sql`${t.precioMetro} >= 0`),
     check('muestras_marcos_colilla_positiva', sql`${t.colillaCm} >= 0`)
   ]
@@ -230,7 +248,7 @@ export const preciosVidrios = sqliteTable(
   'precios_vidrios',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    tipo: text('tipo', { enum: TIPOS_VIDRIO_LISTA }).notNull(),
+    tipo: text('tipo').notNull(),
     precioM2: real('precio_m2').notNull(),
     activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull().default(now),
@@ -285,7 +303,7 @@ export const pedidos = sqliteTable(
     altoCm: real('alto_cm'),
     anchoPaspartuCm: real('ancho_paspartu_cm'),
     tipoPaspartu: text('tipo_paspartu', { enum: TIPOS_PASPARTU }),
-    tipoVidrio: text('tipo_vidrio', { enum: TIPOS_VIDRIO }),
+    tipoVidrio: text('tipo_vidrio'),
     porcentajeMateriales: real('porcentaje_materiales').notNull().default(10),
     subtotal: real('subtotal').notNull().default(0),
     totalMateriales: real('total_materiales').notNull().default(0),
@@ -369,6 +387,13 @@ export const facturas = sqliteTable(
     index('idx_facturas_cliente').on(t.clienteId),
     index('idx_facturas_pedido').on(t.pedidoId),
     index('idx_facturas_estado').on(t.estado),
+    // A9 — Protección a nivel DB contra doble facturación: solo puede haber
+    // una factura activa (no anulada) por pedido. El app-level check en
+    // crearFactura tiene TOCTOU race en multi-instancia; este índice parcial
+    // es la garantía real.
+    uniqueIndex('idx_facturas_pedido_activa')
+      .on(t.pedidoId)
+      .where(sql`estado != 'anulada'`),
     check('facturas_total_no_negativo', sql`${t.total} >= 0`)
   ]
 )
@@ -514,10 +539,17 @@ export const ventasKits = sqliteTable(
 // Grupo 6 — Proveedores e Inventario (declarado antes de finanzas por FK)
 // ============================================================================
 
+export const TIPOS_PROVEEDOR = ['marco', 'vidrio', 'paspartu_material', 'otro'] as const
+export type TipoProveedor = (typeof TIPOS_PROVEEDOR)[number]
+
 export const proveedores = sqliteTable('proveedores', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   nombre: text('nombre').notNull(),
   producto: text('producto'),
+  // Tipo categoriza al proveedor para filtrar por rubro en el cotizador
+  // (solo marcos en paso marco, solo vidrios en paso vidrio). 'otro' cubre
+  // proveedores genéricos precargados antes de la migración.
+  tipo: text('tipo', { enum: TIPOS_PROVEEDOR }).notNull().default('otro'),
   telefono: text('telefono'),
   diasPedido: text('dias_pedido'),
   formaPago: text('forma_pago'),

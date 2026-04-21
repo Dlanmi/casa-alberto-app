@@ -57,23 +57,65 @@ function validarNombreCliente(nombre: string | undefined | null): string {
   return limpio
 }
 
+// Sprint 2 · A1 — teléfono: 7–15 dígitos. Permitimos que venga con espacios,
+// guiones o paréntesis de formato local ("300 123 4567", "(601) 456-7890") y
+// los limpiamos antes de validar. El storage queda con sólo dígitos para que
+// búsquedas por teléfono sean consistentes (`like '%300123%'`).
+const TELEFONO_REGEX = /^\d{7,15}$/
+
+export function normalizarTelefono(raw: string | undefined | null): string | null {
+  const limpio = (raw ?? '').replace(/[\s()+\-.]/g, '')
+  if (!limpio) return null
+  if (!TELEFONO_REGEX.test(limpio)) {
+    throw new Error(
+      'El teléfono debe tener entre 7 y 15 dígitos (se permiten espacios o guiones como formato).'
+    )
+  }
+  return limpio
+}
+
+// Sprint 2 · A2 — cédula: 6–15 dígitos (cubre CC, TI, NIT corto, pasaportes
+// numéricos). Aceptamos puntos como separadores de miles ("1.234.567.890") y
+// los limpiamos. El UNIQUE index de la DB bloquea duplicados; aquí damos el
+// mensaje legible antes de que SQLite escupa un SQLITE_CONSTRAINT_UNIQUE.
+const CEDULA_REGEX = /^\d{6,15}$/
+
+export function normalizarCedula(raw: string | undefined | null): string | null {
+  const limpio = (raw ?? '').replace(/[\s.\-]/g, '')
+  if (!limpio) return null
+  if (!CEDULA_REGEX.test(limpio)) {
+    throw new Error('La cédula debe tener entre 6 y 15 dígitos.')
+  }
+  return limpio
+}
+
 export function crearCliente(db: DB, data: NuevoCliente) {
   const nombre = validarNombreCliente(data.nombre)
-  const result = db
-    .insert(clientes)
-    .values({
-      nombre,
-      telefono: data.telefono?.trim() || null,
-      cedula: data.cedula?.trim() || null,
-      correo: data.correo?.trim() || null,
-      direccion: data.direccion?.trim() || null,
-      notas: data.notas?.trim() || null,
-      esMenor: data.esMenor ?? false,
-      activo: true
-    })
-    .returning()
-    .get()
-  return result
+  const telefono = normalizarTelefono(data.telefono)
+  const cedula = normalizarCedula(data.cedula)
+  try {
+    return db
+      .insert(clientes)
+      .values({
+        nombre,
+        telefono,
+        cedula,
+        correo: data.correo?.trim() || null,
+        direccion: data.direccion?.trim() || null,
+        notas: data.notas?.trim() || null,
+        esMenor: data.esMenor ?? false,
+        activo: true
+      })
+      .returning()
+      .get()
+  } catch (err) {
+    // Sprint 2 · A2 — el UNIQUE index en cedula dispara SQLITE_CONSTRAINT_UNIQUE
+    // cuando intentamos duplicar. Lo convertimos en un error de negocio legible.
+    if (err instanceof Error && /UNIQUE/i.test(err.message) && /cedula/i.test(err.message)) {
+      throw new Error(`Ya hay otro cliente registrado con la cédula ${cedula}.`)
+    }
+    throw err
+  }
 }
 
 export function actualizarCliente(db: DB, id: number, data: ActualizarCliente) {
@@ -82,8 +124,21 @@ export function actualizarCliente(db: DB, id: number, data: ActualizarCliente) {
   if (data.nombre !== undefined) {
     payload.nombre = validarNombreCliente(data.nombre)
   }
-  const result = db.update(clientes).set(payload).where(eq(clientes.id, id)).returning().get()
-  return result ?? null
+  if (data.telefono !== undefined) {
+    payload.telefono = normalizarTelefono(data.telefono)
+  }
+  if (data.cedula !== undefined) {
+    payload.cedula = normalizarCedula(data.cedula)
+  }
+  try {
+    const result = db.update(clientes).set(payload).where(eq(clientes.id, id)).returning().get()
+    return result ?? null
+  } catch (err) {
+    if (err instanceof Error && /UNIQUE/i.test(err.message) && /cedula/i.test(err.message)) {
+      throw new Error(`Ya hay otro cliente registrado con la cédula ${payload.cedula}.`)
+    }
+    throw err
+  }
 }
 
 export function desactivarCliente(db: DB, id: number) {
