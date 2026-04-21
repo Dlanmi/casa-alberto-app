@@ -1,9 +1,17 @@
 import * as XLSX from '@e965/xlsx'
 import { app, dialog } from 'electron'
 import { join } from 'path'
+import * as fs from 'fs'
 import { statSync } from 'fs'
 import { eq } from 'drizzle-orm'
 import type { DB } from '../db'
+
+// `@e965/xlsx` solo auto-detecta `fs` en el build CJS (xlsx.js). Bajo ESM
+// (xlsx.mjs, lo que usa vitest y la build moderna de electron-vite), el
+// módulo arranca con `_fs` undefined y `XLSX.writeFile` lanza "cannot save
+// file". Inyectamos `fs` una vez al cargar el módulo para que readFile y
+// writeFile funcionen en cualquier runtime.
+XLSX.set_fs(fs)
 
 // Límites defensivos para importación de Excel. Un xlsx malicioso puede causar
 // DoS (RAM, CPU) o prototype pollution si se pasa sin sanear.
