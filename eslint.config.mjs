@@ -35,5 +35,19 @@ export default defineConfig(
       '@typescript-eslint/explicit-function-return-type': 'off'
     }
   },
+  // Overrides para componentes flotantes (popover de ayuda, banner del
+  // updater) que resetean su estado interno al cambiar de ruta. El patrón
+  // "setState en useEffect con [pathname] como única dep" es intencional:
+  // NO queremos `open` en deps porque causaría un loop (bug real de v1.4.0
+  // del HelpButton). Las reglas react-hooks/set-state-in-effect y
+  // exhaustive-deps flaguean este patrón genéricamente, pero aquí es
+  // correcto por diseño. Lo acotamos a estos 2 archivos específicos.
+  {
+    files: ['**/components/layout/help-button.tsx', '**/components/layout/update-notification.tsx'],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/exhaustive-deps': 'off'
+    }
+  },
   eslintConfigPrettier
 )

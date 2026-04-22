@@ -16,8 +16,9 @@ export function UpdateNotification(): React.JSX.Element | null {
 
   // Si el estado cambia (p. ej. llega una nueva descarga mientras el usuario
   // había oculto la anterior con "Después"), volvemos a mostrar el banner.
+  // react-hooks/set-state-in-effect desactivado para este archivo en
+  // eslint.config.mjs; el reset es intencional al cambiar el estado externo.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDismissed(false)
   }, [status.state])
 
