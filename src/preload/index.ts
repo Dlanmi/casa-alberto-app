@@ -24,7 +24,8 @@ import type {
   PedidoListarFiltros,
   PdfFacturaPayload,
   PrecioVidrio,
-  ResultadoCotizacion
+  ResultadoCotizacion,
+  StatsGenerales
 } from '@shared/types'
 
 const invoke = <T>(channel: string, ...args: unknown[]): Promise<T> =>
@@ -71,7 +72,8 @@ const api = {
   app: {
     // Fase B — datos de demostración opt-in
     loadDemoData: () => invoke<IpcResult<void>>('app:loadDemoData'),
-    clearDemoData: () => invoke<IpcResult<void>>('app:clearDemoData')
+    clearDemoData: () => invoke<IpcResult<void>>('app:clearDemoData'),
+    statsGenerales: () => invoke<IpcResult<StatsGenerales>>('app:statsGenerales')
   },
   backup: {
     // C-02 — gestión de respaldos de la base de datos

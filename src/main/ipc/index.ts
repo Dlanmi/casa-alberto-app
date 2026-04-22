@@ -28,6 +28,7 @@ import {
   marcarOnboardingCompleto
 } from '../db/queries/configuracion'
 import { seedDemo, clearDemoData } from '../db/seed'
+import { statsGenerales } from '../db/queries/stats'
 import { checkForUpdatesNow, getUpdateStatus, quitAndInstall } from '../updater'
 import {
   crearBackupAhora,
@@ -204,6 +205,8 @@ export function registerIpcHandlers(db: DB): void {
   // app — manejo de datos de demostración opt-in (Fase B)
   ipcMain.handle('app:loadDemoData', () => wrap(seedDemo)(db))
   ipcMain.handle('app:clearDemoData', () => wrap(clearDemoData)(db))
+  // Conteos agregados para detectar empty-states desde el HelpButton.
+  ipcMain.handle('app:statsGenerales', () => wrap(statsGenerales)(db))
 
   // backup — C-02
   ipcMain.handle('backup:crearAhora', () => wrap(crearBackupAhora)())

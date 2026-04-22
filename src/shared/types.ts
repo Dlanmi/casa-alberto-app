@@ -249,3 +249,18 @@ export type UpdateStatus =
   | { state: 'downloading'; percent: number }
   | { state: 'downloaded'; version: string }
   | { state: 'error'; message: string }
+
+// ---------------------------------------------------------------------------
+// Conteos agregados (empty-state detection en el HelpButton)
+// ---------------------------------------------------------------------------
+
+export type StatsGenerales = {
+  clientes: number
+  pedidos: number
+  facturas: number
+  proveedores: number
+  inventario: number
+  clases: number
+  estudiantes: number
+  contratos: number
+}
