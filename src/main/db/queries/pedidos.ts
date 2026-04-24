@@ -13,7 +13,7 @@ import {
   type SQL
 } from 'drizzle-orm'
 import type { DB } from '../index'
-import type { PedidoSinAbonoConSaldo } from '@shared/types'
+import type { EntregaDelDia, PedidoSinAbonoConSaldo } from '@shared/types'
 import { generarConsecutivo } from '../consecutivos'
 import {
   clientes,
@@ -369,6 +369,49 @@ export function pedidosPorRangoFecha(db: DB, desde: string, hasta: string) {
     )
     .orderBy(pedidos.fechaEntrega)
     .all()
+}
+
+// Vista aplanada de entregas en un rango (inclusivo en ambos extremos).
+// Pensada para el HelpButton de /agenda: lista accionable con nombre +
+// teléfono del cliente para poder llamar a confirmar que vienen. Excluye
+// pedidos terminales (listo/entregado/cancelado) porque esos ya no
+// requieren trabajo operativo.
+export function entregasEnRango(db: DB, desde: string, hasta: string): EntregaDelDia[] {
+  const rows = db
+    .select({
+      pedidoId: pedidos.id,
+      pedidoNumero: pedidos.numero,
+      clienteId: clientes.id,
+      clienteNombre: clientes.nombre,
+      clienteTelefono: clientes.telefono,
+      fechaEntrega: pedidos.fechaEntrega,
+      tipoTrabajo: pedidos.tipoTrabajo,
+      estado: pedidos.estado
+    })
+    .from(pedidos)
+    .innerJoin(clientes, eq(clientes.id, pedidos.clienteId))
+    .where(
+      and(
+        isNotNull(pedidos.fechaEntrega),
+        gte(pedidos.fechaEntrega, desde),
+        lte(pedidos.fechaEntrega, hasta),
+        not(inArray(pedidos.estado, ESTADOS_TERMINALES))
+      )
+    )
+    .orderBy(pedidos.fechaEntrega)
+    .all()
+  return rows.map((r) => ({
+    pedidoId: r.pedidoId,
+    pedidoNumero: r.pedidoNumero,
+    clienteId: r.clienteId,
+    clienteNombre: r.clienteNombre,
+    clienteTelefono: r.clienteTelefono,
+    // El filtro isNotNull ya garantiza que no sea null, pero el tipo
+    // inferido es string | null — aseveramos no-null.
+    fechaEntrega: r.fechaEntrega ?? '',
+    tipoTrabajo: r.tipoTrabajo,
+    estado: r.estado
+  }))
 }
 
 export function pedidosSinAbono(db: DB) {

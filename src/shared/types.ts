@@ -20,6 +20,7 @@ import type {
   EstadoFactura,
   EstadoPedido,
   MetodoPago,
+  TipoTrabajo,
   facturas,
   historialCambios,
   inventario,
@@ -279,4 +280,19 @@ export type PedidoSinAbonoConSaldo = {
   saldoPendiente: number
   diasSinAbono: number
   fechaEntrega: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Entregas del día / rango (HelpButton de /agenda — lista accionable)
+// ---------------------------------------------------------------------------
+
+export type EntregaDelDia = {
+  pedidoId: number
+  pedidoNumero: string
+  clienteId: number
+  clienteNombre: string
+  clienteTelefono: string | null
+  fechaEntrega: string
+  tipoTrabajo: TipoTrabajo
+  estado: EstadoPedido
 }

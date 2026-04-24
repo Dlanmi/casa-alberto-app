@@ -23,6 +23,7 @@ import type {
   PedidoConItems,
   PedidoListarFiltros,
   PdfFacturaPayload,
+  EntregaDelDia,
   PedidoSinAbonoConSaldo,
   PrecioVidrio,
   ResultadoCotizacion,
@@ -42,7 +43,8 @@ const api = {
     desactivar: (id: number) => invoke('clientes:desactivar', id),
     reactivar: (id: number) => invoke('clientes:reactivar', id),
     estadisticas: (id: number) => invoke('clientes:estadisticas', id),
-    upsertAcudiente: (data: unknown) => invoke('clientes:upsertAcudiente', data)
+    upsertAcudiente: (data: unknown) => invoke('clientes:upsertAcudiente', data),
+    listarAcudientes: () => invoke('clientes:listarAcudientes')
   },
   proveedores: {
     listar: (opts?: unknown) => invoke('proveedores:listar', opts),
@@ -175,6 +177,8 @@ const api = {
       ),
     sinAbonoConSaldo: (limit?: number) =>
       invoke<IpcResult<PedidoSinAbonoConSaldo[]>>('pedidos:sinAbonoConSaldo', limit),
+    entregasEnRango: (desde: string, hasta: string) =>
+      invoke<IpcResult<EntregaDelDia[]>>('pedidos:entregasEnRango', desde, hasta),
     alertas: {
       atrasados: () => invoke('pedidos:alertas:atrasados'),
       entregaProxima: (dias?: number) => invoke('pedidos:alertas:entregaProxima', dias),

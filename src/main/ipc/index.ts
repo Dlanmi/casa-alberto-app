@@ -6,6 +6,7 @@ import {
   crearCliente,
   desactivarCliente,
   estadisticasCliente,
+  listarAcudientes,
   listarClientes,
   obtenerCliente,
   obtenerClienteConAcudiente,
@@ -92,6 +93,7 @@ import {
   pedidosListosSinRecoger,
   pedidosSinAbono,
   pedidosSinAbonoConSaldo,
+  entregasEnRango,
   pedidosSinReclamar,
   reclasificarPedidos,
   resumenPedidosPorEstado
@@ -180,6 +182,7 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('clientes:reactivar', (_e, id: number) => wrap(reactivarCliente)(db, id))
   ipcMain.handle('clientes:estadisticas', (_e, id: number) => wrap(estadisticasCliente)(db, id))
   ipcMain.handle('clientes:upsertAcudiente', (_e, data) => wrap(upsertAcudiente)(db, data))
+  ipcMain.handle('clientes:listarAcudientes', () => wrap(listarAcudientes)(db))
 
   // proveedores
   ipcMain.handle('proveedores:listar', (_e, opts) => wrap(listarProveedores)(db, opts))
@@ -346,6 +349,9 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('pedidos:alertas:sinAbono', () => wrap(pedidosSinAbono)(db))
   ipcMain.handle('pedidos:sinAbonoConSaldo', (_e, limit?: number) =>
     wrap(pedidosSinAbonoConSaldo)(db, limit)
+  )
+  ipcMain.handle('pedidos:entregasEnRango', (_e, desde: string, hasta: string) =>
+    wrap(entregasEnRango)(db, desde, hasta)
   )
   ipcMain.handle('pedidos:alertas:sinReclamar', (_e, dias?: number) =>
     wrap(pedidosSinReclamar)(db, dias)

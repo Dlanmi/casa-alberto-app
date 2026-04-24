@@ -204,6 +204,15 @@ export function estadisticasCliente(db: DB, id: number) {
   }
 }
 
+// Listado completo de acudientes — usado por el popup de clase en /agenda
+// para resolver el contacto del acudiente de cada estudiante menor sin
+// hacer N round-trips. La tabla es pequeña (1 acudiente por cliente, y solo
+// clientes con menores), por lo que traerla entera es más barato que
+// consultarla una por una desde el render.
+export function listarAcudientes(db: DB) {
+  return db.select().from(acudientes).all()
+}
+
 export type NuevoAcudiente = {
   clienteId: number
   nombre: string
