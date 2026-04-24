@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { LayoutGrid, List, ClipboardList, Calculator, Archive } from 'lucide-react'
 import { OperationalBoard } from '@renderer/components/layout/page-frame'
 import { SearchInput } from '@renderer/components/ui/search-input'
@@ -41,6 +41,9 @@ const FOCUS_LABEL: Record<FocusKey, string> = {
 export default function PedidosPage(): React.JSX.Element {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const params = useParams<{ id?: string }>()
+  const routeIdRaw = params.id
+  const routeId = routeIdRaw ? Number(routeIdRaw) : null
   const { showToast } = useToast()
   const { emoji } = useEmojis()
   const [selected, setSelected] = useState<Pedido | null>(null)
@@ -71,6 +74,38 @@ export default function PedidosPage(): React.JSX.Element {
     }, 3000)
     return () => clearTimeout(timer)
   }, [highlightedId, setSearchParams])
+
+  // Deep-link a un pedido específico vía /pedidos/:id. El HelpButton (tip de
+  // deudores accionables) y el dashboard pueden llevar al usuario directo al
+  // detail del pedido sin que tenga que buscarlo en el Kanban. Si el id no
+  // existe (el pedido fue borrado o la URL está mal), mostramos toast + quit
+  // a /pedidos para que la pantalla no quede bloqueada.
+  //
+  // Dependemos SOLO de `routeId`: si incluyéramos `selectedId`, al cerrar el
+  // panel (setSelected(null)) el effect se re-dispararía en el render
+  // intermedio donde aún no se propagó el navigate — y el detail se reabría
+  // solo. Ver regresión reportada tras v1.6.0.
+  useEffect(() => {
+    if (routeId === null || Number.isNaN(routeId)) return
+    let cancelled = false
+    void (async () => {
+      const res = await window.api.pedidos.obtener(routeId)
+      if (cancelled) return
+      if (res.ok && res.data) {
+        setSelected(res.data)
+      } else {
+        showToast({
+          tone: 'warning',
+          message: `No encontramos el pedido #${routeId}. Volvemos al listado.`
+        })
+        navigate('/pedidos', { replace: true })
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId])
 
   const currentFocus = (() => {
     const focus = searchParams.get('focus')
@@ -469,7 +504,14 @@ export default function PedidosPage(): React.JSX.Element {
       {selected && (
         <PedidoDetailPanel
           pedido={selected}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            setSelected(null)
+            // Si llegamos por /pedidos/:id, al cerrar volvemos a /pedidos
+            // para que el efecto no lo reabra en el próximo render.
+            if (routeId !== null && !Number.isNaN(routeId)) {
+              navigate('/pedidos', { replace: true })
+            }
+          }}
           onChangeEstado={handleChangeEstado}
           onPedidoUpdated={async () => {
             refetch()
