@@ -264,3 +264,19 @@ export type StatsGenerales = {
   estudiantes: number
   contratos: number
 }
+
+// ---------------------------------------------------------------------------
+// Deudores accionables (HelpButton — lista de clientes con saldo pendiente
+// con datos suficientes para llamar o mandar WhatsApp sin más queries).
+// ---------------------------------------------------------------------------
+
+export type PedidoSinAbonoConSaldo = {
+  pedidoId: number
+  pedidoNumero: string
+  clienteId: number
+  clienteNombre: string
+  clienteTelefono: string | null
+  saldoPendiente: number
+  diasSinAbono: number
+  fechaEntrega: string | null
+}

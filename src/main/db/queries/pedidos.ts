@@ -13,6 +13,7 @@ import {
   type SQL
 } from 'drizzle-orm'
 import type { DB } from '../index'
+import type { PedidoSinAbonoConSaldo } from '@shared/types'
 import { generarConsecutivo } from '../consecutivos'
 import {
   clientes,
@@ -393,6 +394,59 @@ export function pedidosSinAbono(db: DB) {
     .having(sql`coalesce(sum(${pagos.monto}), 0) = 0`)
     .all()
   return rows
+}
+
+// Vista aplanada de pedidos sin abono, con saldo calculado, nombre y
+// teléfono del cliente, y días desde la emisión de la factura. Pensado
+// para el HelpButton: necesita mostrar una lista accionable ordenada
+// por antigüedad (los más viejos primero) y con todo lo que hace falta
+// para llamar o mandar WhatsApp sin consultar más endpoints.
+// El tipo vive en @shared/types para ser consumido por el renderer.
+export function pedidosSinAbonoConSaldo(db: DB, limit = 10): PedidoSinAbonoConSaldo[] {
+  // Los sin-abono puros son los que tienen `sum(pagos) = 0`. También
+  // incluimos facturas con saldo > 0 pero algún abono parcial: el
+  // HelpButton los muestra igual porque todavía hay deuda pendiente.
+  // Para lo primero (sin abono completo) el filtro ya lo hace having=0;
+  // aquí ampliamos a "con saldo > 0" para que incluya parciales.
+  const rows = db
+    .select({
+      pedidoId: pedidos.id,
+      pedidoNumero: pedidos.numero,
+      clienteId: clientes.id,
+      clienteNombre: clientes.nombre,
+      clienteTelefono: clientes.telefono,
+      total: facturas.total,
+      fechaFactura: facturas.fecha,
+      fechaEntrega: pedidos.fechaEntrega,
+      totalPagado: sql<number>`coalesce(sum(${pagos.monto}), 0)`.as('total_pagado'),
+      diasSinAbono:
+        sql<number>`cast(julianday('now') - julianday(${facturas.fecha}) as integer)`.as(
+          'dias_sin_abono'
+        )
+    })
+    .from(pedidos)
+    .innerJoin(clientes, eq(clientes.id, pedidos.clienteId))
+    .innerJoin(facturas, eq(facturas.pedidoId, pedidos.id))
+    .leftJoin(pagos, eq(pagos.facturaId, facturas.id))
+    .where(
+      and(not(inArray(pedidos.estado, ESTADOS_NO_FACTURABLES)), not(eq(facturas.estado, 'anulada')))
+    )
+    .groupBy(pedidos.id, clientes.id, facturas.id)
+    .having(sql`${facturas.total} - coalesce(sum(${pagos.monto}), 0) > 0`)
+    .orderBy(desc(sql`dias_sin_abono`))
+    .limit(limit)
+    .all()
+
+  return rows.map((r) => ({
+    pedidoId: r.pedidoId,
+    pedidoNumero: r.pedidoNumero,
+    clienteId: r.clienteId,
+    clienteNombre: r.clienteNombre,
+    clienteTelefono: r.clienteTelefono,
+    saldoPendiente: Math.max(0, Number(r.total) - Number(r.totalPagado)),
+    diasSinAbono: Math.max(0, Number(r.diasSinAbono)),
+    fechaEntrega: r.fechaEntrega
+  }))
 }
 
 export function pedidosSinReclamar(db: DB, diasLimite = 15) {

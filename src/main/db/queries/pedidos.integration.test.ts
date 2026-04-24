@@ -11,6 +11,7 @@ import { clientes, pedidos, facturas, pagos } from '../schema'
 import {
   cambiarEstadoPedido,
   obtenerSaldosPorPedido,
+  pedidosSinAbonoConSaldo,
   pedidosSinReclamar,
   reclasificarPedidos
 } from './pedidos'
@@ -302,3 +303,193 @@ describe.runIf(nativeAbiAvailable)('cambiarEstadoPedido · saldo al entregar (Sp
     expect(updated.estado).toBe('entregado')
   })
 })
+
+describe.runIf(nativeAbiAvailable)(
+  'pedidosSinAbonoConSaldo (v1.6.0 — lista accionable para HelpButton)',
+  () => {
+    let db: DB
+
+    beforeEach(() => {
+      db = createTestDb().db
+    })
+
+    function seedDeudor(args: {
+      clienteNombre: string
+      clienteTelefono: string | null
+      pedidoNumero: string
+      facturaNumero: string
+      total: number
+      pagado?: number
+      fechaFactura: string
+      fechaEntrega?: string | null
+    }): number {
+      const cliente = db
+        .insert(clientes)
+        .values({ nombre: args.clienteNombre, telefono: args.clienteTelefono })
+        .returning()
+        .get()
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: args.pedidoNumero,
+          clienteId: cliente.id,
+          tipoTrabajo: 'enmarcacion_estandar',
+          subtotal: args.total,
+          totalMateriales: 0,
+          precioTotal: args.total,
+          estado: 'confirmado',
+          tipoEntrega: 'estandar',
+          fechaIngreso: args.fechaFactura,
+          fechaEntrega: args.fechaEntrega ?? null
+        })
+        .returning()
+        .get()
+      const factura = db
+        .insert(facturas)
+        .values({
+          numero: args.facturaNumero,
+          pedidoId: pedido.id,
+          clienteId: cliente.id,
+          fecha: args.fechaFactura,
+          total: args.total,
+          estado: 'pendiente'
+        })
+        .returning()
+        .get()
+      if (args.pagado && args.pagado > 0) {
+        db.insert(pagos)
+          .values({
+            facturaId: factura.id,
+            monto: args.pagado,
+            metodoPago: 'efectivo',
+            fecha: args.fechaFactura
+          })
+          .run()
+      }
+      return pedido.id
+    }
+
+    it('devuelve lista vacía cuando no hay facturas con saldo', () => {
+      expect(pedidosSinAbonoConSaldo(db)).toEqual([])
+    })
+
+    it('calcula el saldo correcto (total - pagos)', () => {
+      seedDeudor({
+        clienteNombre: 'Ana',
+        clienteTelefono: '3001112222',
+        pedidoNumero: 'P-0001',
+        facturaNumero: 'F-0001',
+        total: 100000,
+        pagado: 30000,
+        fechaFactura: '2026-04-01'
+      })
+      const rows = pedidosSinAbonoConSaldo(db)
+      expect(rows).toHaveLength(1)
+      expect(rows[0].saldoPendiente).toBe(70000)
+      expect(rows[0].clienteNombre).toBe('Ana')
+      expect(rows[0].clienteTelefono).toBe('3001112222')
+      expect(rows[0].pedidoNumero).toBe('P-0001')
+    })
+
+    it('excluye facturas totalmente pagadas', () => {
+      seedDeudor({
+        clienteNombre: 'Carlos',
+        clienteTelefono: null,
+        pedidoNumero: 'P-0002',
+        facturaNumero: 'F-0002',
+        total: 50000,
+        pagado: 50000,
+        fechaFactura: '2026-04-01'
+      })
+      expect(pedidosSinAbonoConSaldo(db)).toEqual([])
+    })
+
+    it('excluye facturas anuladas', () => {
+      const cliente = db.insert(clientes).values({ nombre: 'María' }).returning().get()
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: 'P-0003',
+          clienteId: cliente.id,
+          tipoTrabajo: 'enmarcacion_estandar',
+          subtotal: 40000,
+          totalMateriales: 0,
+          precioTotal: 40000,
+          estado: 'confirmado',
+          tipoEntrega: 'estandar',
+          fechaIngreso: '2026-04-01'
+        })
+        .returning()
+        .get()
+      db.insert(facturas)
+        .values({
+          numero: 'F-0003',
+          pedidoId: pedido.id,
+          clienteId: cliente.id,
+          fecha: '2026-04-01',
+          total: 40000,
+          estado: 'anulada'
+        })
+        .run()
+      expect(pedidosSinAbonoConSaldo(db)).toEqual([])
+    })
+
+    it('ordena por días sin abono descendente (más viejos primero)', () => {
+      // factura más vieja (1 de enero) vs más reciente (20 de abril).
+      // julianday usa la fecha "ahora", así que el más viejo tendrá
+      // mayor diasSinAbono independientemente del reloj.
+      seedDeudor({
+        clienteNombre: 'Juan',
+        clienteTelefono: '3001111111',
+        pedidoNumero: 'P-JUAN',
+        facturaNumero: 'F-JUAN',
+        total: 50000,
+        fechaFactura: '2026-01-01'
+      })
+      seedDeudor({
+        clienteNombre: 'Luis',
+        clienteTelefono: '3002222222',
+        pedidoNumero: 'P-LUIS',
+        facturaNumero: 'F-LUIS',
+        total: 50000,
+        fechaFactura: '2026-04-20'
+      })
+      const rows = pedidosSinAbonoConSaldo(db)
+      expect(rows).toHaveLength(2)
+      // El de enero debe venir primero (más días).
+      expect(rows[0].clienteNombre).toBe('Juan')
+      expect(rows[1].clienteNombre).toBe('Luis')
+      expect(rows[0].diasSinAbono).toBeGreaterThanOrEqual(rows[1].diasSinAbono)
+    })
+
+    it('respeta el parámetro limit', () => {
+      for (let i = 1; i <= 5; i++) {
+        seedDeudor({
+          clienteNombre: `Cliente ${i}`,
+          clienteTelefono: null,
+          pedidoNumero: `P-LIM${i}`,
+          facturaNumero: `F-LIM${i}`,
+          total: 10000,
+          fechaFactura: `2026-04-0${i}`
+        })
+      }
+      const rows = pedidosSinAbonoConSaldo(db, 3)
+      expect(rows).toHaveLength(3)
+    })
+
+    it('incluye pedidos con abono parcial (saldo > 0)', () => {
+      seedDeudor({
+        clienteNombre: 'Pedro',
+        clienteTelefono: '3003333333',
+        pedidoNumero: 'P-PED',
+        facturaNumero: 'F-PED',
+        total: 100000,
+        pagado: 20000,
+        fechaFactura: '2026-04-01'
+      })
+      const rows = pedidosSinAbonoConSaldo(db)
+      expect(rows).toHaveLength(1)
+      expect(rows[0].saldoPendiente).toBe(80000)
+    })
+  }
+)
