@@ -10,12 +10,13 @@
 //     toggle en el popover y via búsqueda global.
 
 import type {
+  EntregaDelDia,
   MatrizUrgencia,
   PedidoSinAbonoConSaldo,
   Proveedor,
   StatsGenerales
 } from '@shared/types'
-import { formatCOP } from './format'
+import { formatCOP, formatFechaRelativa } from './format'
 import { mensajeRecordatorioCobro } from './whatsapp'
 
 // Acciones que puede tener un item accionable. El componente HelpButton
@@ -57,6 +58,11 @@ export type HelpContext = {
   stats?: StatsGenerales | null
   proveedores?: Proveedor[] | null
   deudores?: PedidoSinAbonoConSaldo[] | null
+  // v1.7.0 — HelpButton /agenda
+  // entregasHoy: pedidos con fechaEntrega === hoy (lista accionable)
+  // entregasSemana: lunes..domingo de la semana actual (para el resumen)
+  entregasHoy?: EntregaDelDia[] | null
+  entregasSemana?: EntregaDelDia[] | null
   hoy?: Date
 }
 
@@ -178,7 +184,7 @@ export const tipPlaybookDelDia: DynamicTipResolver = (ctx) => {
           ? 'Revisar 1 pedido atrasado'
           : `Revisar ${m.atrasados} pedidos atrasados`,
       sublabel: 'Fecha de entrega ya pasó',
-      actions: [{ kind: 'navigate', label: 'Ver lista', to: '/pedidos' }]
+      actions: [{ kind: 'navigate', label: 'Ver lista', to: '/pedidos?focus=atrasados' }]
     })
   }
 
@@ -191,7 +197,7 @@ export const tipPlaybookDelDia: DynamicTipResolver = (ctx) => {
             ? 'Terminar 1 pedido que entrega pronto'
             : `Terminar ${urgentes} pedidos que entregan pronto`,
         sublabel: 'Hoy o mañana',
-        actions: [{ kind: 'navigate', label: 'Ver lista', to: '/pedidos' }]
+        actions: [{ kind: 'navigate', label: 'Ver lista', to: '/pedidos?focus=proximos' }]
       })
     }
   }
@@ -203,7 +209,7 @@ export const tipPlaybookDelDia: DynamicTipResolver = (ctx) => {
         label:
           sinAbono === 1 ? 'Cobrar 1 pedido sin abono' : `Cobrar ${sinAbono} pedidos sin abono`,
         sublabel: 'Clientes que confirmaron pero no han pagado nada',
-        actions: [{ kind: 'navigate', label: 'Ver deudores', to: '/pedidos' }]
+        actions: [{ kind: 'navigate', label: 'Ver deudores', to: '/pedidos?focus=sin_abono' }]
       })
     }
   }
@@ -253,7 +259,9 @@ export const tipDeudoresAccionables: DynamicTipResolver = (ctx) => {
   const items: HelpActionItem[] = deudores.map((d) => {
     const saldoTxt = formatCOP(d.saldoPendiente)
     const diasTxt = d.diasSinAbono === 1 ? '1 día sin abono' : `${d.diasSinAbono} días sin abono`
-    const actions: HelpAction[] = [{ kind: 'navigate', label: 'Ver pedido', to: '/pedidos' }]
+    const actions: HelpAction[] = [
+      { kind: 'navigate', label: 'Ver pedido', to: `/pedidos/${d.pedidoId}` }
+    ]
     if (d.clienteTelefono && d.clienteTelefono.trim().length >= 7) {
       actions.unshift(
         { kind: 'call', label: 'Llamar', tel: d.clienteTelefono },
@@ -280,6 +288,133 @@ export const tipDeudoresAccionables: DynamicTipResolver = (ctx) => {
     title: deudores.length === 1 ? 'Un cliente te debe' : `${deudores.length} clientes te deben`,
     description: 'Ordenados del más antiguo al más reciente. Llama o manda WhatsApp en 1 click.',
     actionItems: items
+  }
+}
+
+// ---------------------------------------------------------------------------
+// v1.7.0 — Resolvers para /agenda: entregas de hoy + resumen de semana
+// ---------------------------------------------------------------------------
+
+// Labels cortos de tipo de trabajo para los sublabel de los items.
+// Los labels completos viven en lib/constants.ts (TIPO_TRABAJO_LABEL) pero
+// duplicarlos aquí como constante local mantiene help-content sin
+// dependencia circular con el design system.
+const TIPO_TRABAJO_SHORT: Record<string, string> = {
+  enmarcacion_estandar: 'Enmarcación',
+  acolchado: 'Acolchado',
+  adherido: 'Adherido',
+  retablo: 'Retablo',
+  bastidor: 'Bastidor',
+  tapa: 'Tapa',
+  restauracion: 'Restauración',
+  vidrio_espejo: 'Vidrio/Espejo'
+}
+
+// "Entregas de hoy" — lista accionable: cada fila tiene nombre del
+// cliente + número de pedido + tipo, y botones para llamar y abrir el
+// pedido. Si no hay teléfono, solo navegación. Retorna null cuando no
+// hay nada que entregar hoy.
+export const tipEntregasHoy: DynamicTipResolver = (ctx) => {
+  const entregas = ctx.entregasHoy ?? []
+  if (entregas.length === 0) return null
+
+  const items: HelpActionItem[] = entregas.map((e) => {
+    const actions: HelpAction[] = [
+      { kind: 'navigate', label: 'Ver pedido', to: `/pedidos/${e.pedidoId}` }
+    ]
+    if (e.clienteTelefono && e.clienteTelefono.trim().length >= 7) {
+      actions.unshift({ kind: 'call', label: 'Llamar', tel: e.clienteTelefono })
+    }
+    const tipo = TIPO_TRABAJO_SHORT[e.tipoTrabajo] ?? e.tipoTrabajo
+    return {
+      label: e.clienteNombre,
+      sublabel: `${e.pedidoNumero} · ${tipo}`,
+      actions
+    }
+  })
+
+  return {
+    title: entregas.length === 1 ? '1 entrega hoy' : `${entregas.length} entregas hoy`,
+    description: 'Llama para confirmar que vienen a recoger. Click en el pedido abre el detalle.',
+    actionItems: items
+  }
+}
+
+// "Esta semana" — resumen consolidado del bloque de trabajo: cantidad
+// de entregas, lista de días de pedido de proveedores, clases activas.
+// Sin actionItems: es info de planeación, los detalles viven en cada
+// módulo. Null si no hay nada programado.
+export const tipResumenSemana: DynamicTipResolver = (ctx) => {
+  const entregas = ctx.entregasSemana ?? []
+  const proveedores = ctx.proveedores ?? []
+
+  // Días de proveedor activos dentro de la semana (cualquier día de la
+  // semana, no solo hoy). Útil para que papá anticipe los lunes qué
+  // días de la semana va a tener que llamar a quién.
+  const diasActivos = new Set<string>()
+  for (const p of proveedores) {
+    if (!p.activo || !p.diasPedido) continue
+    p.diasPedido
+      .toLowerCase()
+      .split(',')
+      .map((d) => d.trim())
+      .forEach((d) => {
+        if (d.length > 0) diasActivos.add(d)
+      })
+  }
+
+  if (entregas.length === 0 && diasActivos.size === 0) return null
+
+  const lineas: string[] = []
+  if (entregas.length > 0) {
+    lineas.push(
+      entregas.length === 1
+        ? '• 1 entrega programada esta semana'
+        : `• ${entregas.length} entregas programadas esta semana`
+    )
+  }
+  if (diasActivos.size > 0) {
+    const lista = Array.from(diasActivos).sort().join(', ')
+    lineas.push(`• Días de pedido a proveedores: ${lista}`)
+  }
+
+  return {
+    title: 'Esta semana',
+    description: lineas.join('\n'),
+    to: '/agenda'
+  }
+}
+
+// "Próxima entrega" — cuando no hay entrega hoy pero sí en los
+// próximos días, muestra la más cercana con fecha relativa ("mañana",
+// "en 3 días"). Complementa tipEntregasHoy para que /agenda nunca se
+// sienta vacía si hay trabajo en el horizonte.
+export const tipProximaEntrega: DynamicTipResolver = (ctx) => {
+  const entregasHoy = ctx.entregasHoy ?? []
+  const entregasSemana = ctx.entregasSemana ?? []
+  if (entregasHoy.length > 0) return null
+  const hoyStr = (ctx.hoy ?? new Date()).toISOString().slice(0, 10)
+  const futuras = entregasSemana.filter((e) => e.fechaEntrega > hoyStr)
+  if (futuras.length === 0) return null
+  const primera = futuras[0] // ya viene ordenada asc por query
+
+  const actions: HelpAction[] = [
+    { kind: 'navigate', label: 'Ver pedido', to: `/pedidos/${primera.pedidoId}` }
+  ]
+  if (primera.clienteTelefono && primera.clienteTelefono.trim().length >= 7) {
+    actions.unshift({ kind: 'call', label: 'Llamar', tel: primera.clienteTelefono })
+  }
+
+  return {
+    title: `Próxima entrega: ${formatFechaRelativa(primera.fechaEntrega)}`,
+    description: `${primera.clienteNombre} · ${primera.pedidoNumero}. Prepara con tiempo.`,
+    actionItems: [
+      {
+        label: primera.clienteNombre,
+        sublabel: `${primera.pedidoNumero} · ${formatFechaRelativa(primera.fechaEntrega)}`,
+        actions
+      }
+    ]
   }
 }
 
@@ -594,6 +729,7 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
     prefix: '/agenda',
     content: {
       heading: 'Agenda de entregas',
+      dynamicTips: [tipEntregasHoy, tipProximaEntrega, tipResumenSemana, tipDiaProveedorHoy],
       tips: [
         {
           title: 'Vista semanal o diaria',
@@ -703,6 +839,7 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
       heading: '¿Qué hacer hoy?',
       dynamicTips: [
         tipPlaybookDelDia,
+        tipEntregasHoy,
         tipDeudoresAccionables,
         tipAtrasados,
         tipUrgentes,

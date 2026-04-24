@@ -32,12 +32,14 @@ type StubSpies = {
   stats: ReturnType<typeof vi.fn>
   proveedores: ReturnType<typeof vi.fn>
   deudores: ReturnType<typeof vi.fn>
+  entregas: ReturnType<typeof vi.fn>
   openExternal: ReturnType<typeof vi.fn>
 }
 
 function installApiStub(
   matriz: MatrizUrgencia = EMPTY_MATRIZ,
-  deudores: unknown[] = []
+  deudores: unknown[] = [],
+  entregas: unknown[] = []
 ): StubSpies {
   const stats = {
     clientes: 10,
@@ -54,10 +56,15 @@ function installApiStub(
     stats: vi.fn().mockResolvedValue({ ok: true, data: stats }),
     proveedores: vi.fn().mockResolvedValue({ ok: true, data: [] }),
     deudores: vi.fn().mockResolvedValue({ ok: true, data: deudores }),
+    entregas: vi.fn().mockResolvedValue({ ok: true, data: entregas }),
     openExternal: vi.fn().mockResolvedValue({ ok: true, data: undefined })
   }
   ;(window as unknown as { api: unknown }).api = {
-    pedidos: { matrizUrgencia: spies.matriz, sinAbonoConSaldo: spies.deudores },
+    pedidos: {
+      matrizUrgencia: spies.matriz,
+      sinAbonoConSaldo: spies.deudores,
+      entregasEnRango: spies.entregas
+    },
     app: { statsGenerales: spies.stats },
     proveedores: { listar: spies.proveedores },
     shell: { openExternal: spies.openExternal }
@@ -366,7 +373,8 @@ describe('HelpButton — empty-state (v1.5.0)', () => {
     ;(window as unknown as { api: unknown }).api = {
       pedidos: {
         matrizUrgencia: vi.fn().mockResolvedValue({ ok: true, data: EMPTY_MATRIZ }),
-        sinAbonoConSaldo: vi.fn().mockResolvedValue({ ok: true, data: [] })
+        sinAbonoConSaldo: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+        entregasEnRango: vi.fn().mockResolvedValue({ ok: true, data: [] })
       },
       app: {
         statsGenerales: vi.fn().mockResolvedValue({
@@ -507,5 +515,43 @@ describe('HelpButton — playbook del día (v1.6.0)', () => {
     })
 
     expect(screen.queryByText(/tu plan para hoy/i)).toBeNull()
+  })
+})
+
+describe('HelpButton — agenda con entregas (v1.7.0)', () => {
+  const entregaMock = {
+    pedidoId: 1,
+    pedidoNumero: 'P-0042',
+    clienteId: 1,
+    clienteNombre: 'María López',
+    clienteTelefono: '3104567890',
+    fechaEntrega: '2026-04-24',
+    tipoTrabajo: 'enmarcacion_estandar',
+    estado: 'confirmado'
+  }
+
+  it('muestra "N entregas hoy" en /agenda cuando hay entregas del día', async () => {
+    installApiStub(EMPTY_MATRIZ, [], [entregaMock])
+    renderAt('/agenda')
+    fireEvent.click(screen.getByRole('button', { name: /abrir ayuda/i }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText(/1 entrega hoy/i)).toBeTruthy()
+    expect(screen.getByText(/María López/)).toBeTruthy()
+    // Con teléfono debe haber botón Llamar.
+    expect(screen.getAllByRole('button', { name: /llamar/i }).length).toBeGreaterThan(0)
+  })
+
+  it('sin entregas hoy cae a tips estáticos (no muestra "N entregas hoy")', async () => {
+    installApiStub(EMPTY_MATRIZ, [], [])
+    renderAt('/agenda')
+    fireEvent.click(screen.getByRole('button', { name: /abrir ayuda/i }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText(/entregas hoy/i)).toBeNull()
   })
 })

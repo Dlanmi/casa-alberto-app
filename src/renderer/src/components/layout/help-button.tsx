@@ -29,6 +29,8 @@ import { whatsappUrl } from '@renderer/lib/whatsapp'
 import { useMatrizUrgencia } from '@renderer/hooks/use-matriz-urgencia'
 import { useStatsGenerales } from '@renderer/hooks/use-stats-generales'
 import { usePedidosSinAbono } from '@renderer/hooks/use-pedidos-sin-abono'
+import { useEntregasHoy } from '@renderer/hooks/use-entregas-hoy'
+import { useEntregasSemana } from '@renderer/hooks/use-entregas-semana'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import type { Proveedor } from '@shared/types'
 import { resetWelcomeTour } from './welcome-tour'
@@ -75,9 +77,11 @@ export function HelpButton(): React.JSX.Element {
     []
   )
   const { data: deudores, refetch: refetchDeudores } = usePedidosSinAbono(5)
+  const { data: entregasHoy, refetch: refetchEntregasHoy } = useEntregasHoy()
+  const { data: entregasSemana, refetch: refetchEntregasSemana } = useEntregasSemana()
   const ctx = useMemo<HelpContext>(
-    () => ({ matriz, stats, proveedores, deudores }),
-    [matriz, stats, proveedores, deudores]
+    () => ({ matriz, stats, proveedores, deudores, entregasHoy, entregasSemana }),
+    [matriz, stats, proveedores, deudores, entregasHoy, entregasSemana]
   )
   const dynamicTips = useMemo(() => resolveDynamicTips(content, ctx), [content, ctx])
 
@@ -90,7 +94,17 @@ export function HelpButton(): React.JSX.Element {
     refetchStats()
     refetchProveedores()
     refetchDeudores()
-  }, [open, refetchMatriz, refetchStats, refetchProveedores, refetchDeudores])
+    refetchEntregasHoy()
+    refetchEntregasSemana()
+  }, [
+    open,
+    refetchMatriz,
+    refetchStats,
+    refetchProveedores,
+    refetchDeudores,
+    refetchEntregasHoy,
+    refetchEntregasSemana
+  ])
 
   // Cierra al cambiar de ruta para no dejar tips de otra pantalla visibles.
   // Reset del popover al cambiar de ruta. Intencionalmente omitimos `open`

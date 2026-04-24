@@ -3,6 +3,7 @@
 // contextos controlados.
 import { describe, expect, it } from 'vitest'
 import type {
+  EntregaDelDia,
   MatrizUrgencia,
   PedidoSinAbonoConSaldo,
   Proveedor,
@@ -22,7 +23,10 @@ import {
   tipEmptyInventario,
   tipEmptyPedidos,
   tipEmptyProveedores,
+  tipEntregasHoy,
   tipPlaybookDelDia,
+  tipProximaEntrega,
+  tipResumenSemana,
   tipSinAbono,
   tipUrgentes
 } from './help-content'
@@ -429,6 +433,17 @@ describe('tipDeudoresAccionables', () => {
     expect(actions[0].kind).toBe('navigate')
   })
 
+  it('la acción "Ver pedido" enlaza al pedido específico (/pedidos/:id)', () => {
+    const tip = tipDeudoresAccionables({
+      deudores: [deudor({ pedidoId: 42 })]
+    })
+    const nav = tip!.actionItems![0].actions.find((a) => a.kind === 'navigate')
+    expect(nav).toBeDefined()
+    if (nav && nav.kind === 'navigate') {
+      expect(nav.to).toBe('/pedidos/42')
+    }
+  })
+
   it('ignora teléfonos demasiado cortos (<7 dígitos)', () => {
     const tip = tipDeudoresAccionables({
       deudores: [deudor({ clienteTelefono: '12345' })]
@@ -449,5 +464,188 @@ describe('tipDeudoresAccionables', () => {
       expect(wa.mensaje).toMatch(/P-JU1/)
       expect(wa.mensaje).toMatch(/70/)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// v1.7.0 — tipEntregasHoy, tipResumenSemana, tipProximaEntrega
+// ---------------------------------------------------------------------------
+
+describe('tipEntregasHoy', () => {
+  function entrega(overrides: Partial<EntregaDelDia> = {}): EntregaDelDia {
+    return {
+      pedidoId: 1,
+      pedidoNumero: 'P-0001',
+      clienteId: 1,
+      clienteNombre: 'María López',
+      clienteTelefono: '3104567890',
+      fechaEntrega: '2026-04-24',
+      tipoTrabajo: 'enmarcacion_estandar',
+      estado: 'confirmado',
+      ...overrides
+    }
+  }
+
+  it('null cuando no hay entregas', () => {
+    expect(tipEntregasHoy({ entregasHoy: [] })).toBeNull()
+    expect(tipEntregasHoy({})).toBeNull()
+    expect(tipEntregasHoy({ entregasHoy: null })).toBeNull()
+  })
+
+  it('singular con 1 entrega', () => {
+    expect(tipEntregasHoy({ entregasHoy: [entrega()] })!.title).toBe('1 entrega hoy')
+  })
+
+  it('plural con >1', () => {
+    const tip = tipEntregasHoy({
+      entregasHoy: [entrega(), entrega({ pedidoId: 2 })]
+    })
+    expect(tip!.title).toBe('2 entregas hoy')
+  })
+
+  it('cada item incluye tipo de trabajo en sublabel', () => {
+    const tip = tipEntregasHoy({
+      entregasHoy: [entrega({ tipoTrabajo: 'acolchado', pedidoNumero: 'P-ACO' })]
+    })
+    expect(tip!.actionItems![0].sublabel).toMatch(/P-ACO/)
+    expect(tip!.actionItems![0].sublabel).toMatch(/Acolchado/)
+  })
+
+  it('con teléfono: 2 acciones (llamar + ver pedido)', () => {
+    const tip = tipEntregasHoy({
+      entregasHoy: [entrega({ clienteTelefono: '3104567890' })]
+    })
+    const kinds = tip!.actionItems![0].actions.map((a) => a.kind)
+    expect(kinds).toContain('call')
+    expect(kinds).toContain('navigate')
+    expect(kinds).not.toContain('whatsapp') // no es cobro, no tiene sentido WhatsApp
+  })
+
+  it('sin teléfono: solo navigate', () => {
+    const tip = tipEntregasHoy({
+      entregasHoy: [entrega({ clienteTelefono: null })]
+    })
+    expect(tip!.actionItems![0].actions).toHaveLength(1)
+    expect(tip!.actionItems![0].actions[0].kind).toBe('navigate')
+  })
+
+  it('navigate enlaza al pedido específico', () => {
+    const tip = tipEntregasHoy({
+      entregasHoy: [entrega({ pedidoId: 99 })]
+    })
+    const nav = tip!.actionItems![0].actions.find((a) => a.kind === 'navigate')
+    if (nav && nav.kind === 'navigate') {
+      expect(nav.to).toBe('/pedidos/99')
+    }
+  })
+})
+
+describe('tipResumenSemana', () => {
+  function entrega(overrides: Partial<EntregaDelDia> = {}): EntregaDelDia {
+    return {
+      pedidoId: 1,
+      pedidoNumero: 'P-0001',
+      clienteId: 1,
+      clienteNombre: 'María',
+      clienteTelefono: null,
+      fechaEntrega: '2026-04-25',
+      tipoTrabajo: 'enmarcacion_estandar',
+      estado: 'confirmado',
+      ...overrides
+    }
+  }
+
+  it('null si no hay entregas ni proveedores con días', () => {
+    expect(tipResumenSemana({ entregasSemana: [], proveedores: [] })).toBeNull()
+  })
+
+  it('incluye cantidad de entregas', () => {
+    const tip = tipResumenSemana({
+      entregasSemana: [entrega(), entrega({ pedidoId: 2 })]
+    })
+    expect(tip!.description).toMatch(/2 entregas/)
+  })
+
+  it('incluye días de proveedor únicos ordenados', () => {
+    const prov: Proveedor = {
+      id: 1,
+      nombre: 'Alberto',
+      producto: null,
+      tipo: 'otro',
+      telefono: null,
+      diasPedido: 'lunes, miercoles',
+      formaPago: null,
+      formaEntrega: null,
+      notas: null,
+      activo: true,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
+    } as Proveedor
+    const tip = tipResumenSemana({ proveedores: [prov] })
+    expect(tip!.description).toMatch(/lunes/)
+    expect(tip!.description).toMatch(/miercoles/)
+  })
+
+  it('ignora proveedores inactivos o sin diasPedido', () => {
+    const inactivo = {
+      id: 1,
+      nombre: 'X',
+      diasPedido: 'lunes',
+      activo: false
+    } as unknown as Proveedor
+    const sinDias = {
+      id: 2,
+      nombre: 'Y',
+      diasPedido: null,
+      activo: true
+    } as unknown as Proveedor
+    expect(tipResumenSemana({ proveedores: [inactivo, sinDias] })).toBeNull()
+  })
+})
+
+describe('tipProximaEntrega', () => {
+  const HOY = new Date('2026-04-24T10:00:00')
+
+  function entrega(fecha: string): EntregaDelDia {
+    return {
+      pedidoId: 1,
+      pedidoNumero: 'P-0001',
+      clienteId: 1,
+      clienteNombre: 'María',
+      clienteTelefono: '3104567890',
+      fechaEntrega: fecha,
+      tipoTrabajo: 'enmarcacion_estandar',
+      estado: 'confirmado'
+    }
+  }
+
+  it('null si hay entregas hoy (prefiere el tip directo)', () => {
+    expect(
+      tipProximaEntrega({
+        entregasHoy: [entrega('2026-04-24')],
+        entregasSemana: [entrega('2026-04-24'), entrega('2026-04-26')],
+        hoy: HOY
+      })
+    ).toBeNull()
+  })
+
+  it('null si no hay entregas futuras', () => {
+    expect(
+      tipProximaEntrega({
+        entregasHoy: [],
+        entregasSemana: [entrega('2026-04-22')], // ya pasó
+        hoy: HOY
+      })
+    ).toBeNull()
+  })
+
+  it('muestra la primera entrega futura', () => {
+    const tip = tipProximaEntrega({
+      entregasHoy: [],
+      entregasSemana: [entrega('2026-04-26'), entrega('2026-04-28')],
+      hoy: HOY
+    })
+    expect(tip).not.toBeNull()
+    expect(tip!.title.toLowerCase()).toMatch(/pr.xima entrega/i)
   })
 })
