@@ -85,6 +85,33 @@ export function mesActualISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+// Convierte una fecha a ISO "YYYY-MM-DD" tomando la fecha LOCAL (no UTC)
+// para evitar corrimientos de zona horaria. .toISOString() aplica UTC y
+// en Colombia eso mueve la fecha un día al final del día.
+export function toFechaISO(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+// Devuelve el lunes (inicio de semana) de la semana que contiene `date`.
+// Semana en es-CO empieza en lunes. Normaliza a inicio del día (00:00)
+// para que `getTime()` sea determinístico.
+export function inicioSemana(date: Date = new Date()): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const day = d.getDay() // 0=dom, 1=lun, ..., 6=sab
+  const diff = day === 0 ? 6 : day - 1
+  d.setDate(d.getDate() - diff)
+  return d
+}
+
+// Devuelve el domingo (fin de semana) de la semana que contiene `date`.
+export function finSemana(date: Date = new Date()): Date {
+  const lunes = inicioSemana(date)
+  const domingo = new Date(lunes)
+  domingo.setDate(lunes.getDate() + 6)
+  return domingo
+}
+
 // ---- Phone ----
 
 export function formatTelefono(tel: string | null | undefined): string {
