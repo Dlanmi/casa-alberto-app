@@ -13,7 +13,13 @@ import {
   Settings
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { EstadoPedido, TipoTrabajo, EstadoFactura, MetodoPago } from '@shared/types'
+import type {
+  EstadoPedido,
+  TipoTrabajo,
+  TipoEntrega,
+  EstadoFactura,
+  MetodoPago
+} from '@shared/types'
 
 // ---- Routes ----
 
@@ -141,6 +147,12 @@ export const TIPO_TRABAJO_LABEL: Record<TipoTrabajo, string> = {
   vidrio_espejo: 'Vidrio / Espejo'
 }
 
+export const TIPO_ENTREGA_LABEL: Record<TipoEntrega, string> = {
+  estandar: 'Estándar',
+  urgente: 'Urgente',
+  sin_afan: 'Sin afán'
+}
+
 export const ESTADO_FACTURA_LABEL: Record<EstadoFactura, string> = {
   pendiente: 'Pendiente',
   pagada: 'Pagada',
@@ -172,4 +184,10 @@ export const ESTADO_FACTURA_COLOR: Record<EstadoFactura, StatusColor> = {
   pendiente: 'warning',
   pagada: 'success',
   anulada: 'error'
+}
+
+export const TIPO_ENTREGA_COLOR: Record<TipoEntrega, StatusColor> = {
+  estandar: 'neutral',
+  urgente: 'warning',
+  sin_afan: 'info'
 }
