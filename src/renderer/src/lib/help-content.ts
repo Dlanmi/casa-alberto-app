@@ -9,12 +9,38 @@
 //   - FAQ: sección con preguntas frecuentes (paso a paso) accesibles via
 //     toggle en el popover y via búsqueda global.
 
-import type { MatrizUrgencia, Proveedor, StatsGenerales } from '@shared/types'
+import type {
+  MatrizUrgencia,
+  PedidoSinAbonoConSaldo,
+  Proveedor,
+  StatsGenerales
+} from '@shared/types'
+import { formatCOP } from './format'
+import { mensajeRecordatorioCobro } from './whatsapp'
+
+// Acciones que puede tener un item accionable. El componente HelpButton
+// sabe cómo renderizar cada `kind` con su botón correspondiente.
+export type HelpAction =
+  | { kind: 'navigate'; label: string; to: string }
+  | { kind: 'call'; label: string; tel: string }
+  | { kind: 'whatsapp'; label: string; tel: string; mensaje: string }
+
+// Item accionable dentro de un tip: una línea con etiqueta + sublabel
+// opcional + 1-3 botones.
+export type HelpActionItem = {
+  label: string
+  sublabel?: string
+  actions: HelpAction[]
+}
 
 export type HelpTip = {
   title: string
   description: string
   to?: string
+  // v1.6.0 — lista opcional de items con acciones concretas (llamar,
+  // WhatsApp, ir a una ruta interna). Si está presente, el popover
+  // renderiza los items además de (o en vez de) la descripción.
+  actionItems?: HelpActionItem[]
 }
 
 // Contexto que el HelpButton pasa a los resolvers de tips dinámicos.
@@ -22,12 +48,15 @@ export type HelpTip = {
 // - stats: conteos agregados para detectar empty-states.
 // - proveedores: lista activa para resolver "hoy toca pedir a X" según el
 //   día de la semana configurado en cada uno.
+// - deudores: lista accionable de clientes con saldo pendiente, ya
+//   ordenada por días de espera desc.
 // - hoy: fecha actual inyectable para tests determinísticos; si se omite,
 //   los resolvers usan `new Date()`.
 export type HelpContext = {
   matriz?: MatrizUrgencia | null
   stats?: StatsGenerales | null
   proveedores?: Proveedor[] | null
+  deudores?: PedidoSinAbonoConSaldo[] | null
   hoy?: Date
 }
 
@@ -127,6 +156,130 @@ export const tipDiaProveedorHoy: DynamicTipResolver = (ctx) => {
         ? 'Según el día configurado en su ficha. Llama antes de que cierre.'
         : 'Varios proveedores tienen hoy como día de pedido. Revisa qué necesitas de cada uno.',
     to: '/proveedores'
+  }
+}
+
+// ---------------------------------------------------------------------------
+// "Tu plan para hoy" — tip consolidado con acciones priorizadas
+// ---------------------------------------------------------------------------
+// Combina todas las señales de urgencia (matriz + día de proveedor) en un
+// único tip con actionItems. Orden de prioridad: atrasados → urgentes →
+// sin abono → día de proveedor. Si no hay ninguna señal, retorna null
+// (no mostramos "plan vacío"; cae a los tips estáticos de la ruta).
+
+export const tipPlaybookDelDia: DynamicTipResolver = (ctx) => {
+  const items: HelpActionItem[] = []
+  const m = ctx.matriz
+
+  if (m && m.atrasados > 0) {
+    items.push({
+      label:
+        m.atrasados === 1
+          ? 'Revisar 1 pedido atrasado'
+          : `Revisar ${m.atrasados} pedidos atrasados`,
+      sublabel: 'Fecha de entrega ya pasó',
+      actions: [{ kind: 'navigate', label: 'Ver lista', to: '/pedidos' }]
+    })
+  }
+
+  if (m) {
+    const urgentes = m.urgenteSinAbono + m.urgenteConAbono
+    if (urgentes > 0) {
+      items.push({
+        label:
+          urgentes === 1
+            ? 'Terminar 1 pedido que entrega pronto'
+            : `Terminar ${urgentes} pedidos que entregan pronto`,
+        sublabel: 'Hoy o mañana',
+        actions: [{ kind: 'navigate', label: 'Ver lista', to: '/pedidos' }]
+      })
+    }
+  }
+
+  if (m) {
+    const sinAbono = m.urgenteSinAbono + m.normalSinAbono
+    if (sinAbono > 0) {
+      items.push({
+        label:
+          sinAbono === 1 ? 'Cobrar 1 pedido sin abono' : `Cobrar ${sinAbono} pedidos sin abono`,
+        sublabel: 'Clientes que confirmaron pero no han pagado nada',
+        actions: [{ kind: 'navigate', label: 'Ver deudores', to: '/pedidos' }]
+      })
+    }
+  }
+
+  // Día de proveedor — reutiliza el filtro de tipDiaProveedorHoy sin llamarlo
+  // directamente para evitar duplicación semántica en el orden de appearance.
+  const hoy = ctx.hoy ?? new Date()
+  const diaHoy = DIAS_ES[hoy.getDay()]
+  const provHoy = (ctx.proveedores ?? []).filter((p) => {
+    if (!p.activo || !p.diasPedido) return false
+    return p.diasPedido
+      .toLowerCase()
+      .split(',')
+      .map((d) => d.trim())
+      .includes(diaHoy)
+  })
+  if (provHoy.length > 0) {
+    const nombres = provHoy.map((p) => p.nombre).join(', ')
+    items.push({
+      label: provHoy.length === 1 ? `Pedir a ${nombres}` : `Pedir a: ${nombres}`,
+      sublabel: 'Hoy es su día de pedido',
+      actions: [{ kind: 'navigate', label: 'Ver proveedores', to: '/proveedores' }]
+    })
+  }
+
+  if (items.length === 0) return null
+  return {
+    title: 'Tu plan para hoy',
+    description: 'Acciones en orden de prioridad — ataca primero lo de arriba.',
+    actionItems: items
+  }
+}
+
+// ---------------------------------------------------------------------------
+// "Deudores" — lista accionable con llamar y WhatsApp
+// ---------------------------------------------------------------------------
+// Renderiza los top-N deudores con teléfono y saldo visible. Cada item
+// expone 1-3 acciones según lo que esté disponible: siempre "ver pedido"
+// (navigate); "llamar" y "WhatsApp" solo si hay teléfono. El mensaje
+// pre-escrito se arma con el helper whatsapp.ts para que el tono sea
+// consistente y respete el límite de caracteres del URL.
+
+export const tipDeudoresAccionables: DynamicTipResolver = (ctx) => {
+  const deudores = ctx.deudores ?? []
+  if (deudores.length === 0) return null
+
+  const items: HelpActionItem[] = deudores.map((d) => {
+    const saldoTxt = formatCOP(d.saldoPendiente)
+    const diasTxt = d.diasSinAbono === 1 ? '1 día sin abono' : `${d.diasSinAbono} días sin abono`
+    const actions: HelpAction[] = [{ kind: 'navigate', label: 'Ver pedido', to: '/pedidos' }]
+    if (d.clienteTelefono && d.clienteTelefono.trim().length >= 7) {
+      actions.unshift(
+        { kind: 'call', label: 'Llamar', tel: d.clienteTelefono },
+        {
+          kind: 'whatsapp',
+          label: 'WhatsApp',
+          tel: d.clienteTelefono,
+          mensaje: mensajeRecordatorioCobro({
+            nombreCliente: d.clienteNombre,
+            pedidoNumero: d.pedidoNumero,
+            saldo: d.saldoPendiente
+          })
+        }
+      )
+    }
+    return {
+      label: `${d.clienteNombre} — ${saldoTxt}`,
+      sublabel: `${d.pedidoNumero} · ${diasTxt}`,
+      actions
+    }
+  })
+
+  return {
+    title: deudores.length === 1 ? 'Un cliente te debe' : `${deudores.length} clientes te deben`,
+    description: 'Ordenados del más antiguo al más reciente. Llama o manda WhatsApp en 1 click.',
+    actionItems: items
   }
 }
 
@@ -238,7 +391,14 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
     prefix: '/pedidos',
     content: {
       heading: 'Gestionar pedidos',
-      dynamicTips: [tipEmptyPedidos, tipAtrasados, tipSinAbono, tipUrgentes],
+      dynamicTips: [
+        tipEmptyPedidos,
+        tipPlaybookDelDia,
+        tipDeudoresAccionables,
+        tipAtrasados,
+        tipSinAbono,
+        tipUrgentes
+      ],
       tips: [
         {
           title: 'Arrastra para avanzar el estado',
@@ -273,7 +433,7 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
     prefix: '/facturas',
     content: {
       heading: 'Facturas y cobros',
-      dynamicTips: [tipSinAbono],
+      dynamicTips: [tipDeudoresAccionables, tipSinAbono],
       tips: [
         {
           title: 'Registrar un abono',
@@ -307,7 +467,7 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
     prefix: '/clientes',
     content: {
       heading: 'Directorio de clientes',
-      dynamicTips: [tipEmptyClientes, tipSinAbono],
+      dynamicTips: [tipEmptyClientes, tipDeudoresAccionables, tipSinAbono],
       tips: [
         {
           title: 'Badge rojo "Con deuda"',
@@ -541,7 +701,14 @@ export const HELP_ROUTES: Array<{ prefix: string; content: HelpRouteContent }> =
     prefix: '/',
     content: {
       heading: '¿Qué hacer hoy?',
-      dynamicTips: [tipAtrasados, tipUrgentes, tipSinAbono, tipDiaProveedorHoy],
+      dynamicTips: [
+        tipPlaybookDelDia,
+        tipDeudoresAccionables,
+        tipAtrasados,
+        tipUrgentes,
+        tipSinAbono,
+        tipDiaProveedorHoy
+      ],
       tips: [
         {
           title: 'Empieza por las alertas',

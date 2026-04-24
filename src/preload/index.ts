@@ -23,6 +23,7 @@ import type {
   PedidoConItems,
   PedidoListarFiltros,
   PdfFacturaPayload,
+  PedidoSinAbonoConSaldo,
   PrecioVidrio,
   ResultadoCotizacion,
   StatsGenerales
@@ -172,6 +173,8 @@ const api = {
       invoke<IpcResult<Array<{ pedidoId: number; total: number; pagado: number; saldo: number }>>>(
         'pedidos:saldos'
       ),
+    sinAbonoConSaldo: (limit?: number) =>
+      invoke<IpcResult<PedidoSinAbonoConSaldo[]>>('pedidos:sinAbonoConSaldo', limit),
     alertas: {
       atrasados: () => invoke('pedidos:alertas:atrasados'),
       entregaProxima: (dias?: number) => invoke('pedidos:alertas:entregaProxima', dias),
@@ -256,6 +259,11 @@ const api = {
         ipcRenderer.removeAllListeners('updater:status')
       }
     }
+  },
+  shell: {
+    // Abre URLs en el browser del sistema (https, tel:, mailto:). El main
+    // valida el protocolo para evitar fugas de filesystem o ejecución.
+    openExternal: (url: string) => invoke<IpcResult<void>>('shell:openExternal', url)
   },
   excel: {
     exportarFinanzas: (mes: string) => invoke('excel:exportarFinanzas', mes),

@@ -2,13 +2,19 @@
 // Sin renderizar componentes — solo funciones puras ejercitadas con
 // contextos controlados.
 import { describe, expect, it } from 'vitest'
-import type { MatrizUrgencia, Proveedor, StatsGenerales } from '@shared/types'
+import type {
+  MatrizUrgencia,
+  PedidoSinAbonoConSaldo,
+  Proveedor,
+  StatsGenerales
+} from '@shared/types'
 import {
   getHelpForRoute,
   HELP_FAQ,
   HELP_ROUTES,
   resolveDynamicTips,
   tipAtrasados,
+  tipDeudoresAccionables,
   tipDiaProveedorHoy,
   tipEmptyClases,
   tipEmptyClientes,
@@ -16,6 +22,7 @@ import {
   tipEmptyInventario,
   tipEmptyPedidos,
   tipEmptyProveedores,
+  tipPlaybookDelDia,
   tipSinAbono,
   tipUrgentes
 } from './help-content'
@@ -284,6 +291,163 @@ describe('HELP_FAQ', () => {
       for (const step of faq.steps) {
         expect(step.length).toBeGreaterThan(0)
       }
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// v1.6.0 — tipPlaybookDelDia y tipDeudoresAccionables
+// ---------------------------------------------------------------------------
+
+describe('tipPlaybookDelDia', () => {
+  it('null si no hay ninguna señal (matriz vacía, sin proveedores hoy)', () => {
+    expect(tipPlaybookDelDia({ matriz: EMPTY_MATRIZ, proveedores: [] })).toBeNull()
+    expect(tipPlaybookDelDia({})).toBeNull()
+  })
+
+  it('incluye "atrasados" cuando matriz.atrasados > 0', () => {
+    const tip = tipPlaybookDelDia({
+      matriz: { ...EMPTY_MATRIZ, atrasados: 2 }
+    })
+    expect(tip).not.toBeNull()
+    expect(tip!.title).toBe('Tu plan para hoy')
+    expect(tip!.actionItems).toBeDefined()
+    expect(tip!.actionItems!.length).toBeGreaterThan(0)
+    expect(tip!.actionItems![0].label).toMatch(/2 pedidos atrasados/)
+  })
+
+  it('ordena prioridades: atrasados → urgentes → sin abono', () => {
+    const tip = tipPlaybookDelDia({
+      matriz: {
+        ...EMPTY_MATRIZ,
+        atrasados: 1,
+        urgenteSinAbono: 1,
+        normalSinAbono: 2
+      }
+    })
+    const labels = tip!.actionItems!.map((i) => i.label.toLowerCase())
+    expect(labels[0]).toContain('atrasado')
+    expect(labels[1]).toContain('entrega')
+    expect(labels[2]).toContain('sin abono')
+  })
+
+  it('incluye día de proveedor al final cuando aplica', () => {
+    const LUNES = new Date('2026-04-20T10:00:00')
+    const proveedor: Proveedor = {
+      id: 1,
+      nombre: 'Alberto',
+      producto: null,
+      tipo: 'otro',
+      telefono: null,
+      diasPedido: 'lunes',
+      formaPago: null,
+      formaEntrega: null,
+      notas: null,
+      activo: true,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
+    } as Proveedor
+    const tip = tipPlaybookDelDia({
+      matriz: { ...EMPTY_MATRIZ, atrasados: 1 },
+      hoy: LUNES,
+      proveedores: [proveedor]
+    })
+    const lastItem = tip!.actionItems![tip!.actionItems!.length - 1]
+    expect(lastItem.label).toMatch(/Alberto/)
+  })
+
+  it('cada item tiene al menos una acción navigate', () => {
+    const tip = tipPlaybookDelDia({
+      matriz: { ...EMPTY_MATRIZ, atrasados: 1, urgenteSinAbono: 1 }
+    })
+    for (const item of tip!.actionItems!) {
+      expect(item.actions.length).toBeGreaterThan(0)
+      expect(item.actions[0].kind).toBe('navigate')
+    }
+  })
+})
+
+describe('tipDeudoresAccionables', () => {
+  function deudor(overrides: Partial<PedidoSinAbonoConSaldo> = {}): PedidoSinAbonoConSaldo {
+    return {
+      pedidoId: 1,
+      pedidoNumero: 'P-0001',
+      clienteId: 1,
+      clienteNombre: 'María López',
+      clienteTelefono: '3104567890',
+      saldoPendiente: 50000,
+      diasSinAbono: 10,
+      fechaEntrega: null,
+      ...overrides
+    }
+  }
+
+  it('null cuando no hay deudores', () => {
+    expect(tipDeudoresAccionables({ deudores: [] })).toBeNull()
+    expect(tipDeudoresAccionables({})).toBeNull()
+    expect(tipDeudoresAccionables({ deudores: null })).toBeNull()
+  })
+
+  it('singular vs plural en el título', () => {
+    expect(tipDeudoresAccionables({ deudores: [deudor()] })!.title).toBe('Un cliente te debe')
+    expect(tipDeudoresAccionables({ deudores: [deudor(), deudor({ pedidoId: 2 })] })!.title).toBe(
+      '2 clientes te deben'
+    )
+  })
+
+  it('genera label con nombre y saldo formateado', () => {
+    const tip = tipDeudoresAccionables({ deudores: [deudor({ saldoPendiente: 85000 })] })
+    expect(tip!.actionItems![0].label).toMatch(/María López/)
+    expect(tip!.actionItems![0].label).toMatch(/85/)
+  })
+
+  it('sublabel tiene número de pedido y días', () => {
+    const tip = tipDeudoresAccionables({
+      deudores: [deudor({ pedidoNumero: 'P-XYZ', diasSinAbono: 20 })]
+    })
+    expect(tip!.actionItems![0].sublabel).toMatch(/P-XYZ/)
+    expect(tip!.actionItems![0].sublabel).toMatch(/20 días/)
+  })
+
+  it('con teléfono genera 3 acciones (WhatsApp, llamar, ver pedido)', () => {
+    const tip = tipDeudoresAccionables({
+      deudores: [deudor({ clienteTelefono: '3104567890' })]
+    })
+    const actions = tip!.actionItems![0].actions
+    expect(actions).toHaveLength(3)
+    expect(actions.map((a) => a.kind)).toContain('whatsapp')
+    expect(actions.map((a) => a.kind)).toContain('call')
+    expect(actions.map((a) => a.kind)).toContain('navigate')
+  })
+
+  it('sin teléfono solo muestra la acción navigate', () => {
+    const tip = tipDeudoresAccionables({
+      deudores: [deudor({ clienteTelefono: null })]
+    })
+    const actions = tip!.actionItems![0].actions
+    expect(actions).toHaveLength(1)
+    expect(actions[0].kind).toBe('navigate')
+  })
+
+  it('ignora teléfonos demasiado cortos (<7 dígitos)', () => {
+    const tip = tipDeudoresAccionables({
+      deudores: [deudor({ clienteTelefono: '12345' })]
+    })
+    expect(tip!.actionItems![0].actions).toHaveLength(1)
+  })
+
+  it('mensaje de WhatsApp incluye nombre y saldo', () => {
+    const tip = tipDeudoresAccionables({
+      deudores: [
+        deudor({ clienteNombre: 'Juan Pérez', pedidoNumero: 'P-JU1', saldoPendiente: 70000 })
+      ]
+    })
+    const wa = tip!.actionItems![0].actions.find((a) => a.kind === 'whatsapp')
+    expect(wa).toBeDefined()
+    if (wa && wa.kind === 'whatsapp') {
+      expect(wa.mensaje).toMatch(/Juan/)
+      expect(wa.mensaje).toMatch(/P-JU1/)
+      expect(wa.mensaje).toMatch(/70/)
     }
   })
 })

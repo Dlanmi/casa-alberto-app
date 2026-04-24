@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRight, ChevronDown, ChevronUp, HelpCircle, RotateCcw, Search, X } from 'lucide-react'
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
+  MessageCircle,
+  Phone,
+  RotateCcw,
+  Search,
+  X
+} from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
 import {
   getHelpForRoute,
@@ -8,9 +18,17 @@ import {
   HELP_ROUTES,
   resolveDynamicTips
 } from '@renderer/lib/help-content'
-import type { HelpContext, HelpFaq, HelpTip } from '@renderer/lib/help-content'
+import type {
+  HelpAction,
+  HelpActionItem,
+  HelpContext,
+  HelpFaq,
+  HelpTip
+} from '@renderer/lib/help-content'
+import { whatsappUrl } from '@renderer/lib/whatsapp'
 import { useMatrizUrgencia } from '@renderer/hooks/use-matriz-urgencia'
 import { useStatsGenerales } from '@renderer/hooks/use-stats-generales'
+import { usePedidosSinAbono } from '@renderer/hooks/use-pedidos-sin-abono'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import type { Proveedor } from '@shared/types'
 import { resetWelcomeTour } from './welcome-tour'
@@ -56,9 +74,10 @@ export function HelpButton(): React.JSX.Element {
     () => window.api.proveedores.listar({ soloActivos: true }),
     []
   )
+  const { data: deudores, refetch: refetchDeudores } = usePedidosSinAbono(5)
   const ctx = useMemo<HelpContext>(
-    () => ({ matriz, stats, proveedores }),
-    [matriz, stats, proveedores]
+    () => ({ matriz, stats, proveedores, deudores }),
+    [matriz, stats, proveedores, deudores]
   )
   const dynamicTips = useMemo(() => resolveDynamicTips(content, ctx), [content, ctx])
 
@@ -70,7 +89,8 @@ export function HelpButton(): React.JSX.Element {
     refetchMatriz()
     refetchStats()
     refetchProveedores()
-  }, [open, refetchMatriz, refetchStats, refetchProveedores])
+    refetchDeudores()
+  }, [open, refetchMatriz, refetchStats, refetchProveedores, refetchDeudores])
 
   // Cierra al cambiar de ruta para no dejar tips de otra pantalla visibles.
   // Reset del popover al cambiar de ruta. Intencionalmente omitimos `open`
@@ -140,6 +160,26 @@ export function HelpButton(): React.JSX.Element {
   function handleNavigate(to: string): void {
     navigate(to)
     setOpen(false)
+  }
+
+  // Despacha una acción de un actionItem. Siempre cierra el popover
+  // después para que papá vuelva al contexto donde estaba actuando.
+  function handleAction(action: HelpAction): void {
+    if (action.kind === 'navigate') {
+      handleNavigate(action.to)
+    } else if (action.kind === 'call') {
+      const clean = action.tel.replace(/\D/g, '')
+      if (clean.length >= 7) {
+        window.location.href = `tel:${clean}`
+      }
+      setOpen(false)
+    } else if (action.kind === 'whatsapp') {
+      const url = whatsappUrl(action.tel, action.mensaje)
+      if (url) {
+        void window.api.shell.openExternal(url)
+      }
+      setOpen(false)
+    }
   }
 
   function handleResetTour(): void {
@@ -253,6 +293,7 @@ export function HelpButton(): React.JSX.Element {
                 dynamicTips={dynamicTips}
                 staticTips={content.tips}
                 onNavigate={handleNavigate}
+                onAction={handleAction}
               />
             ) : (
               <FaqList
@@ -286,22 +327,29 @@ export function HelpButton(): React.JSX.Element {
 function TipsList({
   dynamicTips,
   staticTips,
-  onNavigate
+  onNavigate,
+  onAction
 }: {
   dynamicTips: HelpTip[]
   staticTips: HelpTip[]
   onNavigate: (to: string) => void
+  onAction: (action: HelpAction) => void
 }): React.JSX.Element {
   return (
     <ul className="space-y-4">
       {dynamicTips.map((tip, index) => (
         <li
           key={`dyn-${index}`}
-          className="rounded-md border border-accent/30 bg-accent/5 p-3 space-y-1"
+          className="rounded-md border border-accent/30 bg-accent/5 p-3 space-y-2"
         >
           <p className="text-sm font-semibold text-accent-strong">{tip.title}</p>
           <p className="text-sm leading-relaxed text-text">{tip.description}</p>
-          {tip.to && <NavButton to={tip.to} onNavigate={onNavigate} label="Ver ahora" />}
+          {tip.actionItems && tip.actionItems.length > 0 && (
+            <ActionItemsList items={tip.actionItems} onAction={onAction} />
+          )}
+          {tip.to && !tip.actionItems && (
+            <NavButton to={tip.to} onNavigate={onNavigate} label="Ver ahora" />
+          )}
         </li>
       ))}
       {staticTips.map((tip, index) => (
@@ -312,6 +360,66 @@ function TipsList({
         </li>
       ))}
     </ul>
+  )
+}
+
+// Lista de items con acciones (llamar, WhatsApp, navegar). Renderizado
+// compacto: label arriba, sublabel debajo, botones alineados a la derecha.
+function ActionItemsList({
+  items,
+  onAction
+}: {
+  items: HelpActionItem[]
+  onAction: (action: HelpAction) => void
+}): React.JSX.Element {
+  return (
+    <ul className="mt-1 space-y-2 divide-y divide-border/60">
+      {items.map((item, i) => (
+        <li key={i} className="pt-2 first:pt-0">
+          <p className="text-sm font-medium text-text">{item.label}</p>
+          {item.sublabel && <p className="mt-0.5 text-xs text-text-muted">{item.sublabel}</p>}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {item.actions.map((action, j) => (
+              <ActionButton key={j} action={action} onAction={onAction} />
+            ))}
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function ActionButton({
+  action,
+  onAction
+}: {
+  action: HelpAction
+  onAction: (action: HelpAction) => void
+}): React.JSX.Element {
+  const icon =
+    action.kind === 'call' ? (
+      <Phone size={14} />
+    ) : action.kind === 'whatsapp' ? (
+      <MessageCircle size={14} />
+    ) : (
+      <ArrowRight size={14} />
+    )
+  const ariaLabel =
+    action.kind === 'call'
+      ? `Llamar al ${action.tel}`
+      : action.kind === 'whatsapp'
+        ? `Abrir WhatsApp para ${action.tel}`
+        : action.label
+  return (
+    <button
+      type="button"
+      onClick={() => onAction(action)}
+      aria-label={ariaLabel}
+      className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-text hover:border-accent/50 hover:text-accent-strong cursor-pointer transition-colors"
+    >
+      {icon}
+      {action.label}
+    </button>
   )
 }
 

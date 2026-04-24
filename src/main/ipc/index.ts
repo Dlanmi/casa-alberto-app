@@ -91,6 +91,7 @@ import {
   pedidosPorRangoFecha,
   pedidosListosSinRecoger,
   pedidosSinAbono,
+  pedidosSinAbonoConSaldo,
   pedidosSinReclamar,
   reclasificarPedidos,
   resumenPedidosPorEstado
@@ -226,6 +227,26 @@ export function registerIpcHandlers(db: DB): void {
     }
   })
 
+  // shell — abrir URLs externas (WhatsApp, tel:, mailto:) desde el renderer.
+  // Validación estricta de protocolo: bloquea `file:`, `javascript:`, etc.
+  // para prevenir leak de filesystem o ejecución de código.
+  const PROTOCOLOS_PERMITIDOS = new Set(['https:', 'http:', 'tel:', 'mailto:'])
+  ipcMain.handle('shell:openExternal', async (_e, url: string): Promise<IpcResult<void>> => {
+    try {
+      if (typeof url !== 'string' || url.length === 0 || url.length > 2048) {
+        return { ok: false, error: 'URL inválida' }
+      }
+      const parsed = new URL(url)
+      if (!PROTOCOLOS_PERMITIDOS.has(parsed.protocol)) {
+        return { ok: false, error: `Protocolo no permitido: ${parsed.protocol}` }
+      }
+      await shell.openExternal(url)
+      return { ok: true, data: undefined }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   // cotizador — muestras de marcos CRUD
   ipcMain.handle('cotizador:listarMuestrasMarcos', () => wrap(listarMuestrasMarcos)(db))
   ipcMain.handle('cotizador:obtenerMuestraMarco', (_e, id: number) =>
@@ -323,6 +344,9 @@ export function registerIpcHandlers(db: DB): void {
     wrap(pedidosEntregaProxima)(db, dias)
   )
   ipcMain.handle('pedidos:alertas:sinAbono', () => wrap(pedidosSinAbono)(db))
+  ipcMain.handle('pedidos:sinAbonoConSaldo', (_e, limit?: number) =>
+    wrap(pedidosSinAbonoConSaldo)(db, limit)
+  )
   ipcMain.handle('pedidos:alertas:sinReclamar', (_e, dias?: number) =>
     wrap(pedidosSinReclamar)(db, dias)
   )
