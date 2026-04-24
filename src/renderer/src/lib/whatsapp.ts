@@ -53,6 +53,41 @@ export function mensajeRecordatorioCobro(args: {
 }
 
 /**
+ * Mensaje para recordar al cliente la entrega programada. Se adapta según
+ * si el pedido está atrasado (pide que pase a recoger) o en su ventana
+ * normal (aviso amable). Usado por el popup de agenda.
+ */
+export function mensajeRecordatorioEntrega(args: {
+  nombreCliente: string
+  pedidoNumero: string
+  atrasada: boolean
+}): string {
+  const nombre = args.nombreCliente.trim().split(' ')[0] || 'hola'
+  const msg = args.atrasada
+    ? `Hola ${nombre}, te saluda Casa Alberto. Quería avisarte que tu pedido ${args.pedidoNumero} ya está pendiente de entrega. ¿Cuándo podrías pasar a recogerlo? Gracias.`
+    : `Hola ${nombre}, te saluda Casa Alberto. Te recuerdo que tu pedido ${args.pedidoNumero} está programado para entrega. Cualquier cosa me escribes. Gracias.`
+  return msg.length > MAX_LEN_MENSAJE ? msg.slice(0, MAX_LEN_MENSAJE - 1) + '…' : msg
+}
+
+/**
+ * Mensaje para avisar al cliente que el pedido ya está terminado y puede
+ * pasar a recogerlo. Usado cuando el estado del pedido es `listo`; difiere
+ * de `mensajeRecordatorioEntrega` en que no habla de "programado" sino de
+ * "listo" — tono cercano, invita a pasar cuando le quede bien.
+ */
+export function mensajeListoParaRecoger(args: {
+  nombreCliente: string
+  pedidoNumero: string
+}): string {
+  const nombre = args.nombreCliente.trim().split(' ')[0] || 'hola'
+  const msg =
+    `Hola ${nombre}, te saluda Casa Alberto. ` +
+    `Tu pedido ${args.pedidoNumero} ya está listo para recoger. ` +
+    `¿Cuándo te queda bien pasar? Gracias.`
+  return msg.length > MAX_LEN_MENSAJE ? msg.slice(0, MAX_LEN_MENSAJE - 1) + '…' : msg
+}
+
+/**
  * Construye la URL https://wa.me/{tel}?text=... con el mensaje codificado.
  * Retorna null si el teléfono no es válido — el caller decide si mostrar
  * el botón o no.

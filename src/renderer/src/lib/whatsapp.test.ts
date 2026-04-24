@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { formatTelefonoInternacional, mensajeRecordatorioCobro, whatsappUrl } from './whatsapp'
+import {
+  formatTelefonoInternacional,
+  mensajeListoParaRecoger,
+  mensajeRecordatorioCobro,
+  mensajeRecordatorioEntrega,
+  whatsappUrl
+} from './whatsapp'
 
 describe('formatTelefonoInternacional', () => {
   it('devuelve null para entradas vacías o nulas', () => {
@@ -62,6 +68,72 @@ describe('mensajeRecordatorioCobro', () => {
       nombreCliente: 'Cliente con nombre muy largo compuesto de varias palabras',
       pedidoNumero: 'P-9999',
       saldo: 99999999
+    })
+    expect(msg.length).toBeLessThanOrEqual(280)
+  })
+})
+
+describe('mensajeRecordatorioEntrega', () => {
+  it('incluye primer nombre y número de pedido en tono amable cuando no está atrasada', () => {
+    const msg = mensajeRecordatorioEntrega({
+      nombreCliente: 'María López',
+      pedidoNumero: 'P-0042',
+      atrasada: false
+    })
+    expect(msg).toMatch(/Hola María/)
+    expect(msg).toMatch(/P-0042/)
+    expect(msg).toMatch(/Casa Alberto/)
+    expect(msg).toMatch(/programado/)
+    expect(msg).toMatch(/Gracias/)
+  })
+
+  it('cambia el tono cuando la entrega está atrasada (pide que pase a recoger)', () => {
+    const msg = mensajeRecordatorioEntrega({
+      nombreCliente: 'Juan',
+      pedidoNumero: 'P-0010',
+      atrasada: true
+    })
+    expect(msg).toMatch(/pendiente de entrega/)
+    expect(msg).toMatch(/recogerlo/)
+    expect(msg).not.toMatch(/programado/)
+  })
+
+  it('se mantiene debajo del límite de 280 caracteres', () => {
+    const msg = mensajeRecordatorioEntrega({
+      nombreCliente: 'Cliente con nombre muy largo compuesto',
+      pedidoNumero: 'P-9999',
+      atrasada: true
+    })
+    expect(msg.length).toBeLessThanOrEqual(280)
+  })
+})
+
+describe('mensajeListoParaRecoger', () => {
+  it('incluye primer nombre, número de pedido y tono cercano', () => {
+    const msg = mensajeListoParaRecoger({
+      nombreCliente: 'María López',
+      pedidoNumero: 'P-0042'
+    })
+    expect(msg).toMatch(/Hola María/)
+    expect(msg).toMatch(/P-0042/)
+    expect(msg).toMatch(/Casa Alberto/)
+    expect(msg).toMatch(/listo para recoger/)
+    expect(msg).toMatch(/Gracias/)
+  })
+
+  it('usa solo el primer nombre cuando el cliente tiene varios', () => {
+    const msg = mensajeListoParaRecoger({
+      nombreCliente: 'Juan Carlos Pérez',
+      pedidoNumero: 'P-0001'
+    })
+    expect(msg).toMatch(/Hola Juan,/)
+    expect(msg).not.toMatch(/Juan Carlos/)
+  })
+
+  it('se mantiene debajo del límite de 280 caracteres', () => {
+    const msg = mensajeListoParaRecoger({
+      nombreCliente: 'Cliente con nombre compuesto muy largo de varias palabras',
+      pedidoNumero: 'P-9999'
     })
     expect(msg.length).toBeLessThanOrEqual(280)
   })
