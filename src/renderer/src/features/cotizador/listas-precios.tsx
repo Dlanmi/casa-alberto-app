@@ -13,6 +13,7 @@ import { EmptyState } from '@renderer/components/ui/empty-state'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
 import { formatCOP } from '@renderer/lib/format'
+import { parseMoneyInput } from '@renderer/lib/parse-input'
 import type {
   IpcResult,
   MuestraMarco,
@@ -204,8 +205,8 @@ function TabMarcos(): React.JSX.Element {
     if (!form.referencia.trim()) errs.referencia = 'Requerido'
     const colilla = Number(form.colillaCm)
     if (!form.colillaCm || isNaN(colilla) || colilla <= 0) errs.colillaCm = 'Debe ser mayor a 0'
-    const precio = Number(form.precioMetro)
-    if (!form.precioMetro || isNaN(precio) || precio <= 0) errs.precioMetro = 'Debe ser mayor a 0'
+    const precio = parseMoneyInput(form.precioMetro)
+    if (!form.precioMetro || precio <= 0) errs.precioMetro = 'Debe ser mayor a 0'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -217,7 +218,7 @@ function TabMarcos(): React.JSX.Element {
       const payload = {
         referencia: form.referencia.trim(),
         colillaCm: Number(form.colillaCm),
-        precioMetro: Number(form.precioMetro),
+        precioMetro: parseMoneyInput(form.precioMetro),
         descripcion: form.descripcion.trim() || null,
         proveedorId: form.proveedorId ? Number(form.proveedorId) : null
       }
@@ -441,13 +442,13 @@ function MarcoModal({
           />
           <Input
             label="Precio por metro"
-            type="number"
+            type="text"
+            inputMode="decimal"
             min={0}
-            step="100"
             value={form.precioMetro}
             onChange={(e) => update('precioMetro', e.target.value)}
             error={errors.precioMetro}
-            placeholder="Ej: 12000"
+            placeholder="Ej: 12.000"
           />
         </div>
         <Input
@@ -505,9 +506,9 @@ function TabVidrios(): React.JSX.Element {
   }
 
   async function saveEdit(id: number): Promise<void> {
-    const precio = Number(editValue)
-    if (isNaN(precio) || precio < 0) {
-      setEditError('Debe ser un numero valido >= 0')
+    const precio = parseMoneyInput(editValue)
+    if (!editValue.trim() || precio <= 0) {
+      setEditError('Debe ser un numero valido mayor a 0')
       return
     }
     setSaving(true)
@@ -533,8 +534,8 @@ function TabVidrios(): React.JSX.Element {
   async function handleCreate(e: React.FormEvent): Promise<void> {
     e.preventDefault()
     const tipo = newTipo.trim()
-    const precio = Number(newPrecio)
-    if (!tipo || isNaN(precio) || precio < 0) return
+    const precio = parseMoneyInput(newPrecio)
+    if (!tipo || precio <= 0) return
     setCreating(true)
     try {
       const res = (await window.api.cotizador.crearPrecioVidrio(
@@ -619,9 +620,9 @@ function TabVidrios(): React.JSX.Element {
                   {editingId === vidrio.id ? (
                     <div className="flex items-center gap-2 max-w-50">
                       <Input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         min={0}
-                        step="100"
                         value={editValue}
                         onChange={(e) => {
                           setEditValue(e.target.value)
@@ -675,12 +676,12 @@ function TabVidrios(): React.JSX.Element {
             />
             <Input
               label="Precio por m2"
-              type="number"
+              type="text"
+              inputMode="decimal"
               min="0"
-              step="100"
               value={newPrecio}
               onChange={(e) => setNewPrecio(e.target.value)}
-              placeholder="Ej: 120000"
+              placeholder="Ej: 120.000"
               required
             />
             <div className="flex gap-3 pt-2">
@@ -763,9 +764,9 @@ function TabMedidaPrecio({
   }
 
   async function saveEdit(id: number): Promise<void> {
-    const precio = Number(editValue)
-    if (isNaN(precio) || precio < 0) {
-      setEditError('Debe ser un número válido')
+    const precio = parseMoneyInput(editValue)
+    if (!editValue.trim() || precio <= 0) {
+      setEditError('Debe ser un número válido mayor a 0')
       return
     }
     setSavingEdit(true)
@@ -789,7 +790,7 @@ function TabMedidaPrecio({
     e.preventDefault()
     const ancho = parseFloat(form.anchoCm)
     const alto = parseFloat(form.altoCm)
-    const precio = parseFloat(form.precio)
+    const precio = parseMoneyInput(form.precio)
     if (!ancho || !alto || !precio) return
     setSaving(true)
     try {
@@ -862,9 +863,9 @@ function TabMedidaPrecio({
                     <div className="flex justify-end">
                       <div className="max-w-40">
                         <Input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           min={0}
-                          step="100"
                           value={editValue}
                           onChange={(e) => {
                             setEditValue(e.target.value)
@@ -947,11 +948,12 @@ function TabMedidaPrecio({
             </div>
             <Input
               label="Precio"
-              type="number"
+              type="text"
+              inputMode="decimal"
               min="1"
               value={form.precio}
               onChange={(e) => setForm((p) => ({ ...p, precio: e.target.value }))}
-              placeholder="Ej: 25000"
+              placeholder="Ej: 25.000"
               required
             />
             <div className="flex gap-3 pt-2">

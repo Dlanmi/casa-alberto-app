@@ -49,7 +49,7 @@ type ClienteEstadisticas = {
   ultimoPedido: { numero: string; fechaIngreso: string; estado: string } | null
 }
 
-// Sprint 2 · A1/A2/A4 — espejo de `normalizarTelefono`/`normalizarCedula`/
+// Espejo en el renderer de `normalizarTelefono`/`normalizarCedula`/
 // `validarNombreCliente` en src/main/db/queries/clientes.ts. Mantenemos las
 // reglas aquí para dar feedback inline antes del submit (el backend sigue
 // siendo la fuente de verdad; si divergen, el backend gana).
@@ -124,7 +124,7 @@ export default function ClientesPage(): React.JSX.Element {
     refetch
   } = useIpc<Cliente[]>(() => window.api.clientes.listar({ soloActivos: true }), [])
 
-  // Fase 3 — conjunto de IDs de clientes con pedidos sin abono. Permite
+  // Conjunto de IDs de clientes con pedidos sin abono. Permite
   // mostrar un badge rojo junto al nombre para que papá ubique sin abrir
   // cuál cliente tiene pagos pendientes. El endpoint ya está en la app y
   // lo usa la sidebar para el contador de pedidos.

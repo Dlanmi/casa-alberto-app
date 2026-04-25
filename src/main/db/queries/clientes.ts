@@ -57,9 +57,9 @@ function validarNombreCliente(nombre: string | undefined | null): string {
   return limpio
 }
 
-// Sprint 2 · A1 — teléfono: 7–15 dígitos. Permitimos que venga con espacios,
-// guiones o paréntesis de formato local ("300 123 4567", "(601) 456-7890") y
-// los limpiamos antes de validar. El storage queda con sólo dígitos para que
+// Teléfono: 7–15 dígitos. Permitimos que venga con espacios, guiones o
+// paréntesis de formato local ("300 123 4567", "(601) 456-7890") y los
+// limpiamos antes de validar. El storage queda con solo dígitos para que
 // búsquedas por teléfono sean consistentes (`like '%300123%'`).
 const TELEFONO_REGEX = /^\d{7,15}$/
 
@@ -74,9 +74,9 @@ export function normalizarTelefono(raw: string | undefined | null): string | nul
   return limpio
 }
 
-// Sprint 2 · A2 — cédula: 6–15 dígitos (cubre CC, TI, NIT corto, pasaportes
-// numéricos). Aceptamos puntos como separadores de miles ("1.234.567.890") y
-// los limpiamos. El UNIQUE index de la DB bloquea duplicados; aquí damos el
+// Cédula: 6–15 dígitos (cubre CC, TI, NIT corto, pasaportes numéricos).
+// Aceptamos puntos como separadores de miles ("1.234.567.890") y los
+// limpiamos. El UNIQUE index de la DB bloquea duplicados; aquí damos el
 // mensaje legible antes de que SQLite escupa un SQLITE_CONSTRAINT_UNIQUE.
 const CEDULA_REGEX = /^\d{6,15}$/
 
@@ -109,8 +109,8 @@ export function crearCliente(db: DB, data: NuevoCliente) {
       .returning()
       .get()
   } catch (err) {
-    // Sprint 2 · A2 — el UNIQUE index en cedula dispara SQLITE_CONSTRAINT_UNIQUE
-    // cuando intentamos duplicar. Lo convertimos en un error de negocio legible.
+    // El UNIQUE index en `cedula` dispara SQLITE_CONSTRAINT_UNIQUE cuando
+    // intentamos duplicar. Lo convertimos en un error de negocio legible.
     if (err instanceof Error && /UNIQUE/i.test(err.message) && /cedula/i.test(err.message)) {
       throw new Error(`Ya hay otro cliente registrado con la cédula ${cedula}.`)
     }

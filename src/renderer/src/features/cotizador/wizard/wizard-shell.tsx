@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Check, Cloud, CloudOff, Loader2, X } from 'lucid
 import { cn } from '@renderer/lib/cn'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
-import { useDecimalInput } from '@renderer/lib/use-decimal-input'
+import { useMoneyInput } from '@renderer/lib/use-money-input'
 import { redondearPrecioFinal } from '@shared/redondeo'
 import { StepDots } from '@renderer/components/ui/step-dots'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
@@ -670,7 +670,7 @@ function StepVidrioEspejo({
   const precioUnitario = data.tipoVidrioEspejo === 'claro' ? precioClaro : precioAntirreflectivo
   const precioCalculado = Math.round(areaM2 * precioUnitario)
 
-  const instalacion = useDecimalInput(data.precioInstalacion, (n) =>
+  const instalacion = useMoneyInput(data.precioInstalacion, (n) =>
     onChange({ precioInstalacion: n })
   )
 
@@ -751,12 +751,12 @@ function StepVidrioEspejo({
 
         <Input
           label="Costo de instalación"
-          type="number"
+          type="text"
           inputMode="decimal"
-          pattern="[0-9]*[.,]?[0-9]*"
           min={0}
           value={instalacion.raw}
           onChange={instalacion.handleChange}
+          onBlur={instalacion.handleBlur}
           placeholder="0 si no aplica"
           hint="Incluye transporte y mano de obra de instalación a domicilio."
         />
@@ -776,7 +776,7 @@ function StepPrecioManual({
 }): React.JSX.Element {
   const esRestauracion = tipoTrabajo === 'restauracion'
 
-  const precio = useDecimalInput(data.precioManual, (n) => onChange({ precioManual: n }), {
+  const precio = useMoneyInput(data.precioManual, (n) => onChange({ precioManual: n }), {
     min: 0
   })
 
@@ -803,11 +803,13 @@ function StepPrecioManual({
         />
         <Input
           label="Precio total"
-          type="number"
+          type="text"
+          inputMode="decimal"
           min={1}
           value={precio.raw}
           onChange={precio.handleChange}
-          placeholder="Ej: 150000"
+          onBlur={precio.handleBlur}
+          placeholder="Ej: 150.000"
           hint="Este es el precio final que se cobrará al cliente."
         />
       </div>

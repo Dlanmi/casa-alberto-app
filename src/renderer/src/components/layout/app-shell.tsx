@@ -19,9 +19,9 @@ export function AppShell(): React.JSX.Element {
 
   const navigate = useNavigate()
 
-  // C-01 — Gate de primera ejecución. Si el flag aún no está en '1', el
-  // dueño todavía no ha completado el wizard. Redirigimos desde el shell
-  // (cualquier ruta protegida). Usamos useIpc para loading/error consistente.
+  // Gate de primera ejecución. Si el flag aún no está en '1', el dueño
+  // todavía no ha completado el wizard. Redirigimos desde el shell para
+  // capturar cualquier ruta protegida. useIpc da loading/error consistente.
   const { data: completed, loading: flagLoading } = useIpc<boolean>(
     () => window.api.configuracion.isOnboardingCompleted(),
     []
@@ -64,9 +64,9 @@ export function AppShell(): React.JSX.Element {
 
   useKeyboard(shortcuts)
 
-  // C-01 — mientras consultamos el flag, mostramos loader. Si ya sabemos
-  // que el usuario NO completó onboarding, el effect de arriba ya nos va a
-  // redirigir — mostramos loader mientras tanto para evitar flash del shell.
+  // Mientras consultamos el flag de onboarding, mostramos loader. Si ya
+  // sabemos que el usuario NO completó el wizard, el effect de arriba va a
+  // redirigir — el loader evita el flash del shell antes del redirect.
   if (flagLoading || completed === false) {
     return <PageLoader />
   }

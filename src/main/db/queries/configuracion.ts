@@ -45,15 +45,15 @@ export function listarConfiguracion(db: DB) {
 }
 
 /**
- * C-01 — Lee el flag de onboarding. Retorna `true` solo si el usuario
- * completó explícitamente el wizard de primera ejecución.
+ * Lee el flag de onboarding. Retorna `true` solo si el usuario completó
+ * explícitamente el wizard de primera ejecución.
  */
 export function isOnboardingCompleted(db: DB): boolean {
   return getConfig(db, 'onboarding_completed') === '1'
 }
 
 /**
- * C-01 — Marca el wizard de onboarding como completado. Se llama cuando el
+ * Marca el wizard de onboarding como completado. Se llama cuando el
  * usuario termina la última pantalla del wizard.
  */
 export function marcarOnboardingCompleto(db: DB): void {

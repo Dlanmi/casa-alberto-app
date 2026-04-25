@@ -151,3 +151,62 @@ describe('generarFacturaPDF — validación del numero (A7)', () => {
     expect(() => generarFacturaPDF(fakeDb, data)).toThrow(/Número de factura.*inválido/i)
   })
 })
+
+// El tipo PdfFormato es solo TypeScript; en runtime un renderer comprometido
+// podría enviar `formato: "../../evil"` que se interpolaría en el path
+// `factura-{numero}-{formato}.pdf` y, tras path.normalize, escaparía del
+// directorio de PDFs. Validamos contra el whitelist exportado.
+describe('generarFacturaPDF — validación del formato (defense in depth)', () => {
+  beforeEach(() => {
+    mocks.userDataDir = mkdtempSync(join(tmpdir(), 'casa-alberto-pdf-formato-'))
+  })
+
+  afterEach(() => {
+    rmSync(mocks.userDataDir, { recursive: true, force: true })
+  })
+
+  function makeData(formato: unknown): Parameters<typeof generarFacturaPDF>[1] {
+    return {
+      numero: 'F-0001',
+      fecha: '2026-04-16',
+      clienteNombre: 'Cliente',
+      items: [],
+      subtotal: 0,
+      totalMateriales: 0,
+      total: 0,
+      pagos: [],
+      saldo: 0,
+      formato: formato as never
+    }
+  }
+
+  it('rechaza formato con path traversal', () => {
+    const fakeDb = {} as never
+    expect(() => generarFacturaPDF(fakeDb, makeData('../../evil'))).toThrow(
+      /Formato de PDF inválido/i
+    )
+  })
+
+  it('rechaza formato fuera del whitelist', () => {
+    const fakeDb = {} as never
+    expect(() => generarFacturaPDF(fakeDb, makeData('xml'))).toThrow(/Formato de PDF inválido/i)
+    expect(() => generarFacturaPDF(fakeDb, makeData(''))).toThrow(/Formato de PDF inválido/i)
+  })
+
+  it('acepta los tres formatos válidos sin lanzar (omitido vale como carta)', () => {
+    const fakeDb = {} as never
+    // No nos interesa el render real; capturamos solo que no se rechace en
+    // la guarda de validación. pdfkit sí intentará renderizar, pero la
+    // validación se ejecuta antes de tocar el filesystem.
+    expect(() => generarFacturaPDF(fakeDb, makeData(undefined))).not.toThrow(
+      /Formato de PDF inválido/i
+    )
+    expect(() => generarFacturaPDF(fakeDb, makeData('carta'))).not.toThrow(
+      /Formato de PDF inválido/i
+    )
+    expect(() => generarFacturaPDF(fakeDb, makeData('a4'))).not.toThrow(/Formato de PDF inválido/i)
+    expect(() => generarFacturaPDF(fakeDb, makeData('termico80'))).not.toThrow(
+      /Formato de PDF inválido/i
+    )
+  })
+})

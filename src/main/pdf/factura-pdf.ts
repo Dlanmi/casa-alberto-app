@@ -5,7 +5,7 @@ import { createWriteStream, existsSync, mkdirSync, lstatSync, realpathSync } fro
 import type { DB } from '../db'
 import { configuracion } from '../db/schema'
 import { eq } from 'drizzle-orm'
-import type { PdfFormato } from '../../shared/types'
+import { PDF_FORMATOS, type PdfFormato } from '../../shared/types'
 
 // Formato de consecutivo esperado: prefijo de 1-3 mayúsculas + guión + 1-8 dígitos.
 // Defensa en profundidad ante un consecutivo corrupto que pudiera escapar del
@@ -306,6 +306,14 @@ export function generarFacturaPDF(db: DB, data: FacturaData): string {
   // construir el path del archivo.
   if (!NUMERO_REGEX.test(data.numero)) {
     throw new Error('Número de factura con formato inválido')
+  }
+
+  // El tipo `PdfFormato` solo existe en TypeScript — en runtime, un renderer
+  // comprometido o una llamada IPC malformada podría enviar `formato:
+  // "../../evil"` que termina interpolado en el path del archivo. Aceptamos
+  // únicamente los valores conocidos del whitelist exportado.
+  if (data.formato !== undefined && !PDF_FORMATOS.includes(data.formato)) {
+    throw new Error('Formato de PDF inválido')
   }
 
   // Sanear strings de dominio que terminan en el PDF. Protege contra:

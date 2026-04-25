@@ -35,9 +35,9 @@ import { useIpc } from '@renderer/hooks/use-ipc'
 import type { Proveedor } from '@shared/types'
 import { resetWelcomeTour } from './welcome-tour'
 
-// Fase 4 — Botón flotante de ayuda contextual. v1.5.0 hace el popover
-// verdaderamente inteligente: tips dinámicos con datos reales (matriz de
-// urgencia), toggle Tips/FAQ, y búsqueda global que incluye ambos.
+// Botón flotante de ayuda contextual. El popover combina tips estáticos
+// + tips dinámicos con datos reales (matriz de urgencia, deudores,
+// entregas de la semana), toggle Tips/FAQ y búsqueda global.
 const MIN_QUERY_LEN = 2
 const MAX_SEARCH_RESULTS = 10
 
@@ -106,12 +106,11 @@ export function HelpButton(): React.JSX.Element {
     refetchEntregasSemana
   ])
 
-  // Cierra al cambiar de ruta para no dejar tips de otra pantalla visibles.
-  // Reset del popover al cambiar de ruta. Intencionalmente omitimos `open`
-  // y los setters de deps: no queremos re-disparar al abrir (eso causó el
-  // bug de v1.4.0 donde el popover se cerraba solo al abrirse). Las reglas
-  // react-hooks/set-state-in-effect y exhaustive-deps están apagadas para
-  // este archivo en eslint.config.mjs.
+  // Cierra el popover al cambiar de ruta para no dejar tips de otra
+  // pantalla visibles. Intencionalmente omitimos `open` y los setters de
+  // las deps: si los incluyéramos, el popover se re-cerraría al abrirse
+  // (regresión histórica). Las reglas react-hooks/set-state-in-effect y
+  // exhaustive-deps están apagadas para este archivo en eslint.config.mjs.
   useEffect(() => {
     setOpen(false)
     setQuery('')

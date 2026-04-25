@@ -16,8 +16,8 @@ const VISIBLE_ESTADOS: EstadoPedido[] = [
 type KanbanBoardProps = {
   pedidos: Pedido[]
   clienteMap: Map<number, string>
-  // Fase 2 — map global pedidoId → saldo pendiente. El board lo pasa a las
-  // columnas para que cada card pueda mostrar el badge rojo "Debe $XXX".
+  // Map global pedidoId → saldo pendiente. El board lo pasa a las columnas
+  // para que cada card pueda mostrar el badge rojo "Debe $XXX".
   saldosMap?: Map<number, number>
   onCardClick: (pedido: Pedido) => void
   onChangeEstado: (pedidoId: number, nuevoEstado: EstadoPedido) => void
@@ -66,12 +66,12 @@ export function KanbanBoard({
     }
   }, [updateScrollState])
 
-  // Fase 10 — si el usuario suelta la tarjeta fuera del browser (ej. sobre
-  // otra app) el dragend de la tarjeta se dispara pero a veces el setState
+  // Si el usuario suelta la tarjeta fuera del browser (ej. sobre otra
+  // app) el dragend de la tarjeta se dispara pero a veces el setState
   // queda pendiente. Un listener global a nivel window garantiza que
-  // SIEMPRE se limpie el dragState aunque la interacción termine fuera de
-  // nuestro árbol de eventos — previene el "estado fantasma" que dejaba
-  // columnas atenuadas cuando ya no había drag activo.
+  // SIEMPRE se limpie el dragState aunque la interacción termine fuera
+  // del árbol de eventos — previene el "estado fantasma" que dejaba
+  // columnas atenuadas sin drag activo.
   useEffect(() => {
     const handleWindowDragEnd = (): void => setDragState(null)
     window.addEventListener('dragend', handleWindowDragEnd)

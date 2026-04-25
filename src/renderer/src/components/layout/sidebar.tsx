@@ -8,9 +8,9 @@ import { Tooltip } from '@renderer/components/ui/tooltip'
 import type { BackupInfo, IpcResult, Pedido } from '@shared/types'
 import { useUpdateStatus } from '@renderer/hooks/use-update-status'
 
-// C-02 — formateo relativo humano para "hace X horas" del indicador de
-// backup. `now` se pasa explícitamente para que la función sea pura (no
-// llama `Date.now()` durante render, React 19 lo marca como impure).
+// Formateo relativo humano para "hace X horas" del indicador de backup.
+// `now` se pasa explícitamente para que la función sea pura (no llama
+// `Date.now()` durante render, React 19 lo marca como impure).
 function formatRelative(iso: string, now: number): string {
   const diffMs = now - new Date(iso).getTime()
   const diffH = Math.floor(diffMs / (1000 * 60 * 60))
@@ -39,7 +39,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
     '/facturas': 0,
     '/inventario': 0
   })
-  // C-02 — último backup, para mostrar "Respaldo: hace Xh" en la parte
+  // Último backup conocido, para mostrar "Respaldo: hace Xh" en la parte
   // inferior del sidebar. Se refresca cada 5 minutos.
   const [ultimoBackup, setUltimoBackup] = useState<BackupInfo | null>(null)
   const { status: updateStatus } = useUpdateStatus()
@@ -87,10 +87,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
     }
   }, [])
 
-  // C-02 — estado visual del indicador calculado cuando cambia el ultimo
-  // backup o cuando tickRef se actualiza cada 5 minutos. Usamos useMemo
-  // con una dependencia adicional `now` que se refresca periodicamente para
-  // evitar llamar Date.now() durante el render (React 19 lo marca impure).
+  // Estado visual del indicador de backup, recalculado cuando cambia el
+  // último respaldo o cuando `now` se refresca cada 5 minutos. Usar
+  // `useMemo` con dependencia explícita `now` evita llamar `Date.now()`
+  // durante el render (React 19 lo marca como impuro).
   const [now, setNow] = useState<number>(() => Date.now())
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 5 * 60 * 1000)
@@ -171,7 +171,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
                         'w-full flex items-center gap-3 rounded-md transition-colors cursor-pointer relative',
                         collapsed ? 'h-11 justify-center' : 'h-11 px-3',
                         active
-                          ? 'font-semibold text-text before:absolute before:left-0 before:top-1/4 before:h-1/2 before:w-[3px] before:rounded-r-full before:bg-accent'
+                          ? 'font-semibold text-text before:absolute before:left-0 before:top-1/4 before:h-1/2 before:w-0.75 before:rounded-r-full before:bg-accent'
                           : 'text-text-muted hover:bg-surface-muted hover:text-text'
                       )}
                       aria-current={active ? 'page' : undefined}
@@ -219,7 +219,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
       </nav>
 
       <div className="border-t border-border p-2 shrink-0 space-y-1">
-        {/* C-02 — Indicador de último respaldo. Clic abre Configuración. */}
+        {/* Indicador de último respaldo. Clic abre Configuración. */}
         {collapsed ? (
           <Tooltip content={backupTooltipLabel} position="right">
             <button

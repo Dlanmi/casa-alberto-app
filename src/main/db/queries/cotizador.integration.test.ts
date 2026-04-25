@@ -164,10 +164,10 @@ describe.runIf(nativeAbiAvailable)('cotizarAcolchado + marco opcional (Fase 2 §
 })
 
 // ---------------------------------------------------------------------------
-// Sprint 2 · A3 — validación de precios positivos antes del insert.
-// Antes las funciones `crear*` aceptaban silenciosamente precios negativos
-// o cero; bastaba con un IPC mal armado para envenenar la lista de precios.
-// Estos tests garantizan que cada entry point falla con mensaje legible.
+// Validación de precios positivos antes del insert. Sin estos guards, las
+// funciones `crear*` aceptaban silenciosamente precios negativos o cero —
+// bastaba un IPC mal armado para envenenar la lista de precios. Estos
+// tests garantizan que cada entry point falla con mensaje legible.
 // ---------------------------------------------------------------------------
 
 describe.runIf(nativeAbiAvailable)('cotizador · A3 validar precios > 0', () => {

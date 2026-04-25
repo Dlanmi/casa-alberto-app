@@ -225,11 +225,12 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
   })
 })
 
-// Sprint 1 · A9 — UNIQUE partial index en facturas(pedido_id) WHERE estado != 'anulada'.
-// Los tests de `facturas guards` pre-insertan una factura con número hardcodeado
-// antes de cada test, lo que colisionaría con el consecutivo auto-generado. Por
-// eso esta suite vive fuera con su propio beforeEach limpio.
-describe.runIf(nativeAbiAvailable)('facturas UNIQUE partial index (Sprint 1 A9)', () => {
+// UNIQUE partial index en facturas(pedido_id) WHERE estado != 'anulada'
+// (ver SPEC-007 en docs/BUSINESS_RULES.md). Los tests de `facturas guards`
+// pre-insertan una factura con número hardcodeado antes de cada test, lo
+// que colisionaría con el consecutivo auto-generado. Por eso esta suite
+// vive fuera con su propio beforeEach limpio.
+describe.runIf(nativeAbiAvailable)('facturas UNIQUE partial index (SPEC-007)', () => {
   let db: DB
 
   beforeEach(() => {

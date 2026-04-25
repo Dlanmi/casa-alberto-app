@@ -25,6 +25,8 @@ import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
 import { formatCOP, hoyISO } from '@renderer/lib/format'
+import { parseMoneyInput } from '@renderer/lib/parse-input'
+import { saldoStatus } from '@renderer/lib/saldo-display'
 import { cn } from '@renderer/lib/cn'
 import { METODO_PAGO_LABEL } from '@renderer/lib/constants'
 import type { Factura, Pago, Cliente, Pedido, MetodoPago, IpcResult } from '@shared/types'
@@ -394,38 +396,41 @@ function FacturaDetailModal({
             </div>
           </div>
 
-          <GuidanceHint
-            tone={(saldo ?? 0) > 0 ? 'warning' : 'success'}
-            title={(saldo ?? 0) > 0 ? 'Aún hay saldo pendiente' : 'Factura al día'}
-            message={
-              (saldo ?? 0) > 0
-                ? 'Registra aquí el próximo abono para que el saldo y el estado se actualicen automáticamente.'
-                : 'Esta factura ya no requiere más pagos. Puedes generar el PDF o revisar su historial.'
-            }
-          />
+          {(() => {
+            const status = saldoStatus(saldo ?? 0)
+            return (
+              <>
+                <GuidanceHint tone={status.tone} title={status.title} message={status.message} />
 
-          <div className="bg-surface-muted rounded-lg p-4 space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-text-muted">Total</span>
-              <PrecioDisplay value={factura.total} size="md" />
-            </div>
-            <PagoBar total={factura.total} pagado={totalPagado} showLabels />
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-text-muted">Saldo pendiente</span>
-              <span
-                className={cn(
-                  'text-sm font-semibold tabular-nums',
-                  (saldo ?? 0) > 0 ? 'text-warning-strong' : 'text-success-strong'
-                )}
-              >
-                {formatCOP(saldo ?? 0)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-text-muted">Estado</span>
-              <EstadoFacturaBadge estado={estadoActual} />
-            </div>
-          </div>
+                <div className="bg-surface-muted rounded-lg p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-text-muted">Total</span>
+                    <PrecioDisplay value={factura.total} size="md" />
+                  </div>
+                  <PagoBar total={factura.total} pagado={totalPagado} showLabels />
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-text-muted">{status.label}</span>
+                    <span
+                      className={cn(
+                        'text-sm font-semibold tabular-nums',
+                        status.tone === 'warning'
+                          ? 'text-warning-strong'
+                          : status.tone === 'info'
+                            ? 'text-info-strong'
+                            : 'text-success-strong'
+                      )}
+                    >
+                      {formatCOP(status.displayValue)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-text-muted">Estado</span>
+                    <EstadoFacturaBadge estado={estadoActual} />
+                  </div>
+                </div>
+              </>
+            )
+          })()}
 
           <div className="flex gap-3">
             {estadoActual === 'pendiente' && (saldo ?? 0) > 0 && (
@@ -575,7 +580,7 @@ function NuevaFacturaModal({
         total: selectedPedido.precioTotal
       })) as IpcResult<Factura>
       if (result.ok) {
-        const montoAbono = Number(abono)
+        const montoAbono = parseMoneyInput(abono, { max: selectedPedido.precioTotal })
         if (montoAbono > 0) {
           await window.api.facturas.registrarPago({
             facturaId: result.data.id,
@@ -697,15 +702,16 @@ function NuevaFacturaModal({
             </div>
             <Input
               label="Abono inicial (opcional)"
-              type="number"
+              type="text"
+              inputMode="decimal"
               min={0}
               max={selectedPedido.precioTotal}
               value={abono}
               onChange={(e) => setAbono(e.target.value)}
-              placeholder="Ej: 50000"
+              placeholder="Ej: 50.000"
               hint={
-                Number(abono) > 0
-                  ? `Saldo pendiente: ${formatCOP(selectedPedido.precioTotal - Number(abono))}`
+                parseMoneyInput(abono) > 0
+                  ? `Saldo pendiente: ${formatCOP(selectedPedido.precioTotal - parseMoneyInput(abono, { max: selectedPedido.precioTotal }))}`
                   : 'Si el cliente paga un adelanto, ingrésalo aquí.'
               }
             />
@@ -783,8 +789,8 @@ function PaymentForm({
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault()
-    const monto = parseFloat(form.monto)
-    if (isNaN(monto) || monto <= 0) return
+    const monto = parseMoneyInput(form.monto)
+    if (monto <= 0) return
     try {
       await execute({
         facturaId,
@@ -809,10 +815,10 @@ function PaymentForm({
   // usuario con opciones que excederían el total.
   const quickAmounts = [50000, 100000, 200000].filter((amount) => amount <= saldo)
   const handleQuickAmount = (amount: number): void => {
-    setForm((p) => ({ ...p, monto: String(amount) }))
+    setForm((p) => ({ ...p, monto: formatCOP(amount) }))
   }
   const setFullSaldo = (): void => {
-    setForm((p) => ({ ...p, monto: String(saldo) }))
+    setForm((p) => ({ ...p, monto: formatCOP(saldo) }))
   }
 
   return (
@@ -842,11 +848,13 @@ function PaymentForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input
           label="Monto"
-          type="number"
+          type="text"
+          inputMode="decimal"
           min="1"
           max={saldo}
           value={form.monto}
           onChange={(e) => setForm((p) => ({ ...p, monto: e.target.value }))}
+          placeholder="Ej: 50.000"
           hint={`Saldo: ${formatCOP(saldo)}`}
         />
         <Select

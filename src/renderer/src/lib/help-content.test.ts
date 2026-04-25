@@ -648,4 +648,17 @@ describe('tipProximaEntrega', () => {
     expect(tip).not.toBeNull()
     expect(tip!.title.toLowerCase()).toMatch(/pr.xima entrega/i)
   })
+
+  // Regresión: si hoy se calcula con toISOString (UTC), después de ~7pm
+  // en Colombia (UTC-5) salta al día siguiente y la entrega de mañana
+  // queda excluida del filtro futuras. Debe usarse toFechaISO local.
+  it('incluye la entrega de mañana aunque sea de noche en Colombia (UTC-5)', () => {
+    const nocheColombia = new Date('2026-04-24T23:30:00-05:00') // 4:30 UTC del 25
+    const tip = tipProximaEntrega({
+      entregasHoy: [],
+      entregasSemana: [entrega('2026-04-25')], // mañana local
+      hoy: nocheColombia
+    })
+    expect(tip).not.toBeNull()
+  })
 })

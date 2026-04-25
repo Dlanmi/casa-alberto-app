@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { restaurarDesdeBackup } from './backup'
+import { restaurarDesdeBackup, restaurarDesdeBackupPorId } from './backup'
 
 let tmpRoot = ''
 let backupsDir = ''
@@ -78,5 +78,69 @@ describe('restaurarDesdeBackup — path traversal guard (A1)', () => {
     const linkPath = join(backupsDir, 'link-a-externo.db')
     symlinkSync(externo, linkPath)
     expect(() => restaurarDesdeBackup(linkPath)).toThrow(/inválida/i)
+  })
+})
+
+// `restaurarDesdeBackupPorId` reemplaza la entrada legacy por path. El
+// renderer envía un identificador (nombre de archivo) en lugar de una
+// ruta absoluta del filesystem. Esto reduce la superficie de ataque del
+// IPC: aunque el guard subyacente sigue activo, rechazar payloads con
+// separadores antes de tocar el FS da errores más claros y evita trabajo
+// innecesario.
+describe('restaurarDesdeBackupPorId — guard sintáctico del identificador', () => {
+  beforeEach(() => {
+    tmpRoot = mkdtempSync(join(tmpdir(), 'casa-alberto-test-id-'))
+    backupsDir = join(tmpRoot, 'backups')
+    dbPath = join(tmpRoot, 'casa-alberto.db')
+    writeFileSync(dbPath, 'dummy-db')
+    mkdirSync(backupsDir, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(tmpRoot, { recursive: true, force: true })
+  })
+
+  it('rechaza identificador vacío', () => {
+    expect(() => restaurarDesdeBackupPorId('')).toThrow(/Identificador.*inválido/i)
+  })
+
+  it('rechaza identificador con barra (path traversal directo)', () => {
+    expect(() => restaurarDesdeBackupPorId('subdir/backup.db')).toThrow(/Identificador.*inválido/i)
+  })
+
+  it('rechaza identificador con barra invertida (Windows path traversal)', () => {
+    expect(() => restaurarDesdeBackupPorId('..\\..\\evil.db')).toThrow(/Identificador.*inválido/i)
+  })
+
+  it('rechaza identificadores especiales "." y ".."', () => {
+    expect(() => restaurarDesdeBackupPorId('.')).toThrow(/Identificador.*inválido/i)
+    expect(() => restaurarDesdeBackupPorId('..')).toThrow(/Identificador.*inválido/i)
+  })
+
+  it('rechaza identificador absurdamente largo (límite 256)', () => {
+    const id = 'a'.repeat(257) + '.db'
+    expect(() => restaurarDesdeBackupPorId(id)).toThrow(/Identificador.*inválido/i)
+  })
+
+  it('rechaza tipos no string', () => {
+    expect(() => restaurarDesdeBackupPorId(null as unknown as string)).toThrow(
+      /Identificador.*inválido/i
+    )
+    expect(() => restaurarDesdeBackupPorId(undefined as unknown as string)).toThrow(
+      /Identificador.*inválido/i
+    )
+    expect(() => restaurarDesdeBackupPorId(123 as unknown as string)).toThrow(
+      /Identificador.*inválido/i
+    )
+  })
+
+  it('acepta un nombre válido y delega al guard de path', () => {
+    const validBackup = join(backupsDir, 'casa-alberto-2026-04-25.db')
+    writeFileSync(validBackup, 'valid')
+    expect(() => restaurarDesdeBackupPorId('casa-alberto-2026-04-25.db')).not.toThrow()
+  })
+
+  it('un nombre que no existe en el directorio retorna "no encontrado"', () => {
+    expect(() => restaurarDesdeBackupPorId('no-existe.db')).toThrow(/no encontrado/i)
   })
 })

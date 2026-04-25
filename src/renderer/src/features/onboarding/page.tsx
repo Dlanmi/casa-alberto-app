@@ -88,27 +88,43 @@ export default function OnboardingPage(): React.JSX.Element {
   }, [])
 
   // Wrapper de setStep que además persiste el nuevo valor en config. Acepta
-  // value o updater igual que useState. La escritura es fire-and-forget: si
-  // falla, loguea pero no bloquea la navegación del wizard.
-  const setStep = useCallback((next: number | ((prev: number) => number)) => {
-    setStepState((prev) => {
-      const resolved = typeof next === 'function' ? next(prev) : next
-      window.api.configuracion
-        .guardar({
-          clave: STEP_CONFIG_KEY,
-          valor: String(resolved),
-          descripcion: 'Paso actual del wizard de onboarding'
-        })
-        .catch((err) => console.error('[onboarding] no se pudo persistir el step', err))
-      return resolved
-    })
-  }, [])
+  // value o updater igual que useState. Avance optimista — el state cambia
+  // de inmediato para que la UI responda. Si la persistencia falla, revertimos
+  // al paso anterior y avisamos: si papá cerrara la app sin saberlo, volvería
+  // a un paso desactualizado al reabrir.
+  const setStep = useCallback(
+    (next: number | ((prev: number) => number)) => {
+      setStepState((prev) => {
+        const resolved = typeof next === 'function' ? next(prev) : next
+        window.api.configuracion
+          .guardar({
+            clave: STEP_CONFIG_KEY,
+            valor: String(resolved),
+            descripcion: 'Paso actual del wizard de onboarding'
+          })
+          .catch((err) => {
+            console.error('[onboarding] no se pudo persistir el step', err)
+            showToast({
+              tone: 'error',
+              title: 'No se pudo guardar el paso',
+              message: 'Reintenta. Si cierras la app ahora podrías volver a un paso anterior.'
+            })
+            // Revertir solo si nadie ha cambiado el step después de nuestro
+            // intento — si papá ya avanzó a otra parte, respetamos su acción.
+            setStepState((current) => (current === resolved ? prev : current))
+          })
+        return resolved
+      })
+    },
+    [showToast]
+  )
 
   /**
-   * C-01 — Marca el flag y navega a la ruta destino. Se llama tanto al
-   * terminar el wizard normal como al elegir "Explorar con datos de ejemplo".
-   * También limpia el paso persistido para que si el flag se resetea (soporte,
-   * reinstalación) el wizard arranque limpio en "Bienvenida".
+   * Marca el flag de onboarding completado y navega a la ruta destino. Se
+   * llama tanto al terminar el wizard normal como al elegir "Explorar con
+   * datos de ejemplo". Limpia el paso persistido para que si el flag se
+   * resetea (soporte, reinstalación) el wizard arranque limpio en
+   * "Bienvenida".
    */
   async function completarOnboarding(destino: string): Promise<void> {
     try {

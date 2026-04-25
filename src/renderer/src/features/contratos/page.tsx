@@ -32,6 +32,7 @@ import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { DirectoryScreen, MetricCard, PageSection } from '@renderer/components/layout/page-frame'
 import { cn } from '@renderer/lib/cn'
 import { formatCOP, hoyISO } from '@renderer/lib/format'
+import { parseMoneyInput } from '@renderer/lib/parse-input'
 import type {
   Contrato,
   ContratoItem,
@@ -664,7 +665,7 @@ function CreateContratoModal({
   const parsedItems = useMemo(() => {
     return items.map((it) => {
       const cantidad = parseFloat(it.cantidad) || 0
-      const valorUnitario = parseFloat(it.valorUnitario) || 0
+      const valorUnitario = parseMoneyInput(it.valorUnitario)
       return {
         descripcion: it.descripcion,
         cantidad,
@@ -789,12 +790,11 @@ function CreateContratoModal({
                   </div>
                   <div className="w-24 sm:w-32 shrink-0">
                     <input
-                      type="number"
-                      placeholder="Valor unit."
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Ej: 50.000"
                       value={item.valorUnitario}
                       onChange={(e) => updateItem(item.key, 'valorUnitario', e.target.value)}
-                      min="0"
-                      step="100"
                       className={cn(
                         'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text tabular-nums',
                         'placeholder:text-text-soft',

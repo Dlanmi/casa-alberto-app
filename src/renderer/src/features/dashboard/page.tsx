@@ -18,7 +18,7 @@ import { Badge } from '@renderer/components/ui/badge'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { useIpc } from '@renderer/hooks/use-ipc'
-import { mesActualISO, hoyISO, formatCOP } from '@renderer/lib/format'
+import { mesActualISO, hoyISO, formatCOP, diaSemana } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/cn'
 import { normalizePedidoAlertas, type PedidoAlertaRow } from '@renderer/lib/pedidos-alertas'
 import { UrgencyMatrix } from './urgency-matrix'
@@ -120,7 +120,7 @@ export default function DashboardPage(): React.JSX.Element {
   ).length
 
   const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
-  const hoyDia = diasSemana[new Date().getDay()] ?? ''
+  const hoyDia = diasSemana[diaSemana()] ?? ''
   const proveedoresHoy = (proveedores ?? []).filter((proveedor) =>
     normalizeText(proveedor.diasPedido).includes(normalizeText(hoyDia))
   )

@@ -252,7 +252,8 @@ describe('aplicarMaterialesAdicionales', () => {
     expect(aplicarMaterialesAdicionales(100000, 5)).toBe(5000)
   })
 
-  // Sprint 2 · A5 — el clamp silencioso fue reemplazado por error explícito.
+  // El clamp silencioso del porcentaje 5-10% fue reemplazado por error
+  // explícito; este test verifica la regresión.
   // Antes la función aceptaba 1% o 20% y los ajustaba a 5% / 10% sin avisar,
   // lo que tapaba bugs en la UI o payloads IPC mal formados. Ahora debe lanzar.
   it('rechaza porcentaje por debajo del mínimo (5%)', () => {

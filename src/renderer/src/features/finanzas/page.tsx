@@ -33,6 +33,7 @@ import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { EMOJI_CATEGORIA_FINANZAS } from '@renderer/lib/emojis'
 import { useEmojis } from '@renderer/contexts/emojis-context'
 import { formatCOP, mesActualISO, hoyISO } from '@renderer/lib/format'
+import { parseMoneyInput } from '@renderer/lib/parse-input'
 import { cn } from '@renderer/lib/cn'
 import type {
   MovimientoFinanciero,
@@ -532,8 +533,8 @@ function MovimientoModal({
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault()
-    const monto = parseFloat(form.monto)
-    if (isNaN(monto) || monto <= 0) return
+    const monto = parseMoneyInput(form.monto)
+    if (monto <= 0) return
     try {
       await execute({
         tipo: form.tipo,
@@ -580,11 +581,12 @@ function MovimientoModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Monto"
-            type="number"
+            type="text"
+            inputMode="decimal"
             min="1"
             value={form.monto}
             onChange={(e) => setForm((p) => ({ ...p, monto: e.target.value }))}
-            placeholder="0"
+            placeholder="Ej: 50.000"
           />
           <Input
             label="Fecha"

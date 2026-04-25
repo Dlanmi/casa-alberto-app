@@ -21,6 +21,7 @@ import { useToast } from '@renderer/contexts/toast-context'
 import { useEmojis } from '@renderer/contexts/emojis-context'
 import { EMOJI_TOAST } from '@renderer/lib/emojis'
 import { formatCOP, hoyISO } from '@renderer/lib/format'
+import { useMoneyInput } from '@renderer/lib/use-money-input'
 import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { conceptoIcon, TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
 import { cn } from '@renderer/lib/cn'
@@ -64,7 +65,10 @@ export function StepResumen({
 
   // Campos adicionales para el pedido
   const [conAbono, setConAbono] = useState(true)
-  const [abono, setAbono] = useState<string>('')
+  const [abonoNum, setAbonoNum] = useState<number>(0)
+  const abonoInput = useMoneyInput(abonoNum, setAbonoNum, {
+    max: cotizacion?.precioTotal
+  })
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo')
   const [notas, setNotas] = useState('')
   // Fecha de entrega: siempre hoy + 8 días por defecto (se ajusta en Pedidos si es urgente)
@@ -99,7 +103,7 @@ export function StepResumen({
       }
 
       const pedido = result.data
-      const abonoNum = conAbono ? parseFloat(abono) || 0 : 0
+      const abonoEfectivo = conAbono ? abonoNum : 0
 
       // 2. Confirmar pedido + crear factura SIEMPRE que el dueño finalice el
       //    wizard — el cliente ya comprometió el trabajo aunque aún no pague.
@@ -115,11 +119,11 @@ export function StepResumen({
         total: cotizacion.precioTotal
       })) as IpcResult<Factura>
 
-      if (factRes.ok && abonoNum > 0) {
+      if (factRes.ok && abonoEfectivo > 0) {
         // Registrar el abono como primer pago si lo hay
         await window.api.facturas.registrarPago({
           facturaId: factRes.data.id,
-          monto: abonoNum,
+          monto: abonoEfectivo,
           fecha: hoyISO(),
           metodoPago
         })
@@ -129,8 +133,8 @@ export function StepResumen({
         tone: 'success',
         title: `${emoji(EMOJI_TOAST.pedido_creado)} Pedido ${pedido.numero} creado`.trim(),
         message:
-          abonoNum > 0
-            ? `Abono de ${formatCOP(abonoNum)} registrado. Factura generada.`
+          abonoEfectivo > 0
+            ? `Abono de ${formatCOP(abonoEfectivo)} registrado. Factura generada.`
             : `Factura pendiente por ${formatCOP(cotizacion.precioTotal)}.`
       })
       // Navegación automática al listado de pedidos con el nuevo pedido
@@ -161,11 +165,11 @@ export function StepResumen({
   }
 
   const TipoIcon = TIPO_TRABAJO_ICON[tipoTrabajo] ?? FileText
-  const abonoNum = conAbono ? parseFloat(abono) || 0 : 0
-  const saldo = cotizacion.precioTotal - abonoNum
+  const abonoVisible = conAbono ? abonoNum : 0
+  const saldo = cotizacion.precioTotal - abonoVisible
   const porcentajePagado =
     cotizacion.precioTotal > 0
-      ? Math.min(100, Math.round((abonoNum / cotizacion.precioTotal) * 100))
+      ? Math.min(100, Math.round((abonoVisible / cotizacion.precioTotal) * 100))
       : 0
 
   return (
@@ -301,7 +305,7 @@ export function StepResumen({
                   <button
                     onClick={() => {
                       setConAbono(false)
-                      setAbono('')
+                      setAbonoNum(0)
                     }}
                     className="text-xs text-text-muted hover:text-text cursor-pointer"
                   >
@@ -312,12 +316,14 @@ export function StepResumen({
                   {/* Monto */}
                   <Input
                     label="Monto del abono"
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     min={0}
                     max={cotizacion.precioTotal}
-                    placeholder="Ej: 50000"
-                    value={abono}
-                    onChange={(e) => setAbono(e.target.value)}
+                    placeholder="Ej: 50.000"
+                    value={abonoInput.raw}
+                    onChange={abonoInput.handleChange}
+                    onBlur={abonoInput.handleBlur}
                   />
 
                   {/* Método de pago */}
@@ -350,7 +356,7 @@ export function StepResumen({
                   </div>
 
                   {/* Desglose visual del abono */}
-                  {abonoNum > 0 && (
+                  {abonoVisible > 0 && (
                     <div className="space-y-3 rounded-lg bg-surface-muted p-4">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-text-muted">Total del trabajo</span>
@@ -364,7 +370,7 @@ export function StepResumen({
                           Abono
                         </span>
                         <span className="font-semibold tabular-nums text-success-strong">
-                          − {formatCOP(abonoNum)}
+                          − {formatCOP(abonoVisible)}
                         </span>
                       </div>
                       <div className="border-t border-border pt-2">

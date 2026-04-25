@@ -93,7 +93,7 @@ describe.runIf(nativeAbiAvailable)(
   }
 )
 
-// Fase 14 — Regresión del bug de fan-out en obtenerSaldosPorPedido.
+// Regresión del bug de fan-out en obtenerSaldosPorPedido.
 // La versión anterior hacía un triple LEFT JOIN (pedidos × facturas × pagos)
 // y usaba `sum(distinct facturas.total)` + `sum(pagos.monto)`. El producto
 // cartesiano multiplicaba los pagos por la cantidad de facturas, y el
@@ -172,13 +172,13 @@ describe.runIf(nativeAbiAvailable)('obtenerSaldosPorPedido (Fase 14 — fan-out 
     expect(s).toEqual({ pedidoId: id, total: 100000, pagado: 40000, saldo: 60000 })
   })
 
-  // Sprint 1 · A9 — El escenario "dos facturas activas para el mismo pedido"
-  // ahora es imposible gracias al UNIQUE partial index. El test anterior que
-  // insertaba F-010 y F-011 activas al mismo pedido ya no puede correr: el
-  // INSERT de la segunda falla con el constraint. El fan-out por N facturas
-  // activas sigue cubierto indirectamente por `mezcla anulada + activa` (ver
-  // abajo) y por el UNIQUE index del schema. El fan-out por N pagos en UNA
-  // factura está cubierto por `varios pagos en una factura`.
+  // El escenario "dos facturas activas para el mismo pedido" es imposible
+  // gracias al UNIQUE partial index (SPEC-007). El test anterior que
+  // insertaba F-010 y F-011 activas al mismo pedido ya no corre: el
+  // INSERT de la segunda falla con el constraint. El fan-out por N
+  // facturas activas sigue cubierto indirectamente por `mezcla anulada +
+  // activa` (ver abajo). El fan-out por N pagos en UNA factura está
+  // cubierto por `varios pagos en una factura`.
 
   it('mezcla anulada + activa → solo cuenta la activa (total y pagos)', () => {
     const id = insertPedido('P-0004', 0)
@@ -207,12 +207,25 @@ describe.runIf(nativeAbiAvailable)('obtenerSaldosPorPedido (Fase 14 — fan-out 
     const saldos = obtenerSaldosPorPedido(db)
     expect(saldos).toHaveLength(3)
   })
+
+  // v1.7.1 — el clamp `Math.max(0, total - pagado)` enmascaraba sobrepagos.
+  // Cuando el cliente paga más de lo facturado (sobrepago directo) o cuando
+  // hay devoluciones que exceden los pagos restantes, el saldo real es
+  // negativo y representa un crédito a favor del cliente. La UI lo muestra
+  // como "Crédito del cliente"; el backend debe exponerlo, no clampearlo.
+  it('expone saldo negativo cuando hay crédito a favor del cliente', () => {
+    const id = insertPedido('P-0009', 0)
+    const fid = insertFactura(id, 'F-040', 50000)
+    insertPago(fid, 60000) // sobrepago de 10000
+    const s = obtenerSaldosPorPedido(db).find((x) => x.pedidoId === id)
+    expect(s).toEqual({ pedidoId: id, total: 50000, pagado: 60000, saldo: -10000 })
+  })
 })
 
-// Sprint 1 · C2 — backend bloquea "entregado" si hay saldo pendiente.
-// El bloqueo visual del panel es UX, pero un IPC directo podía saltarlo.
-// Esta suite documenta la garantía a nivel backend.
-describe.runIf(nativeAbiAvailable)('cambiarEstadoPedido · saldo al entregar (Sprint 1 C2)', () => {
+// Backend bloquea la transición a "entregado" si la factura tiene saldo
+// pendiente. El bloqueo visual del panel es UX, pero un IPC directo podía
+// saltarlo. Esta suite documenta la garantía a nivel backend.
+describe.runIf(nativeAbiAvailable)('cambiarEstadoPedido · saldo al entregar', () => {
   let db: DB
   let clienteId: number
 

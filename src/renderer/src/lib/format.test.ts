@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  diaSemana,
   formatCOP,
   formatTelefono,
   iniciales,
@@ -7,6 +8,28 @@ import {
   formatFechaLarga,
   formatFechaCorta
 } from './format'
+
+describe('diaSemana', () => {
+  it('retorna 0=domingo, 1=lunes, ..., 6=sabado', () => {
+    // 2026-04-19 es domingo (verificado vs Intl)
+    expect(diaSemana(new Date(2026, 3, 19))).toBe(0)
+    expect(diaSemana(new Date(2026, 3, 20))).toBe(1) // lunes
+    expect(diaSemana(new Date(2026, 3, 25))).toBe(6) // sábado
+  })
+
+  it('normaliza la hora antes de calcular el día', () => {
+    // 23:55 local del 24-abr no debe saltar al día siguiente — getDay()
+    // directo es defensivo en CO, pero el helper garantiza el patrón.
+    const tarde = new Date(2026, 3, 24, 23, 55)
+    expect(diaSemana(tarde)).toBe(5) // viernes
+  })
+
+  it('default usa la fecha actual sin argumentos', () => {
+    expect(typeof diaSemana()).toBe('number')
+    expect(diaSemana()).toBeGreaterThanOrEqual(0)
+    expect(diaSemana()).toBeLessThanOrEqual(6)
+  })
+})
 
 describe('formatCOP', () => {
   it('formatea pesos colombianos sin decimales', () => {

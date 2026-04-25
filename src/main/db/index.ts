@@ -10,8 +10,8 @@ let _db: BetterSQLite3Database<typeof schema> | null = null
 
 export type DB = BetterSQLite3Database<typeof schema>
 
-// C-03 — Rutas públicas para que el módulo de backup (Fase C) escriba y
-// lea los respaldos en el mismo directorio que usa el recovery.
+// Rutas públicas para que el módulo de backup escriba y lea los respaldos
+// en el mismo directorio que usa el recovery.
 export function getDbPath(): string {
   return join(app.getPath('userData'), 'casa-alberto.db')
 }

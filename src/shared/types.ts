@@ -150,7 +150,7 @@ export type PedidoListarFiltros = {
   estado?: EstadoPedido
   clienteId?: number
   limit?: number
-  // Fase 6 — cuando true incluye pedidos entregados hace más de 30 días.
+  // Cuando true incluye pedidos entregados hace más de 30 días.
   // Por defecto se esconden para no inflar el kanban con histórico.
   incluirArchivados?: boolean
 }
@@ -223,7 +223,7 @@ export type {
   ResultadoCotizacion
 }
 
-// C-02 — Información de un archivo de backup expuesta al renderer.
+// Información de un archivo de backup expuesta al renderer.
 export type BackupInfo = {
   path: string
   nombre: string

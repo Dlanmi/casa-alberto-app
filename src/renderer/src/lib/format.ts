@@ -92,6 +92,17 @@ export function toFechaISO(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+// Devuelve el día de la semana (0=dom, 1=lun, ..., 6=sab) normalizando la
+// hora a las 00:00 local. `new Date().getDay()` directo es frágil cerca de
+// medianoche o si el sistema cambia de zona horaria — el set explícito
+// garantiza que siempre interpretamos el día calendario local. Usar este
+// helper en lugar de `getDay()` directo en código de UI.
+export function diaSemana(date: Date = new Date()): number {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d.getDay()
+}
+
 // Devuelve el lunes (inicio de semana) de la semana que contiene `date`.
 // Semana en es-CO empieza en lunes. Normaliza a inicio del día (00:00)
 // para que `getTime()` sea determinístico.

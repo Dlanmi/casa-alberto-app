@@ -37,7 +37,7 @@ const ESTADOS_NO_FACTURABLES: EstadoPedido[] = ['cotizado', 'cancelado']
 const ESTADOS_ACTIVOS_MATRIZ: EstadoPedido[] = ['confirmado', 'en_proceso', 'listo']
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// Fase 6 — días tras los cuales un pedido entregado se considera archivado y
+// Días tras los cuales un pedido entregado se considera archivado y
 // se oculta por defecto del Kanban. Papá puede ver el histórico con el toggle.
 // Declarado antes de listarPedidos para evitar TDZ si la función se llamara
 // durante inicialización del módulo (ej. desde un test helper o seed eager).
@@ -120,7 +120,7 @@ export function listarPedidos(
     estado?: EstadoPedido
     clienteId?: number
     limit?: number
-    // Fase 6 — por defecto excluye pedidos entregados hace más de DIAS_ARCHIVADO
+    // Por defecto excluye pedidos entregados hace más de DIAS_ARCHIVADO
     // días para no inflar el Kanban con histórico. El toggle "Ver archivados"
     // de la UI pone esto en true cuando papá quiere ver el histórico completo.
     incluirArchivados?: boolean
@@ -214,7 +214,12 @@ export function obtenerSaldosPorPedido(
     const pagado = pagoMap.get(p.id) ?? 0
     // Sin factura activa → saldo = precio total (falta cobrar todo).
     const total = facturaInfo ? facturaInfo.total : Number(p.precioTotal)
-    const saldo = Math.max(0, total - pagado)
+    // Saldo SIN clamp a 0: cuando hay devoluciones que exceden el pago neto
+    // o el cliente hizo un sobrepago legítimo, el resultado real es negativo
+    // y representa un crédito a favor del cliente. La UI consumidora decide
+    // cómo presentarlo (ej: "Crédito del cliente: $X" en lugar de "Saldo $0").
+    // Si se clampeara a 0 aquí, papá perdería visibilidad de esa deuda inversa.
+    const saldo = total - pagado
     return { pedidoId: p.id, total, pagado, saldo }
   })
 }

@@ -118,17 +118,18 @@ app.whenReady().then(() => {
     runMigrations(db)
     // Guardar versión actual después de migrar exitosamente
     setConfig(db, 'app_version', currentVersion, 'Versión de la aplicación instalada')
-    // Fase B — solo aseguramos las claves de configuración mínimas. NO se
-    // insertan datos de demostración automáticamente. Si el usuario quiere
-    // datos de ejemplo, debe elegirlo explícitamente en el wizard de
-    // onboarding via IPC `app:loadDemoData`.
+    // Solo aseguramos las claves de configuración mínimas. NO se insertan
+    // datos de demostración automáticamente. Si el usuario quiere datos
+    // de ejemplo, debe elegirlo explícitamente en el wizard de onboarding
+    // vía IPC `app:loadDemoData`.
     ensureConfigInicial(db)
     registerIpcHandlers(db)
 
     // Tareas automáticas de arranque (idempotentes):
     //  - Reclasificar pedidos listo→sin_reclamar tras +15 días (BR-009)
     //  - Generar pagos mensuales de clases del mes actual (BR-012)
-    //  - Verificar que haya un backup reciente; si no, crear uno (C-02)
+    //  - Verificar que haya un backup reciente; si no, crear uno
+    // Ver docs/BUSINESS_RULES.md para detalle de las BR.
     try {
       const reclasificados = reclasificarPedidos(db)
       if (reclasificados > 0) {
@@ -139,8 +140,8 @@ app.whenReady().then(() => {
       if (pagosCreados > 0) {
         console.log(`[boot] ${pagosCreados} pago(s) de clase generado(s) para ${mesActual}`)
       }
-      // C-02: si hace más de 24h que no se crea un backup (o nunca), hacerlo
-      // ahora. Esto cubre el caso del papá que abre la app cada día: cada
+      // Si hace más de 24h que no se crea un backup (o nunca), hacerlo
+      // ahora. Esto cubre el caso del dueño que abre la app cada día: cada
       // mañana arranca un backup fresco del trabajo del día anterior.
       const ultimo = obtenerUltimoBackup()
       const necesitaBackup =
@@ -154,10 +155,10 @@ app.whenReady().then(() => {
       console.error('[boot] tarea automática falló:', bootErr)
     }
 
-    // C-02 — Scheduler diario: mientras la app esté abierta, crea un backup
-    // cada 24 horas. Si el papá la deja abierta varios días seguidos, el
-    // intervalo se encarga. Si la cierra y reabre, el check de boot de
-    // arriba se encarga.
+    // Scheduler diario de respaldo: mientras la app esté abierta, crea un
+    // backup cada 24 horas. Si el dueño la deja abierta varios días, el
+    // intervalo se encarga; si la cierra y reabre, el check de boot de
+    // arriba garantiza el respaldo.
     setInterval(() => {
       try {
         const info = crearBackupAhora()

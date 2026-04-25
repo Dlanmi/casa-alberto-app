@@ -1,13 +1,13 @@
-// Fase 4 — Contenido del botón flotante de ayuda. Cada ruta lista 3-5
-// acciones típicas con un enlace directo o instrucción corta. Pensado
-// para que el papá de 60 años encuentre respuesta sin buscar en menús.
+// Contenido del botón flotante de ayuda. Cada ruta lista 3-5 acciones
+// típicas con un enlace directo o instrucción corta. Pensado para que el
+// dueño de 60 años encuentre respuesta sin buscar en menús.
 //
-// v1.5.0 agrega:
+// El popover combina dos fuentes:
 //   - Tips dinámicos: resolvers que leen datos reales (p. ej. matriz de
 //     urgencia) y producen un tip contextual que se prepende al arreglo
 //     estático. Si no hay dato, no se muestra nada.
-//   - FAQ: sección con preguntas frecuentes (paso a paso) accesibles via
-//     toggle en el popover y via búsqueda global.
+//   - FAQ: preguntas frecuentes (paso a paso) accesibles vía toggle en
+//     el popover y vía búsqueda global.
 
 import type {
   EntregaDelDia,
@@ -16,7 +16,7 @@ import type {
   Proveedor,
   StatsGenerales
 } from '@shared/types'
-import { formatCOP, formatFechaRelativa } from './format'
+import { diaSemana, formatCOP, formatFechaRelativa, hoyISO, toFechaISO } from './format'
 import { mensajeRecordatorioCobro } from './whatsapp'
 
 // Acciones que puede tener un item accionable. El componente HelpButton
@@ -38,9 +38,9 @@ export type HelpTip = {
   title: string
   description: string
   to?: string
-  // v1.6.0 — lista opcional de items con acciones concretas (llamar,
-  // WhatsApp, ir a una ruta interna). Si está presente, el popover
-  // renderiza los items además de (o en vez de) la descripción.
+  // Lista opcional de items con acciones concretas (llamar, WhatsApp,
+  // ir a una ruta interna). Si está presente, el popover renderiza los
+  // items además de (o en vez de) la descripción.
   actionItems?: HelpActionItem[]
 }
 
@@ -58,9 +58,9 @@ export type HelpContext = {
   stats?: StatsGenerales | null
   proveedores?: Proveedor[] | null
   deudores?: PedidoSinAbonoConSaldo[] | null
-  // v1.7.0 — HelpButton /agenda
-  // entregasHoy: pedidos con fechaEntrega === hoy (lista accionable)
-  // entregasSemana: lunes..domingo de la semana actual (para el resumen)
+  // Datos del HelpButton para la ruta /agenda:
+  //   entregasHoy:    pedidos con fechaEntrega === hoy (lista accionable)
+  //   entregasSemana: lunes..domingo de la semana actual (para el resumen)
   entregasHoy?: EntregaDelDia[] | null
   entregasSemana?: EntregaDelDia[] | null
   hoy?: Date
@@ -144,7 +144,7 @@ const DIAS_ES = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes',
 
 export const tipDiaProveedorHoy: DynamicTipResolver = (ctx) => {
   const hoy = ctx.hoy ?? new Date()
-  const diaHoy = DIAS_ES[hoy.getDay()]
+  const diaHoy = DIAS_ES[diaSemana(hoy)]
   const activos = (ctx.proveedores ?? []).filter((p) => {
     if (!p.activo || !p.diasPedido) return false
     const dias = p.diasPedido
@@ -217,7 +217,7 @@ export const tipPlaybookDelDia: DynamicTipResolver = (ctx) => {
   // Día de proveedor — reutiliza el filtro de tipDiaProveedorHoy sin llamarlo
   // directamente para evitar duplicación semántica en el orden de appearance.
   const hoy = ctx.hoy ?? new Date()
-  const diaHoy = DIAS_ES[hoy.getDay()]
+  const diaHoy = DIAS_ES[diaSemana(hoy)]
   const provHoy = (ctx.proveedores ?? []).filter((p) => {
     if (!p.activo || !p.diasPedido) return false
     return p.diasPedido
@@ -292,7 +292,7 @@ export const tipDeudoresAccionables: DynamicTipResolver = (ctx) => {
 }
 
 // ---------------------------------------------------------------------------
-// v1.7.0 — Resolvers para /agenda: entregas de hoy + resumen de semana
+// Resolvers para /agenda: entregas de hoy + resumen de la semana actual.
 // ---------------------------------------------------------------------------
 
 // Labels cortos de tipo de trabajo para los sublabel de los items.
@@ -393,7 +393,10 @@ export const tipProximaEntrega: DynamicTipResolver = (ctx) => {
   const entregasHoy = ctx.entregasHoy ?? []
   const entregasSemana = ctx.entregasSemana ?? []
   if (entregasHoy.length > 0) return null
-  const hoyStr = (ctx.hoy ?? new Date()).toISOString().slice(0, 10)
+  // fechaEntrega se persiste como YYYY-MM-DD local; usar toISOString aquí
+  // aplica UTC y, en Colombia (UTC-5), después de ~7pm "hoy" salta al día
+  // siguiente → la entrega de mañana queda excluida y el tip desaparece.
+  const hoyStr = ctx.hoy ? toFechaISO(ctx.hoy) : hoyISO()
   const futuras = entregasSemana.filter((e) => e.fechaEntrega > hoyStr)
   if (futuras.length === 0) return null
   const primera = futuras[0] // ya viene ordenada asc por query

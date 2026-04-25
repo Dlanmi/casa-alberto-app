@@ -1,8 +1,12 @@
-// Sprint 2 · C5 (fix #2) — inputs numéricos con decimales necesitan guardar
-// el texto crudo. Si controlamos el `<input>` con el número parseado, el
-// estado "43." cae a 43 y el punto desaparece antes de que el papá alcance
-// a tipear el decimal. Solución: estado local string, el padre sólo ve el
-// número parseado, y un efecto sincroniza cuando el padre resetea el valor.
+// Hook para inputs numéricos con decimales (medidas en cm). Necesitan
+// guardar el texto crudo: si se controla el `<input>` con el número
+// parseado, el estado "43." cae a 43 y el punto desaparece antes de que
+// el dueño alcance a tipear el decimal. Solución: estado local string,
+// el padre solo ve el número parseado, y un efecto sincroniza cuando
+// el padre resetea el valor.
+//
+// Para montos en pesos colombianos usar `useMoneyInput` — el `.` allá
+// es separador de miles, no decimal.
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { parseNumberInput } from './parse-input'
 

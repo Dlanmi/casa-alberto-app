@@ -15,7 +15,7 @@ const bgClasses: Record<StatusColor, string> = {
   neutral: 'bg-neutral-bg'
 }
 
-// Fase 4 — umbrales de estancamiento por estado. Listo es más agresivo porque
+// Umbrales de estancamiento por estado. Listo es más agresivo porque
 // ahí ya tendrían que llamar al cliente; el resto acepta 3 días de holgura.
 const UMBRAL_ESTANCADO: Partial<Record<EstadoPedido, number>> = {
   confirmado: 3,
@@ -34,7 +34,7 @@ type KanbanColumnProps = {
   estado: EstadoPedido
   pedidos: Pedido[]
   clienteMap: Map<number, string>
-  // Fase 2 — map pedidoId → saldo pendiente. Vacío hasta que cargue el IPC.
+  // Map pedidoId → saldo pendiente. Vacío hasta que cargue el IPC.
   saldosMap?: Map<number, number>
   onCardClick: (pedido: Pedido) => void
   onDrop: (pedidoId: number) => void
@@ -63,7 +63,7 @@ export function KanbanColumn({
   const color = ESTADO_PEDIDO_COLOR[estado]
   const { enabled: emojisEnabled } = useEmojis()
 
-  // Fase 4 — cuenta pedidos estancados según el umbral del estado. Solo
+  // Cuenta pedidos estancados según el umbral del estado. Solo
   // aplica a confirmado/en_proceso/listo (UMBRAL_ESTANCADO devuelve undefined
   // para el resto y el count queda en 0).
   const estancadosCount = useMemo(() => {
@@ -101,7 +101,7 @@ export function KanbanColumn({
     <div
       className={cn(
         'flex flex-col min-w-65 w-65 shrink-0 transition-all duration-200',
-        // Fase 5 — feedback más fuerte cuando la columna es destino inválido
+        // Feedback más fuerte cuando la columna es destino inválido
         // durante un drag activo: opacidad baja + scale leve la "apaga"
         // visualmente sin romper clicks en sus cards.
         dropKind === 'disabled' && 'opacity-40 scale-[0.985]'
@@ -111,7 +111,7 @@ export function KanbanColumn({
       onDragLeave={handleDragLeave}
     >
       {/* Column header */}
-      <div className={cn('px-3 py-2 rounded-t-[var(--radius-lg)]', bgClasses[color])}>
+      <div className={cn('px-3 py-2 rounded-t-lg', bgClasses[color])}>
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold text-text truncate">
             {emojisEnabled && (
@@ -144,7 +144,7 @@ export function KanbanColumn({
       {/* Cards */}
       <div
         className={cn(
-          'flex-1 flex flex-col gap-2 p-2 bg-surface-muted/50 rounded-b-[var(--radius-lg)] min-h-50 overflow-y-auto transition-all',
+          'flex-1 flex flex-col gap-2 p-2 bg-surface-muted/50 rounded-b-lg min-h-50 overflow-y-auto transition-all',
           dragOver && dropKind !== 'disabled' && 'bg-accent/5 ring-2 ring-accent/40',
           dropKind === 'allowed' && 'ring-1 ring-success/30'
         )}

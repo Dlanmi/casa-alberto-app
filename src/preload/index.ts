@@ -67,7 +67,7 @@ const api = {
         payload.valor,
         payload.descripcion
       ),
-    // C-01 — flag de primera ejecución
+    // Flag de primera ejecución
     isOnboardingCompleted: () => invoke<IpcResult<boolean>>('configuracion:isOnboardingCompleted'),
     marcarOnboardingCompleto: () =>
       invoke<IpcResult<void>>('configuracion:marcarOnboardingCompleto')
@@ -79,10 +79,13 @@ const api = {
     statsGenerales: () => invoke<IpcResult<StatsGenerales>>('app:statsGenerales')
   },
   backup: {
-    // C-02 — gestión de respaldos de la base de datos
+    // Gestión de respaldos de la base de datos
     crearAhora: () => invoke<IpcResult<BackupInfo>>('backup:crearAhora'),
     listar: () => invoke<IpcResult<BackupInfo[]>>('backup:listar'),
     restaurar: (backupPath: string) => invoke<IpcResult<void>>('backup:restaurar', backupPath),
+    // v1.7.1 — preferir restaurarPorId; el renderer pasa el `nombre` que
+    // viene de `backup.listar()`, sin exponer rutas del filesystem.
+    restaurarPorId: (id: string) => invoke<IpcResult<void>>('backup:restaurarPorId', id),
     obtenerUltimo: () => invoke<IpcResult<BackupInfo | null>>('backup:obtenerUltimo'),
     abrirCarpeta: () => invoke<IpcResult<void>>('backup:abrirCarpeta')
   },

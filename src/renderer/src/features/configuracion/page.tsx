@@ -302,7 +302,7 @@ function AparienciaSection(): React.JSX.Element {
 }
 
 /* ------------------------------------------------------------------ */
-/* Backup Section — C-02                                              */
+/* Sección de respaldos                                               */
 /* ------------------------------------------------------------------ */
 
 function formatBackupSize(bytes: number): string {
@@ -369,7 +369,10 @@ function BackupSection(): React.JSX.Element {
     if (!confirmado) return
     setRestoring(b.path)
     try {
-      const res = (await window.api.backup.restaurar(b.path)) as IpcResult<void>
+      // Usar restaurarPorId (nombre del archivo) en lugar del path completo.
+      // El main resuelve el path internamente desde el directorio permitido,
+      // evitando exponer el filesystem al renderer.
+      const res = (await window.api.backup.restaurarPorId(b.nombre)) as IpcResult<void>
       if (res.ok) {
         showToast({
           tone: 'success',

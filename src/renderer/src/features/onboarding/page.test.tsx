@@ -10,8 +10,20 @@ import OnboardingPage from './page'
 // Mock mínimo de window.api para los GETs/SETs que el wizard dispara al montar
 // (hidratación del step + campos del negocio). Por defecto devuelve vacío —
 // primer uso sin estado persistido.
-function stubApi(overrides: Partial<{ step: string | null; datos: Record<string, string> }> = {}) {
+function stubApi(
+  overrides: Partial<{
+    step: string | null
+    datos: Record<string, string>
+    guardarFails: boolean
+  }> = {}
+): { guardarMock: ReturnType<typeof vi.fn> } {
   const datos = overrides.datos ?? {}
+  const guardarMock = vi.fn(async () => {
+    if (overrides.guardarFails) {
+      throw new Error('IPC offline')
+    }
+    return { ok: true, data: undefined }
+  })
   vi.stubGlobal(
     'window',
     Object.assign(window, {
@@ -21,12 +33,13 @@ function stubApi(overrides: Partial<{ step: string | null; datos: Record<string,
             if (clave === 'onboarding_step') return { ok: true, data: overrides.step ?? null }
             return { ok: true, data: datos[clave] ?? null }
           }),
-          guardar: vi.fn(async () => ({ ok: true, data: undefined })),
+          guardar: guardarMock,
           marcarOnboardingCompleto: vi.fn(async () => ({ ok: true, data: undefined }))
         }
       }
     })
   )
+  return { guardarMock }
 }
 
 describe('OnboardingPage', () => {
@@ -59,7 +72,7 @@ describe('OnboardingPage', () => {
     ).toBeTruthy()
   })
 
-  it('restaura el paso persistido al remontar (fix #5)', async () => {
+  it('restaura el paso persistido al remontar', async () => {
     stubApi({ step: '2' })
 
     render(
@@ -78,7 +91,7 @@ describe('OnboardingPage', () => {
     })
   })
 
-  it('precarga datos del negocio ya guardados (fix #5)', async () => {
+  it('precarga datos del negocio ya guardados', async () => {
     stubApi({
       step: '1',
       datos: {
@@ -103,5 +116,45 @@ describe('OnboardingPage', () => {
     })
     const telInput = screen.getByLabelText(/Teléfono/i) as HTMLInputElement
     expect(telInput.value).toBe('310 123 4567')
+  })
+
+  // `setStep` persiste de forma optimista. Si la mutación falla y no
+  // revertimos, el state local queda desincronizado: el dueño ve "paso 2"
+  // en pantalla pero la DB sigue en "paso 1", y al reabrir la app
+  // retrocede. Este test verifica que ahora revertimos y mostramos toast.
+  it('revierte el step y muestra toast cuando guardar() falla', async () => {
+    const user = userEvent.setup()
+    const { guardarMock } = stubApi({ guardarFails: true })
+
+    render(
+      <MemoryRouter initialEntries={['/onboarding']}>
+        <ToastProvider>
+          <Routes>
+            <Route path="/onboarding" element={<OnboardingPage />} />
+          </Routes>
+        </ToastProvider>
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Qué vas a resolver en este onboarding')).toBeTruthy()
+    })
+
+    // Avanzar al paso de datos. La persistencia de "step=1" va a fallar.
+    await user.click(screen.getByRole('button', { name: /comenzar configuración/i }))
+
+    // El toast aparece (avisa al usuario, no falla en silencio).
+    await waitFor(() => {
+      expect(screen.getByText(/no se pudo guardar el paso/i)).toBeTruthy()
+    })
+
+    // Y el state revierte al paso 0 (Bienvenida) para que el usuario reintente.
+    await waitFor(() => {
+      expect(screen.getByText('Qué vas a resolver en este onboarding')).toBeTruthy()
+    })
+
+    // Confirmamos que la mutación fue invocada (avance optimista) antes de
+    // revertir, no que estuvimos bloqueando antes de tiempo.
+    expect(guardarMock).toHaveBeenCalled()
   })
 })

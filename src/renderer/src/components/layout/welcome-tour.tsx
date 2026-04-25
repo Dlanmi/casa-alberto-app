@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Joyride, STATUS, type EventData, type Step } from 'react-joyride'
 
-// Fase 4 — Tour de 5 pasos para la primera vez que papá abre la app
+// Tour de 5 pasos para la primera vez que papá abre la app
 // después del onboarding. El flag se guarda en localStorage porque es un
 // estado puramente de UI por instalación y no amerita persistir en SQLite.
 

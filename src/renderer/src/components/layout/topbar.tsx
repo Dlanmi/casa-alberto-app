@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Search, ChevronRight, Sparkles } from 'lucide-react'
 import { SIDEBAR_ITEMS } from '@renderer/lib/constants'
+import { diaSemana } from '@renderer/lib/format'
 import { formatPrimaryShortcut } from '@renderer/lib/shortcuts'
 
 type TopbarProps = {
@@ -17,7 +18,7 @@ function getGreeting(): string {
 function getFormattedDate(): string {
   const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
   const now = new Date()
-  const dia = dias[now.getDay()]
+  const dia = dias[diaSemana(now)]
   const formatted = new Intl.DateTimeFormat('es-CO', {
     day: 'numeric',
     month: 'long',

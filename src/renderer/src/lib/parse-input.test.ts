@@ -1,11 +1,11 @@
-// Sprint 2 · C5 — tests para el parser numérico defensivo usado por los
+// Tests para el parser numérico defensivo usado por los
 // inputs del wizard del cotizador y modales con montos. El objetivo es que
 // `Number('abc') || 0` deje de esconder typos, que los rangos (medidas,
 // precios) se respeten, y que MEDIDAS DECIMALES (43.32 cm) funcionen: el
 // primer intento con `parseInt` estripaba decimales y rompía el flujo del
 // papá al cotizar obras con medida fina.
 import { describe, expect, it } from 'vitest'
-import { parseNumberInput } from './parse-input'
+import { parseMoneyInput, parseNumberInput } from './parse-input'
 
 describe('parseNumberInput', () => {
   it('devuelve 0 para string vacío', () => {
@@ -70,5 +70,56 @@ describe('parseNumberInput', () => {
 
   it('rechaza NaN explícito y lo convierte a 0', () => {
     expect(parseNumberInput('NaN')).toBe(0)
+  })
+})
+
+// parseMoneyInput — dinero en pesos colombianos (COP). El punto es separador
+// de miles, no decimal. Un bug silencioso previo usaba parseNumberInput en
+// inputs de plata y papá podía cobrar $86 en vez de $86.000 sin darse cuenta.
+describe('parseMoneyInput', () => {
+  it('devuelve 0 para string vacío o texto no numérico', () => {
+    expect(parseMoneyInput('')).toBe(0)
+    expect(parseMoneyInput('abc')).toBe(0)
+    expect(parseMoneyInput('  ')).toBe(0)
+  })
+
+  it('parsea enteros simples sin separadores', () => {
+    expect(parseMoneyInput('50000')).toBe(50000)
+    expect(parseMoneyInput('0')).toBe(0)
+    expect(parseMoneyInput('1')).toBe(1)
+  })
+
+  it('strippea el punto como separador de miles colombiano', () => {
+    // Este es el caso central del bug reportado: "86.000" debe ser 86 mil.
+    expect(parseMoneyInput('86.000')).toBe(86000)
+    expect(parseMoneyInput('1.234')).toBe(1234)
+    expect(parseMoneyInput('1.234.567')).toBe(1234567)
+    expect(parseMoneyInput('12.345.678')).toBe(12345678)
+  })
+
+  it('acepta la coma como separador decimal', () => {
+    expect(parseMoneyInput('1500,50')).toBe(1500.5)
+    expect(parseMoneyInput('0,99')).toBe(0.99)
+  })
+
+  it('combina miles con decimales (formato largo es-CO)', () => {
+    expect(parseMoneyInput('1.234,50')).toBe(1234.5)
+    expect(parseMoneyInput('1.000.000,25')).toBe(1000000.25)
+  })
+
+  it('ignora símbolo de moneda y espacios pegados al valor', () => {
+    expect(parseMoneyInput('$50.000')).toBe(50000)
+    expect(parseMoneyInput('$ 86.000')).toBe(86000)
+    expect(parseMoneyInput(' 1.234 ')).toBe(1234)
+  })
+
+  it('trata negativos como 0 (un monto negativo no existe en este dominio)', () => {
+    expect(parseMoneyInput('-100')).toBe(0)
+    expect(parseMoneyInput('-50.000')).toBe(0)
+  })
+
+  it('respeta clamp min/max', () => {
+    expect(parseMoneyInput('1.000.000', { max: 500000 })).toBe(500000)
+    expect(parseMoneyInput('50', { min: 100 })).toBe(100)
   })
 })

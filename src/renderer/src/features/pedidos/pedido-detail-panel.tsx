@@ -441,7 +441,7 @@ export function PedidoDetailPanel({
         <div className="flex gap-3">
           {nextEstado &&
             (() => {
-              // Fase 3 — bloqueo visual: no permitir marcar "entregado"
+              // Bloqueo visual: no permitir marcar "entregado"
               // mientras quede saldo pendiente. Misma regla que el kanban
               // via handleChangeEstado; aquí además deshabilitamos el
               // botón y lo explicamos con un title para que papá sepa por

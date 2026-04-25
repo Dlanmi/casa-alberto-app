@@ -1,8 +1,8 @@
-// Sprint 2 · A1/A2/A4 — integration tests para validaciones de cliente.
-// Cubrimos: teléfono (regex 7–15 dígitos), cédula (6–15 dígitos + UNIQUE),
-// nombre (2–200 chars). El backend es la fuente de verdad; estos tests se
-// aseguran de que no se colee un registro inválido aunque la UI se saltara
-// la validación.
+// Integration tests para validaciones de cliente. Cubrimos: teléfono
+// (regex 7–15 dígitos), cédula (6–15 dígitos + UNIQUE), nombre
+// (2–200 chars). El backend es la fuente de verdad; estos tests se
+// aseguran de que no se colee un registro inválido aunque la UI se
+// saltara la validación.
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'

@@ -30,6 +30,7 @@ import { PagoBar } from '@renderer/components/shared/pago-bar'
 import { ClientePicker } from '@renderer/components/shared/cliente-picker'
 import { WorkflowScreen, MetricCard, PageSection } from '@renderer/components/layout/page-frame'
 import { iniciales, mesActualISO, hoyISO, formatCOP, formatFechaLarga } from '@renderer/lib/format'
+import { parseMoneyInput } from '@renderer/lib/parse-input'
 import { cn } from '@renderer/lib/cn'
 import { METODO_PAGO_LABEL } from '@renderer/lib/constants'
 import type {
@@ -1034,8 +1035,8 @@ function PagoClaseModal({
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault()
     if (!form.estudianteId) return
-    const monto = parseFloat(form.monto)
-    if (isNaN(monto) || monto <= 0) return
+    const monto = parseMoneyInput(form.monto)
+    if (monto <= 0) return
     try {
       await execute({
         estudianteId: parseInt(form.estudianteId),
@@ -1069,9 +1070,11 @@ function PagoClaseModal({
           />
           <Input
             label="Monto"
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={form.monto}
             onChange={(e) => setForm((p) => ({ ...p, monto: e.target.value }))}
+            placeholder="Ej: 80.000"
             hint={formatCOP(precioMensual)}
           />
         </div>

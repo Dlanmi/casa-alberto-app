@@ -29,8 +29,8 @@ import { crearFactura, registrarPago } from './queries/facturas'
 import { crearEstudiante, registrarPagoClase, venderKit } from './queries/clases'
 
 const CONFIG_INICIAL: { clave: string; valor: string; descripcion: string }[] = [
-  // Fase B — valores vacíos en instalación real. El usuario los completa en
-  // el wizard de onboarding. NO pre-llenamos el nombre del negocio para que
+  // Valores vacíos en instalación real. El usuario los completa en el
+  // wizard de onboarding. No pre-llenamos el nombre del negocio para que
   // no se sienta "identidad asumida" por el dueño.
   { clave: 'nombre_negocio', valor: '', descripcion: 'Nombre del negocio' },
   { clave: 'rut', valor: '', descripcion: 'RUT del negocio' },
@@ -56,7 +56,7 @@ const CONFIG_INICIAL: { clave: string; valor: string; descripcion: string }[] = 
   { clave: 'backup_ubicacion', valor: '', descripcion: 'Ruta carpeta backup' },
   { clave: 'backup_frecuencia', valor: 'diario', descripcion: 'Frecuencia backup automático' },
   { clave: 'inventario_activo', valor: '0', descripcion: 'Módulo inventario activo' },
-  // C-01 — flag clave: indica si el usuario completó el wizard de onboarding.
+  // Flag de onboarding: '1' = el dueño completó el wizard de bienvenida.
   // Si es '0' (default), App.tsx redirige automáticamente a /onboarding al
   // arrancar. El wizard lo pone en '1' al finalizar.
   {
@@ -704,7 +704,7 @@ function seedFacturasYPagos(db: DB, pedidoIds: number[]): void {
 }
 
 /**
- * Fase B — Configuración mínima que se ejecuta en TODA instalación (no solo
+ * Configuración mínima que se ejecuta en TODA instalación (no solo en
  * demo). Asegura que existan las claves de configuración básicas pero NO
  * inserta clientes, pedidos, facturas u otros datos de muestra.
  *

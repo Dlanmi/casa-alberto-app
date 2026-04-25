@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron'
 import type { DB } from '../db'
 import type { IpcResult } from '../../shared/types'
+import { validarMonto } from '../lib/validar-monto'
+import { validarFilePathInput } from '../lib/validar-filepath'
 import {
   actualizarCliente,
   crearCliente,
@@ -35,6 +37,7 @@ import {
   crearBackupAhora,
   listarBackups,
   restaurarDesdeBackup,
+  restaurarDesdeBackupPorId,
   obtenerUltimoBackup
 } from '../db/backup'
 import { shell } from 'electron'
@@ -202,22 +205,26 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('configuracion:set', (_e, clave: string, valor: string, desc?: string) =>
     wrap(setConfig)(db, clave, valor, desc)
   )
-  // C-01 — flag de onboarding
+  // Flag de onboarding completado
   ipcMain.handle('configuracion:isOnboardingCompleted', () => wrap(isOnboardingCompleted)(db))
   ipcMain.handle('configuracion:marcarOnboardingCompleto', () => wrap(marcarOnboardingCompleto)(db))
 
-  // app — manejo de datos de demostración opt-in (Fase B)
+  // app — manejo de datos de demostración opt-in
   ipcMain.handle('app:loadDemoData', () => wrap(seedDemo)(db))
   ipcMain.handle('app:clearDemoData', () => wrap(clearDemoData)(db))
   // Conteos agregados para detectar empty-states desde el HelpButton.
   ipcMain.handle('app:statsGenerales', () => wrap(statsGenerales)(db))
 
-  // backup — C-02
+  // backup
   ipcMain.handle('backup:crearAhora', () => wrap(crearBackupAhora)())
   ipcMain.handle('backup:listar', () => wrap(listarBackups)())
   ipcMain.handle('backup:restaurar', (_e, backupPath: string) =>
     wrap(restaurarDesdeBackup)(backupPath)
   )
+  // Preferir `restaurarPorId` para que el renderer no envíe paths del
+  // filesystem. El handler legacy `backup:restaurar` queda por
+  // compatibilidad mientras la UI migra.
+  ipcMain.handle('backup:restaurarPorId', (_e, id: string) => wrap(restaurarDesdeBackupPorId)(id))
   ipcMain.handle('backup:obtenerUltimo', () => wrap(obtenerUltimoBackup)())
   // Abre la carpeta de backups en el explorador del SO para que el usuario
   // pueda copiar los archivos a un USB manualmente.
@@ -264,10 +271,10 @@ export function registerIpcHandlers(db: DB): void {
   )
   ipcMain.handle('cotizador:listarPreciosVidrio', () => wrap(listarPreciosVidrio)(db))
   ipcMain.handle('cotizador:actualizarPrecioVidrio', (_e, id: number, precioM2: number) =>
-    wrap(actualizarPrecioVidrio)(db, id, precioM2)
+    wrap(actualizarPrecioVidrio)(db, id, validarMonto(precioM2, { campo: 'Precio por m2' }))
   )
   ipcMain.handle('cotizador:crearPrecioVidrio', (_e, tipo: string, precioM2: number) =>
-    wrap(crearPrecioVidrio)(db, tipo, precioM2)
+    wrap(crearPrecioVidrio)(db, tipo, validarMonto(precioM2, { campo: 'Precio por m2' }))
   )
   ipcMain.handle('cotizador:eliminarPrecioVidrio', (_e, id: number) =>
     wrap(eliminarPrecioVidrio)(db, id)
@@ -278,7 +285,7 @@ export function registerIpcHandlers(db: DB): void {
     wrap(crearPrecioPaspartuPintado)(db, data)
   )
   ipcMain.handle('precios:actualizarPaspartuPintado', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioPaspartuPintado)(db, id, precio)
+    wrap(actualizarPrecioPaspartuPintado)(db, id, validarMonto(precio, { campo: 'Precio' }))
   )
   ipcMain.handle('precios:eliminarPaspartuPintado', (_e, id: number) =>
     wrap(eliminarPrecioPaspartuPintado)(db, id)
@@ -288,7 +295,7 @@ export function registerIpcHandlers(db: DB): void {
     wrap(crearPrecioPaspartuAcrilico)(db, data)
   )
   ipcMain.handle('precios:actualizarPaspartuAcrilico', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioPaspartuAcrilico)(db, id, precio)
+    wrap(actualizarPrecioPaspartuAcrilico)(db, id, validarMonto(precio, { campo: 'Precio' }))
   )
   ipcMain.handle('precios:eliminarPaspartuAcrilico', (_e, id: number) =>
     wrap(eliminarPrecioPaspartuAcrilico)(db, id)
@@ -296,13 +303,13 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('precios:listarRetablos', () => wrap(listarPreciosRetablos)(db))
   ipcMain.handle('precios:crearRetablo', (_e, data) => wrap(crearPrecioRetablo)(db, data))
   ipcMain.handle('precios:actualizarRetablo', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioRetablo)(db, id, precio)
+    wrap(actualizarPrecioRetablo)(db, id, validarMonto(precio, { campo: 'Precio' }))
   )
   ipcMain.handle('precios:eliminarRetablo', (_e, id: number) => wrap(eliminarPrecioRetablo)(db, id))
   ipcMain.handle('precios:listarBastidores', () => wrap(listarPreciosBastidores)(db))
   ipcMain.handle('precios:crearBastidor', (_e, data) => wrap(crearPrecioBastidor)(db, data))
   ipcMain.handle('precios:actualizarBastidor', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioBastidor)(db, id, precio)
+    wrap(actualizarPrecioBastidor)(db, id, validarMonto(precio, { campo: 'Precio' }))
   )
   ipcMain.handle('precios:eliminarBastidor', (_e, id: number) =>
     wrap(eliminarPrecioBastidor)(db, id)
@@ -310,7 +317,7 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('precios:listarTapas', () => wrap(listarPreciosTapas)(db))
   ipcMain.handle('precios:crearTapa', (_e, data) => wrap(crearPrecioTapa)(db, data))
   ipcMain.handle('precios:actualizarTapa', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioTapa)(db, id, precio)
+    wrap(actualizarPrecioTapa)(db, id, validarMonto(precio, { campo: 'Precio' }))
   )
   ipcMain.handle('precios:eliminarTapa', (_e, id: number) => wrap(eliminarPrecioTapa)(db, id))
 
@@ -367,7 +374,7 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('pedidos:porRangoFecha', (_e, desde: string, hasta: string) =>
     wrap(pedidosPorRangoFecha)(db, desde, hasta)
   )
-  // Fase 1 — saldos por pedido (LEFT JOIN facturas+pagos en una sola query)
+  // Saldos por pedido (LEFT JOIN facturas+pagos en una sola query)
   ipcMain.handle('pedidos:saldos', () => wrap(obtenerSaldosPorPedido)(db))
 
   // facturas
@@ -450,7 +457,17 @@ export function registerIpcHandlers(db: DB): void {
 
   // pdf
   ipcMain.handle('pdf:generarFactura', (_e, data) => wrap(generarFacturaPDF)(db, data))
-  ipcMain.handle('pdf:abrir', (_e, filePath: string) => wrap(abrirPDF)(filePath))
+  // Defense in depth en el boundary IPC: aunque `abrirPDF` valida path
+  // traversal y symlinks internamente, rechazamos aquí cualquier payload
+  // que no sea string razonable. `validarFilePathInput` está testeado
+  // independientemente — ver src/main/lib/validar-filepath.test.ts.
+  ipcMain.handle('pdf:abrir', (_e, filePath: unknown) => {
+    const checked = validarFilePathInput(filePath)
+    if (!checked.ok) {
+      return { ok: false, error: 'Ruta de PDF inválida' } satisfies IpcResult<void>
+    }
+    return wrap(abrirPDF)(checked.value)
+  })
 
   // excel
   ipcMain.handle('excel:exportarFinanzas', (_e, mes: string) =>

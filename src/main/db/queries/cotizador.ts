@@ -192,11 +192,11 @@ export function aplicarPaspartu(
   }
 }
 
-// Sprint 2 · A5 — el porcentaje de materiales sólo admite el rango 5-10% (Fase 2).
-// La versión anterior hacía `Math.max(5, Math.min(10, p))` y pasaba silenciosamente
-// cualquier valor fuera de rango al cálculo, lo que ocultaba bugs en la UI o
-// llamadas IPC mal formadas. Ahora lanzamos error explícito para que el caller
-// se entere y muestre un toast o corrija el input.
+// Porcentaje de materiales adicionales: solo se admite el rango 5-10%
+// (Fase 2 §A.9). La versión inicial hacía `Math.max(5, Math.min(10, p))`
+// y pasaba silenciosamente cualquier valor fuera de rango al cálculo, lo
+// que ocultaba bugs en la UI o llamadas IPC mal formadas. Ahora lanzamos
+// error explícito para que el caller corrija el input.
 export const PORCENTAJE_MATERIALES_MIN = 5
 export const PORCENTAJE_MATERIALES_MAX = 10
 
@@ -285,10 +285,11 @@ export type NuevaMuestraMarco = {
   proveedorId?: number | null
 }
 
-// Sprint 2 · A3 — validación positiva antes de insertar. Las CHECK constraints
-// de la DB (>= 0) atrapan el caso extremo, pero preferimos fallar con un mensaje
-// legible en lugar de un "SQLITE_CONSTRAINT: CHECK". Colilla y precio son valores
-// operativos, así que exigimos > 0 (un marco gratis o con colilla 0 cm es un bug).
+// Validación positiva antes de insertar. Las CHECK constraints de la DB
+// (>= 0) atrapan el caso extremo, pero preferimos fallar con un mensaje
+// legible en lugar de un "SQLITE_CONSTRAINT: CHECK". Colilla y precio son
+// valores operativos, así que exigimos > 0 (un marco gratis o con colilla
+// 0 cm es un bug).
 function validarMuestraMarcoData(data: Partial<NuevaMuestraMarco>): void {
   if (data.colillaCm !== undefined) {
     if (!Number.isFinite(data.colillaCm) || data.colillaCm <= 0) {
@@ -326,8 +327,9 @@ export function desactivarMuestraMarco(db: DB, id: number) {
 
 // CRUD para precios de vidrio
 export function actualizarPrecioVidrio(db: DB, id: number, precioM2: number) {
-  // Sprint 2 · A3 — antes no se validaba el precio en el update; un IPC directo
-  // podía dejar vidrios a $0 o negativo y quebrar cotizaciones posteriores.
+  // Sin esta validación un IPC directo podía dejar vidrios a $0 o negativo
+  // y quebrar cotizaciones posteriores. CHECK constraint en DB es la
+  // segunda barrera, pero el mensaje legible viene de aquí.
   if (!Number.isFinite(precioM2) || precioM2 <= 0) {
     throw new Error('El precio por m² debe ser mayor a 0')
   }
@@ -344,8 +346,8 @@ export function crearPrecioVidrio(db: DB, tipo: string, precioM2: number) {
   // ('Claro' y 'claro ' son el mismo tipo desde la UI).
   const tipoNormalizado = tipo.trim().toLowerCase().replace(/\s+/g, '_')
   if (!tipoNormalizado) throw new Error('El tipo de vidrio no puede estar vacío')
-  // Sprint 2 · A3 — un vidrio en la lista de precios debe tener precio > 0.
-  // Aceptar 0 o negativos abre la puerta a cotizaciones gratis por error.
+  // Un vidrio en la lista de precios debe tener precio > 0; aceptar 0 o
+  // negativos abre la puerta a cotizaciones gratis por error.
   if (!Number.isFinite(precioM2) || precioM2 <= 0) {
     throw new Error('El precio por m² debe ser mayor a 0')
   }
@@ -772,10 +774,10 @@ export function cotizarTapa(db: DB, input: InputLookupMedida): ResultadoCotizaci
 // CRUD para listas de precios por medida (5 tablas)
 // ---------------------------------------------------------------------------
 
-// Sprint 2 · A3 — validación compartida para todas las tablas medida×precio.
-// Antes los `crear*` aceptaban precios negativos/NaN/cero sin avisar; la UI
-// puede fallar y mandar basura, o un IPC directo podía saltárselo. Ahora toda
-// creación pasa por este guard con mensaje legible.
+// Validación compartida para todas las tablas medida×precio (paspartú
+// pintado/acrílico, retablos, bastidores, tapas). Sin este guard la UI o
+// un IPC directo podían colar precios negativos/NaN/cero. Ahora toda
+// creación pasa por aquí con mensaje legible.
 function validarMedidaPrecioCreate(data: {
   anchoCm: number
   altoCm: number

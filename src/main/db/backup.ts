@@ -12,7 +12,7 @@ import { join, resolve, sep } from 'path'
 import { getBackupsDir, getSqlite, getDbPath, closeDb, initDb } from './index'
 
 /**
- * C-02 — Sistema de backup automático.
+ * Sistema de backup automático.
  *
  * Los backups viven en `<userData>/backups/` con nombre del formato
  * `casa-alberto-YYYY-MM-DDTHH-mm.db`. Usamos `VACUUM INTO` de SQLite porque:
@@ -114,6 +114,10 @@ export function listarBackups(): BackupInfo[] {
  * Restaura el backup indicado copiándolo sobre el archivo de base de datos
  * activo. Cierra la conexión actual, copia, y reabre. El llamador debe
  * refrescar cualquier estado cacheado en renderer.
+ *
+ * @deprecated Preferir `restaurarDesdeBackupPorId(id)`, que no requiere
+ * que el renderer envíe paths del filesystem. Esta función sigue
+ * disponible por compatibilidad y mantiene la validación de path.
  */
 export function restaurarDesdeBackup(backupPath: string): void {
   const realPath = validarPathSeguro(backupPath, getBackupsDir(), 'backup')
@@ -125,6 +129,30 @@ export function restaurarDesdeBackup(backupPath: string): void {
   copyFileSync(realPath, dbPath)
   initDb()
   console.log(`[backup] restaurado desde ${realPath}`)
+}
+
+/**
+ * Restaura el backup identificado por su nombre de archivo (ej:
+ * "backup-2026-04-25T10-15-00.db"). El renderer obtiene esta lista vía
+ * `listarBackups()` y referencia los items por nombre — nunca por path.
+ * Internamente resolvemos el path contra `getBackupsDir()` y validamos
+ * con el mismo guard que la versión legacy. Esto evita que un renderer
+ * comprometido o un payload malformado envíe rutas arbitrarias del FS.
+ *
+ * Rechaza nombres con separadores (`/`, `\`), `.` o `..` aunque el guard
+ * subsiguiente también los rechace — el chequeo sintáctico permite errores
+ * más claros y reduce trabajo del filesystem.
+ */
+export function restaurarDesdeBackupPorId(id: string): void {
+  if (typeof id !== 'string' || id.length === 0 || id.length > 256) {
+    throw new Error('Identificador de backup inválido')
+  }
+  if (id.includes('/') || id.includes('\\') || id === '.' || id === '..') {
+    throw new Error('Identificador de backup inválido')
+  }
+  const fullPath = join(getBackupsDir(), id)
+  // validarPathSeguro hace los guards definitivos (textual + symlink + realpath).
+  restaurarDesdeBackup(fullPath)
 }
 
 /**
