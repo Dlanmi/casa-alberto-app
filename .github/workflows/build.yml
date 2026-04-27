@@ -11,6 +11,12 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    # La app se despliega en Bogotá (UTC-5) y varios cálculos de fecha
+    # asumen TZ local del usuario (helpers `diaSemana`, `toFechaISO`,
+    # `tipProximaEntrega`). Forzamos la misma zona horaria en CI para
+    # que los tests reflejen el ambiente real.
+    env:
+      TZ: America/Bogota
     steps:
       - uses: actions/checkout@v4
 
