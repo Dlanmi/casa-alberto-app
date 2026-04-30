@@ -113,13 +113,16 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
       }
 
       setToasts((prev) => {
-        // Dedupe: si ya existe un toast con el mismo tono y mensaje, no agregamos
-        // uno nuevo. Esto evita pilas de errores idénticos cuando el usuario
-        // hace clics repetidos en un botón que falla.
-        const duplicado = prev.find((t) => t.tone === toast.tone && t.message === toast.message)
-        if (duplicado) {
-          // No agregar el nuevo; dejar que el existente siga su curso.
-          return prev
+        // Dedupe SOLO para `success`, `info` y `progress`: si el mismo evento
+        // benigno se repite (ej: dos refetch que salen ok), evita la pila de
+        // confirmaciones idénticas. Para `error` y `warning` SIEMPRE
+        // mostramos: si la misma operación falla dos veces seguidas el
+        // dueño tiene que verlo, no silenciar la segunda como ruido.
+        const debeDedupe =
+          toast.tone === 'success' || toast.tone === 'info' || toast.tone === 'progress'
+        if (debeDedupe) {
+          const duplicado = prev.find((t) => t.tone === toast.tone && t.message === toast.message)
+          if (duplicado) return prev
         }
 
         // Cap: si ya hay MAX_TOASTS, remover el más viejo para hacer espacio.

@@ -3,6 +3,9 @@ import type { DB } from '../db'
 import type { IpcResult } from '../../shared/types'
 import { validarMonto } from '../lib/validar-monto'
 import { validarFilePathInput } from '../lib/validar-filepath'
+import { validarId } from '../lib/validar-id'
+import { validarEnum } from '../lib/validar-enum'
+import { ESTADOS_PEDIDO, ESTADOS_CONTRATO } from '../db/schema'
 import {
   actualizarCliente,
   crearCliente,
@@ -164,7 +167,17 @@ function wrap<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => Ip
       return { ok: true, data: fn(...args) }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error('[ipc]', fn.name, '→', msg)
+      // El mensaje completo va al renderer (boundary local del usuario)
+      // pero en producción NO lo logueamos a console: errores del dominio
+      // pueden contener cédulas, montos o paths que se filtrarían si los
+      // logs de Electron se suben a un crash report. En desarrollo sí
+      // logueamos completo para facilitar debug.
+      const errType = err instanceof Error ? err.constructor.name : typeof err
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[ipc]', fn.name, '→', msg)
+      } else {
+        console.error('[ipc]', fn.name, 'failed:', errType)
+      }
       return { ok: false, error: msg }
     }
   }
@@ -173,28 +186,40 @@ function wrap<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => Ip
 export function registerIpcHandlers(db: DB): void {
   // clientes
   ipcMain.handle('clientes:listar', (_e, opts) => wrap(listarClientes)(db, opts))
-  ipcMain.handle('clientes:obtener', (_e, id: number) => wrap(obtenerCliente)(db, id))
+  ipcMain.handle('clientes:obtener', (_e, id: number) =>
+    wrap(obtenerCliente)(db, validarId(id, 'clienteId'))
+  )
   ipcMain.handle('clientes:obtenerConAcudiente', (_e, id: number) =>
-    wrap(obtenerClienteConAcudiente)(db, id)
+    wrap(obtenerClienteConAcudiente)(db, validarId(id, 'clienteId'))
   )
   ipcMain.handle('clientes:crear', (_e, data) => wrap(crearCliente)(db, data))
   ipcMain.handle('clientes:actualizar', (_e, id: number, data) =>
-    wrap(actualizarCliente)(db, id, data)
+    wrap(actualizarCliente)(db, validarId(id, 'clienteId'), data)
   )
-  ipcMain.handle('clientes:desactivar', (_e, id: number) => wrap(desactivarCliente)(db, id))
-  ipcMain.handle('clientes:reactivar', (_e, id: number) => wrap(reactivarCliente)(db, id))
-  ipcMain.handle('clientes:estadisticas', (_e, id: number) => wrap(estadisticasCliente)(db, id))
+  ipcMain.handle('clientes:desactivar', (_e, id: number) =>
+    wrap(desactivarCliente)(db, validarId(id, 'clienteId'))
+  )
+  ipcMain.handle('clientes:reactivar', (_e, id: number) =>
+    wrap(reactivarCliente)(db, validarId(id, 'clienteId'))
+  )
+  ipcMain.handle('clientes:estadisticas', (_e, id: number) =>
+    wrap(estadisticasCliente)(db, validarId(id, 'clienteId'))
+  )
   ipcMain.handle('clientes:upsertAcudiente', (_e, data) => wrap(upsertAcudiente)(db, data))
   ipcMain.handle('clientes:listarAcudientes', () => wrap(listarAcudientes)(db))
 
   // proveedores
   ipcMain.handle('proveedores:listar', (_e, opts) => wrap(listarProveedores)(db, opts))
-  ipcMain.handle('proveedores:obtener', (_e, id: number) => wrap(obtenerProveedor)(db, id))
+  ipcMain.handle('proveedores:obtener', (_e, id: number) =>
+    wrap(obtenerProveedor)(db, validarId(id, 'proveedorId'))
+  )
   ipcMain.handle('proveedores:crear', (_e, data) => wrap(crearProveedor)(db, data))
   ipcMain.handle('proveedores:actualizar', (_e, id: number, data) =>
-    wrap(actualizarProveedor)(db, id, data)
+    wrap(actualizarProveedor)(db, validarId(id, 'proveedorId'), data)
   )
-  ipcMain.handle('proveedores:desactivar', (_e, id: number) => wrap(desactivarProveedor)(db, id))
+  ipcMain.handle('proveedores:desactivar', (_e, id: number) =>
+    wrap(desactivarProveedor)(db, validarId(id, 'proveedorId'))
+  )
 
   // configuracion
   ipcMain.handle('configuracion:listar', () => wrap(listarConfiguracion)(db))
@@ -336,7 +361,9 @@ export function registerIpcHandlers(db: DB): void {
 
   // pedidos
   ipcMain.handle('pedidos:listar', (_e, opts) => wrap(listarPedidos)(db, opts))
-  ipcMain.handle('pedidos:obtener', (_e, id: number) => wrap(obtenerPedido)(db, id))
+  ipcMain.handle('pedidos:obtener', (_e, id: number) =>
+    wrap(obtenerPedido)(db, validarId(id, 'pedidoId'))
+  )
   ipcMain.handle('pedidos:obtenerPorNumero', (_e, numero: string) =>
     wrap(obtenerPedidoPorNumero)(db, numero)
   )
@@ -344,10 +371,14 @@ export function registerIpcHandlers(db: DB): void {
     wrap(crearPedidoDesdeCotizacion)(db, datos, cotizacion)
   )
   ipcMain.handle('pedidos:cambiarEstado', (_e, id: number, estado) =>
-    wrap(cambiarEstadoPedido)(db, id, estado)
+    wrap(cambiarEstadoPedido)(
+      db,
+      validarId(id, 'pedidoId'),
+      validarEnum(estado, ESTADOS_PEDIDO, 'estado')
+    )
   )
   ipcMain.handle('pedidos:actualizarFechaEntrega', (_e, id: number, fecha) =>
-    wrap(actualizarFechaEntrega)(db, id, fecha)
+    wrap(actualizarFechaEntrega)(db, validarId(id, 'pedidoId'), fecha)
   )
   ipcMain.handle('pedidos:alertas:atrasados', () => wrap(pedidosAtrasados)(db))
   ipcMain.handle('pedidos:alertas:entregaProxima', (_e, dias?: number) =>
@@ -379,12 +410,18 @@ export function registerIpcHandlers(db: DB): void {
 
   // facturas
   ipcMain.handle('facturas:crear', (_e, data) => wrap(crearFactura)(db, data))
-  ipcMain.handle('facturas:obtener', (_e, id: number) => wrap(obtenerFactura)(db, id))
+  ipcMain.handle('facturas:obtener', (_e, id: number) =>
+    wrap(obtenerFactura)(db, validarId(id, 'facturaId'))
+  )
   ipcMain.handle('facturas:listar', (_e, opts) => wrap(listarFacturas)(db, opts))
-  ipcMain.handle('facturas:saldo', (_e, id: number) => wrap(getSaldoFactura)(db, id))
+  ipcMain.handle('facturas:saldo', (_e, id: number) =>
+    wrap(getSaldoFactura)(db, validarId(id, 'facturaId'))
+  )
   ipcMain.handle('facturas:registrarPago', (_e, data) => wrap(registrarPago)(db, data))
   ipcMain.handle('facturas:registrarDevolucion', (_e, data) => wrap(registrarDevolucion)(db, data))
-  ipcMain.handle('facturas:anular', (_e, id: number) => wrap(anularFactura)(db, id))
+  ipcMain.handle('facturas:anular', (_e, id: number) =>
+    wrap(anularFactura)(db, validarId(id, 'facturaId'))
+  )
 
   // clases
   ipcMain.handle('clases:listar', (_e, soloActivas?: boolean) =>
@@ -394,12 +431,16 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('estudiantes:listar', (_e, soloActivos?: boolean) =>
     wrap(listarEstudiantes)(db, soloActivos)
   )
-  ipcMain.handle('estudiantes:obtener', (_e, id: number) => wrap(obtenerEstudiante)(db, id))
+  ipcMain.handle('estudiantes:obtener', (_e, id: number) =>
+    wrap(obtenerEstudiante)(db, validarId(id, 'estudianteId'))
+  )
   ipcMain.handle('estudiantes:crear', (_e, data) => wrap(crearEstudiante)(db, data))
-  ipcMain.handle('estudiantes:desactivar', (_e, id: number) => wrap(desactivarEstudiante)(db, id))
+  ipcMain.handle('estudiantes:desactivar', (_e, id: number) =>
+    wrap(desactivarEstudiante)(db, validarId(id, 'estudianteId'))
+  )
   ipcMain.handle('pagosClases:listarMes', (_e, mes: string) => wrap(listarPagosMes)(db, mes))
   ipcMain.handle('pagosClases:obtenerConDetalles', (_e, id: number) =>
-    wrap(obtenerPagoClaseConDetalles)(db, id)
+    wrap(obtenerPagoClaseConDetalles)(db, validarId(id, 'pagoClaseId'))
   )
   ipcMain.handle('pagosClases:registrar', (_e, data) => wrap(registrarPagoClase)(db, data))
   ipcMain.handle('pagosClases:generarMes', (_e, mes: string) => wrap(generarPagosDelMes)(db, mes))
@@ -407,7 +448,7 @@ export function registerIpcHandlers(db: DB): void {
 
   // estudiantes — actualizar
   ipcMain.handle('estudiantes:actualizar', (_e, id: number, data) =>
-    wrap(actualizarEstudiante)(db, id, data)
+    wrap(actualizarEstudiante)(db, validarId(id, 'estudianteId'), data)
   )
 
   // asistencias
@@ -442,10 +483,16 @@ export function registerIpcHandlers(db: DB): void {
 
   // contratos
   ipcMain.handle('contratos:listar', (_e, opts) => wrap(listarContratos)(db, opts))
-  ipcMain.handle('contratos:obtener', (_e, id: number) => wrap(obtenerContrato)(db, id))
+  ipcMain.handle('contratos:obtener', (_e, id: number) =>
+    wrap(obtenerContrato)(db, validarId(id, 'contratoId'))
+  )
   ipcMain.handle('contratos:crear', (_e, data) => wrap(crearContrato)(db, data))
   ipcMain.handle('contratos:cambiarEstado', (_e, id: number, estado) =>
-    wrap(cambiarEstadoContrato)(db, id, estado)
+    wrap(cambiarEstadoContrato)(
+      db,
+      validarId(id, 'contratoId'),
+      validarEnum(estado, ESTADOS_CONTRATO, 'estado')
+    )
   )
   ipcMain.handle('cuentasCobro:listar', (_e, contratoId?: number) =>
     wrap(listarCuentasCobro)(db, contratoId)

@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit'
 import { app, shell } from 'electron'
-import { join, resolve, sep } from 'path'
+import { basename, join, resolve, sep } from 'path'
 import { createWriteStream, existsSync, mkdirSync, lstatSync, realpathSync } from 'fs'
 import type { DB } from '../db'
 import { configuracion } from '../db/schema'
@@ -397,7 +397,7 @@ function validarPathSeguro(rawPath: string, allowedDirRaw: string, recurso: stri
 
   // Guard 1 (textual): resolve() normaliza '..' pero no sigue symlinks.
   if (!resolvedTextual.startsWith(allowedDir + sep)) {
-    console.warn(`[security] ${recurso} fuera de directorio permitido:`, resolvedTextual)
+    console.warn(`[security] ${recurso} fuera de directorio permitido:`, basename(resolvedTextual))
     throw new Error(mensajeUsuario)
   }
 
@@ -410,11 +410,11 @@ function validarPathSeguro(rawPath: string, allowedDirRaw: string, recurso: stri
     throw new Error(`Archivo ${recurso} no encontrado`)
   }
   if (linkStat.isSymbolicLink()) {
-    console.warn(`[security] ${recurso} es un symlink, rechazado:`, resolvedTextual)
+    console.warn(`[security] ${recurso} es un symlink, rechazado:`, basename(resolvedTextual))
     throw new Error(mensajeUsuario)
   }
   if (!linkStat.isFile()) {
-    console.warn(`[security] ${recurso} no es archivo regular:`, resolvedTextual)
+    console.warn(`[security] ${recurso} no es archivo regular:`, basename(resolvedTextual))
     throw new Error(mensajeUsuario)
   }
 
@@ -426,7 +426,7 @@ function validarPathSeguro(rawPath: string, allowedDirRaw: string, recurso: stri
     const realAllowed = realpathSync(allowedDir)
     const realPath = realpathSync(resolvedTextual)
     if (!realPath.startsWith(realAllowed + sep)) {
-      console.warn(`[security] ${recurso} apunta fuera tras resolver symlinks:`, realPath)
+      console.warn(`[security] ${recurso} apunta fuera tras resolver symlinks:`, basename(realPath))
       throw new Error(mensajeUsuario)
     }
     return realPath

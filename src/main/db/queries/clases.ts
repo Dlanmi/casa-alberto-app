@@ -5,6 +5,7 @@ import {
   asistencias,
   clases,
   estudiantes,
+  METODOS_PAGO,
   movimientosFinancieros,
   pagosClases,
   pagosClasesDetalle,
@@ -14,6 +15,8 @@ import {
   type MetodoPago
 } from '../schema'
 import { getConfigNumber } from './configuracion'
+import { validarFechaISO } from '../../lib/validar-fecha'
+import { validarEnum } from '../../lib/validar-enum'
 
 // ---------------------------------------------------------------------------
 // Clases
@@ -109,6 +112,7 @@ export function registrarPagoClase(db: DB, data: NuevoPagoClase) {
     if (!Number.isFinite(data.monto) || data.monto <= 0) {
       throw new Error('El monto del pago debe ser mayor a 0')
     }
+    validarEnum(data.metodoPago, METODOS_PAGO, 'metodoPago')
     const precioMensual = getConfigNumber(tx as unknown as DB, 'precio_clase_mensual', 0)
 
     let pagoClase = tx
@@ -188,6 +192,7 @@ export function registrarPagoClase(db: DB, data: NuevoPagoClase) {
 }
 
 export function listarPagosMes(db: DB, mes: string) {
+  validarFechaISO(mes, 'YYYY-MM', 'mes')
   // Devolvemos el pago mensual enriquecido con `totalPagado` (suma de los
   // detalles) para que la UI pueda dibujar la barra de progreso real sin
   // tener que hacer N+1 round-trips.
@@ -229,6 +234,7 @@ export function listarPagosMes(db: DB, mes: string) {
  * @returns cantidad de pagos creados en esta invocación
  */
 export function generarPagosDelMes(db: DB, mes: string): number {
+  validarFechaISO(mes, 'YYYY-MM', 'mes')
   return db.transaction((tx) => {
     const precioMensual = getConfigNumber(tx as unknown as DB, 'precio_clase_mensual', 0)
     if (precioMensual <= 0) return 0

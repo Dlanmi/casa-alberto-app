@@ -4,6 +4,7 @@ import { generarConsecutivo } from '../consecutivos'
 import {
   devoluciones,
   facturas,
+  METODOS_PAGO,
   movimientosFinancieros,
   pagos,
   pedidos,
@@ -11,6 +12,7 @@ import {
   type EstadoFactura,
   type MetodoPago
 } from '../schema'
+import { validarEnum } from '../../lib/validar-enum'
 
 export type NuevaFactura = {
   pedidoId: number
@@ -123,6 +125,7 @@ export function registrarPago(db: DB, data: NuevoPago) {
     if (data.monto <= 0) {
       throw new Error('El monto del pago debe ser mayor a 0')
     }
+    validarEnum(data.metodoPago, METODOS_PAGO, 'metodoPago')
 
     const factura = tx.select().from(facturas).where(eq(facturas.id, data.facturaId)).get()
     if (!factura) throw new Error(`Factura ${data.facturaId} no encontrada`)

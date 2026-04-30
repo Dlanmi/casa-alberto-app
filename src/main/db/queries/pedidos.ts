@@ -29,6 +29,7 @@ import {
 } from '../schema'
 import type { ResultadoCotizacion } from './cotizador'
 import { TRANSICIONES_VALIDAS } from '@shared/pedido-transitions'
+import { validarFechaISO } from '../../lib/validar-fecha'
 
 export { TRANSICIONES_VALIDAS }
 
@@ -64,6 +65,15 @@ export function crearPedidoDesdeCotizacion(
   datos: NuevoPedidoDatos,
   cotizacion: ResultadoCotizacion
 ) {
+  // Validar formato y existencia real de las fechas antes del compare.
+  // String compare lexicográfico permite que "2026-13-50" pase el `<`
+  // cuando la fecha es semánticamente imposible.
+  if (datos.fechaIngreso) {
+    validarFechaISO(datos.fechaIngreso, 'YYYY-MM-DD', 'fechaIngreso')
+  }
+  if (datos.fechaEntrega) {
+    validarFechaISO(datos.fechaEntrega, 'YYYY-MM-DD', 'fechaEntrega')
+  }
   if (datos.fechaEntrega && datos.fechaIngreso && datos.fechaEntrega < datos.fechaIngreso) {
     throw new Error('La fecha de entrega no puede ser anterior a la fecha de ingreso')
   }

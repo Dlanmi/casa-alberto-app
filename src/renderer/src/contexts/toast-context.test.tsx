@@ -119,12 +119,46 @@ describe('ToastProvider', () => {
       </ToastProvider>
     )
 
-    // Dispara el mismo toast 3 veces — debería quedar solo uno.
+    // Dispara el mismo toast success 3 veces — debería quedar solo uno
+    // (success/info/progress se dedupean para evitar pilas de confirmaciones).
     fireEvent.click(screen.getByRole('button', { name: /mostrar toast legado/i }))
     fireEvent.click(screen.getByRole('button', { name: /mostrar toast legado/i }))
     fireEvent.click(screen.getByRole('button', { name: /mostrar toast legado/i }))
 
     expect(screen.getAllByText('Guardado').length).toBe(1)
+  })
+
+  it('errores secuenciales NO se dedupean: el dueño debe ver cada fallo', () => {
+    function ErrorThrice(): React.JSX.Element {
+      const { showToast } = useToast()
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            // Tres errores idénticos seguidos: si la operación falla varias
+            // veces, papá tiene que ver cada toast — silenciar el segundo
+            // ocultaría el síntoma.
+            showToast({ tone: 'error', message: 'Conexión perdida' })
+            showToast({ tone: 'error', message: 'Conexión perdida' })
+            showToast({ tone: 'error', message: 'Conexión perdida' })
+          }}
+        >
+          Disparar 3 errores
+        </button>
+      )
+    }
+
+    render(
+      <ToastProvider>
+        <ErrorThrice />
+      </ToastProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /disparar 3 errores/i }))
+
+    // El cap limita a MAX_TOASTS=3 simultáneos. Como ningún error se
+    // dedupea, deberíamos ver los 3 textos (limit del cap).
+    expect(screen.getAllByText('Conexión perdida').length).toBe(3)
   })
 
   it('cap: máximo 3 toasts simultáneos, el más viejo se descarta (C2)', () => {

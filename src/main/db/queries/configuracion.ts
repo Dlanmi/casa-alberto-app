@@ -7,11 +7,18 @@ export function getConfig(db: DB, clave: string): string | null {
   return row?.valor ?? null
 }
 
+// Parser puro extraído para test sin DB. `Number.isFinite` rechaza NaN,
+// Infinity y -Infinity. Sin este guard, un valor manual mal formado
+// (`"1e999"`, `"abc"`) podía propagar Infinity a cálculos del cotizador
+// (porcentaje, precio_clase_mensual) y mostrar "$Infinity" en pantalla.
+export function parseConfigNumber(raw: string | null, fallback = 0): number {
+  if (raw == null) return fallback
+  const n = parseFloat(raw)
+  return Number.isFinite(n) ? n : fallback
+}
+
 export function getConfigNumber(db: DB, clave: string, fallback = 0): number {
-  const v = getConfig(db, clave)
-  if (v == null) return fallback
-  const n = parseFloat(v)
-  return Number.isNaN(n) ? fallback : n
+  return parseConfigNumber(getConfig(db, clave), fallback)
 }
 
 const CLAVES_NUMERICAS = [
