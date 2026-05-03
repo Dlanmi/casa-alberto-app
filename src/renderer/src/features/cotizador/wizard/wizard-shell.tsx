@@ -97,6 +97,10 @@ export function WizardShell({
   onClienteChange
 }: WizardShellProps): React.JSX.Element {
   const [step, setStep] = useState(0)
+  // Dirección del último cambio de paso, para escoger el keyframe de
+  // entrada (right→ avance, ←left retroceso). Se aplica al wrapper
+  // envuelto con key del step actual para forzar re-mount + animación.
+  const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
   // SPEC-001 — al montar, intentamos recuperar un draft previo para no perder
   // trabajo si el usuario cerró la app sin terminar. Se namespacea por tipoTrabajo.
   const draftKey = `cotizador:${tipoTrabajo}`
@@ -381,7 +385,10 @@ export function WizardShell({
                 <StepDots
                   steps={[...visibleSteps]}
                   current={step}
-                  onJump={(index) => setStep(index)}
+                  onJump={(index) => {
+                    setDirection(index >= step ? 'forward' : 'backward')
+                    setStep(index)
+                  }}
                 />
               </div>
 
@@ -392,34 +399,45 @@ export function WizardShell({
                 className="mb-6"
               />
 
-              {currentStep?.key === 'precio' && (
-                <StepPrecioManual data={data} onChange={updateData} tipoTrabajo={tipoTrabajo} />
-              )}
-              {currentStep?.key === 'medidas' && <StepMedidas data={data} onChange={updateData} />}
-              {currentStep?.key === 'vidrio_tipo' && (
-                <StepVidrioEspejo data={data} onChange={updateData} />
-              )}
-              {currentStep?.key === 'marco' &&
-                (marcosLoading ? (
-                  <PageLoader />
-                ) : (
-                  <StepMarco data={data} onChange={updateData} marcos={marcos ?? []} />
-                ))}
-              {currentStep?.key === 'opciones' && (
-                <StepOpciones data={data} onChange={updateData} tipoTrabajo={tipoTrabajo} />
-              )}
-              {currentStep?.key === 'materiales' && (
-                <StepMateriales data={data} onChange={updateData} />
-              )}
-              {currentStep?.key === 'resumen' && (
-                <StepResumen
-                  data={data}
-                  cotizacion={cotizacion}
-                  tipoTrabajo={tipoTrabajo}
-                  cliente={cliente}
-                  onClienteChange={onClienteChange}
-                />
-              )}
+              <div
+                key={currentStep?.key}
+                className={
+                  direction === 'forward'
+                    ? 'animate-step-enter-forward'
+                    : 'animate-step-enter-backward'
+                }
+              >
+                {currentStep?.key === 'precio' && (
+                  <StepPrecioManual data={data} onChange={updateData} tipoTrabajo={tipoTrabajo} />
+                )}
+                {currentStep?.key === 'medidas' && (
+                  <StepMedidas data={data} onChange={updateData} />
+                )}
+                {currentStep?.key === 'vidrio_tipo' && (
+                  <StepVidrioEspejo data={data} onChange={updateData} />
+                )}
+                {currentStep?.key === 'marco' &&
+                  (marcosLoading ? (
+                    <PageLoader />
+                  ) : (
+                    <StepMarco data={data} onChange={updateData} marcos={marcos ?? []} />
+                  ))}
+                {currentStep?.key === 'opciones' && (
+                  <StepOpciones data={data} onChange={updateData} tipoTrabajo={tipoTrabajo} />
+                )}
+                {currentStep?.key === 'materiales' && (
+                  <StepMateriales data={data} onChange={updateData} />
+                )}
+                {currentStep?.key === 'resumen' && (
+                  <StepResumen
+                    data={data}
+                    cotizacion={cotizacion}
+                    tipoTrabajo={tipoTrabajo}
+                    cliente={cliente}
+                    onClienteChange={onClienteChange}
+                  />
+                )}
+              </div>
             </div>
 
             {/* Footer al bottom del LEFT column — sin sticky. Al ser el último
@@ -431,7 +449,10 @@ export function WizardShell({
               <Button
                 variant="outline"
                 size="lg"
-                onClick={() => setStep((current) => Math.max(0, current - 1))}
+                onClick={() => {
+                  setDirection('backward')
+                  setStep((current) => Math.max(0, current - 1))
+                }}
                 disabled={step === 0}
               >
                 <ArrowLeft size={18} />
@@ -440,7 +461,10 @@ export function WizardShell({
               {step < visibleSteps.length - 1 ? (
                 <Button
                   size="lg"
-                  onClick={() => setStep((current) => current + 1)}
+                  onClick={() => {
+                    setDirection('forward')
+                    setStep((current) => current + 1)
+                  }}
                   disabled={!canContinue}
                 >
                   {canContinue
@@ -652,9 +676,36 @@ function StepVidrioEspejo({
     () => window.api.cotizador.listarPreciosVidrio(),
     []
   )
-  const precioClaro = preciosVidrio?.find((p) => p.tipo === 'claro')?.precioM2 ?? 100000
-  const precioAntirreflectivo =
-    preciosVidrio?.find((p) => p.tipo === 'antirreflectivo')?.precioM2 ?? 115000
+  const opcionesVidrio =
+    preciosVidrio && preciosVidrio.length > 0
+      ? preciosVidrio
+      : ([
+          {
+            id: -1,
+            tipo: 'claro',
+            precioM2: 100000,
+            activo: true,
+            createdAt: '',
+            updatedAt: ''
+          },
+          {
+            id: -2,
+            tipo: 'antirreflectivo',
+            precioM2: 115000,
+            activo: true,
+            createdAt: '',
+            updatedAt: ''
+          }
+        ] as PrecioVidrio[])
+  const vidrioSeleccionado =
+    opcionesVidrio.find((p) => p.tipo === data.tipoVidrioEspejo) ?? opcionesVidrio[0]
+
+  useEffect(() => {
+    if (vidrioSeleccionado && vidrioSeleccionado.tipo !== data.tipoVidrioEspejo) {
+      onChange({ tipoVidrioEspejo: vidrioSeleccionado.tipo })
+    }
+  }, [data.tipoVidrioEspejo, onChange, vidrioSeleccionado?.tipo])
+
   const formatPrecio = (v: number): string =>
     new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -667,8 +718,14 @@ function StepVidrioEspejo({
   const anchoRedondeado = data.anchoCm > 0 ? Math.ceil(data.anchoCm / 10) * 10 : 0
   const altoRedondeado = data.altoCm > 0 ? Math.ceil(data.altoCm / 10) * 10 : 0
   const areaM2 = (anchoRedondeado * altoRedondeado) / 10000
-  const precioUnitario = data.tipoVidrioEspejo === 'claro' ? precioClaro : precioAntirreflectivo
+  const precioUnitario = vidrioSeleccionado?.precioM2 ?? 0
   const precioCalculado = Math.round(areaM2 * precioUnitario)
+  const formatTipo = (tipo: string): string =>
+    tipo
+      .split('_')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
 
   const instalacion = useMoneyInput(data.precioInstalacion, (n) =>
     onChange({ precioInstalacion: n })
@@ -685,38 +742,27 @@ function StepVidrioEspejo({
         <div>
           <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-3">Tipo</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {[
-              {
-                key: 'claro' as const,
-                label: 'Claro',
-                desc: 'Vidrio transparente 2mm',
-                precio: formatPrecio(precioClaro)
-              },
-              {
-                key: 'antirreflectivo' as const,
-                label: 'Antirreflectivo',
-                desc: 'Sin brillo, ideal con luz directa',
-                precio: formatPrecio(precioAntirreflectivo)
-              }
-            ].map((option) => (
+            {opcionesVidrio.map((option) => (
               <button
-                key={option.key}
-                onClick={() => onChange({ tipoVidrioEspejo: option.key })}
+                key={option.id}
+                onClick={() => onChange({ tipoVidrioEspejo: option.tipo })}
                 className={cn(
                   'relative flex flex-col items-start p-4 rounded-lg border-2 cursor-pointer transition-all text-left',
-                  data.tipoVidrioEspejo === option.key
+                  data.tipoVidrioEspejo === option.tipo
                     ? 'border-accent bg-accent/10 shadow-1'
                     : 'border-border hover:border-border-strong'
                 )}
               >
-                {data.tipoVidrioEspejo === option.key && (
+                {data.tipoVidrioEspejo === option.tipo && (
                   <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-accent flex items-center justify-center">
                     <Check size={12} className="text-white" />
                   </div>
                 )}
-                <span className="text-sm font-semibold text-text">{option.label}</span>
-                <span className="text-xs text-text-muted mt-0.5">{option.desc}</span>
-                <span className="text-xs font-medium text-accent-strong mt-1">{option.precio}</span>
+                <span className="text-sm font-semibold text-text">{formatTipo(option.tipo)}</span>
+                <span className="text-xs text-text-muted mt-0.5">Precio activo por m²</span>
+                <span className="text-xs font-medium text-accent-strong mt-1">
+                  {formatPrecio(option.precioM2)}
+                </span>
               </button>
             ))}
           </div>

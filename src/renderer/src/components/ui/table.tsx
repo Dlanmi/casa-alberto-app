@@ -1,6 +1,14 @@
 import type { HTMLAttributes, ThHTMLAttributes, TdHTMLAttributes } from 'react'
 import { cn } from '@renderer/lib/cn'
 
+/** Delay incremental entre filas que opt-in a stagger via `staggerIndex`.
+ *  Total budget cap = TABLE_STAGGER_MS * TABLE_STAGGER_MAX_INDEX = 300ms
+ *  para mantenernos dentro de la regla 1/3 del motion design. */
+export const TABLE_STAGGER_MS = 25
+/** Index máximo que recibe delay; las filas más allá animan sin retraso
+ *  adicional para que el budget total no escale en tablas largas. */
+export const TABLE_STAGGER_MAX_INDEX = 12
+
 export function Table({
   className,
   ...props
@@ -40,16 +48,37 @@ export function Tbody({
   )
 }
 
-type TrProps = HTMLAttributes<HTMLTableRowElement> & { selected?: boolean }
+type TrProps = HTMLAttributes<HTMLTableRowElement> & {
+  selected?: boolean
+  /** Cuando se define, la fila aplica `animate-fade-in-up` con un delay
+   *  incremental (cap en TABLE_STAGGER_MAX_INDEX). Útil al renderizar listas
+   *  filtradas para que el cambio se sienta orquestado, no abrupto. */
+  staggerIndex?: number
+}
 
-export function Tr({ className, selected, ...props }: TrProps): React.JSX.Element {
+export function Tr({
+  className,
+  selected,
+  staggerIndex,
+  style,
+  ...props
+}: TrProps): React.JSX.Element {
+  const cappedIndex =
+    staggerIndex !== undefined ? Math.min(staggerIndex, TABLE_STAGGER_MAX_INDEX) : undefined
+  const composedStyle =
+    cappedIndex !== undefined
+      ? { ...style, animationDelay: `${cappedIndex * TABLE_STAGGER_MS}ms` }
+      : style
+
   return (
     <tr
       className={cn(
         'transition-colors hover:bg-surface-muted',
         selected && 'bg-accent/5 hover:bg-accent/8',
+        cappedIndex !== undefined && 'animate-fade-in-up',
         className
       )}
+      style={composedStyle}
       {...props}
     />
   )

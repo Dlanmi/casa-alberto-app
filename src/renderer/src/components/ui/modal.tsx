@@ -2,6 +2,11 @@ import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
 
+// Duración del keyframe modal-exit + backdrop-fade-out en main.css.
+// Se mantiene en JS porque retrasamos dialog.close() para que la animación
+// se complete antes de desmontar. Si se cambia uno, cambiar el otro.
+const MODAL_EXIT_MS = 150
+
 type ModalProps = {
   open: boolean
   onClose: () => void
@@ -55,15 +60,34 @@ export function Modal({
       lastFocusedRef.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null
 
+      // Por si veníamos de un cierre interrumpido, retira la clase de salida.
+      dialog.classList.remove('closing')
+
       if (!dialog.open) {
         dialog.showModal()
       }
 
       const focusTarget = initialFocusRef?.current ?? closeButtonRef.current ?? dialog
       queueMicrotask(() => focusTarget?.focus())
-    } else if (dialog.open) {
-      dialog.close()
+      return
     }
+
+    if (dialog.open) {
+      // Aplica la clase para que CSS dispare modal-exit + backdrop-fade-out.
+      // Después de la duración del keyframe, se hace close() real. Si la prop
+      // open vuelve a true antes de que cierre, el effect siguiente limpia la
+      // clase y reabre — caso raro pero cubierto.
+      dialog.classList.add('closing')
+      const timer = window.setTimeout(() => {
+        dialog.classList.remove('closing')
+        if (dialog.open) dialog.close()
+      }, MODAL_EXIT_MS)
+      return () => {
+        window.clearTimeout(timer)
+      }
+    }
+
+    return
   }, [initialFocusRef, open])
 
   useEffect(() => {

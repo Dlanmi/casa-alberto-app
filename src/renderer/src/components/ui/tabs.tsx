@@ -104,9 +104,12 @@ export function Tabs({
           onClick={() => onChange(tab.key)}
           onKeyDown={(event) => handleKeyDown(event, index)}
           className={cn(
-            'px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer -mb-px rounded-t-[var(--radius-sm)]',
+            // border-b-2 border-transparent siempre presente para que el cambio
+            // a border-accent en active sea un cross-fade de color (transition-
+            // colors lo cubre) en vez de un salto.
+            'px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer -mb-px rounded-t-[var(--radius-sm)] border-b-2 border-transparent',
             active === tab.key
-              ? 'text-accent-strong border-b-2 border-accent bg-surface'
+              ? 'text-accent-strong border-accent bg-surface'
               : 'text-text-soft hover:text-text-muted'
           )}
         >

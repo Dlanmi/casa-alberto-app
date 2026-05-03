@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { PanelLeftClose, PanelLeftOpen, HardDrive, Download } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
@@ -39,6 +39,29 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
     '/facturas': 0,
     '/inventario': 0
   })
+  // Tracking imperativo (sin setState en effect). prevBadgesRef guarda el
+  // valor previo; al cambiar badges, comparamos y aplicamos la clase de
+  // animación directamente al span via classList. Mismo patrón que
+  // PrecioDisplay para no disparar re-renders en cascada.
+  const prevBadgesRef = useRef<BadgeCounts | null>(null)
+  const badgeRefs = useRef<Map<string, HTMLSpanElement | null>>(new Map())
+
+  useEffect(() => {
+    const prev = prevBadgesRef.current
+    prevBadgesRef.current = badges
+    if (!prev) return
+    for (const path of Object.keys(badges) as Array<keyof BadgeCounts>) {
+      const el = badgeRefs.current.get(path)
+      if (!el) continue
+      let cls: string | null = null
+      if (prev[path] === 0 && badges[path] > 0) cls = 'animate-badge-enter'
+      else if (badges[path] > prev[path]) cls = 'animate-badge-pulse'
+      if (!cls) continue
+      el.classList.remove('animate-badge-enter', 'animate-badge-pulse')
+      void el.offsetWidth
+      el.classList.add(cls)
+    }
+  }, [badges])
   // Último backup conocido, para mostrar "Respaldo: hace Xh" en la parte
   // inferior del sidebar. Se refresca cada 5 minutos.
   const [ultimoBackup, setUltimoBackup] = useState<BackupInfo | null>(null)
@@ -184,6 +207,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
                       {badgeCount > 0 &&
                         (collapsed ? (
                           <span
+                            ref={(el) => {
+                              badgeRefs.current.set(item.path, el)
+                            }}
                             aria-live="polite"
                             className="absolute -top-1 -right-1 h-5 min-w-5 px-1 flex items-center justify-center rounded-full bg-accent text-white text-xs font-bold"
                           >
@@ -191,6 +217,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
                           </span>
                         ) : (
                           <span
+                            ref={(el) => {
+                              badgeRefs.current.set(item.path, el)
+                            }}
                             aria-live="polite"
                             className="h-6 min-w-6 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-xs font-bold"
                           >

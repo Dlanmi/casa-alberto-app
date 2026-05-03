@@ -15,15 +15,15 @@ Abril 2026
 
 La app está diseñada para un usuario específico: un emprendedor de 36 años de experiencia que ha manejado todo en papel y está dispuesto a usar tecnología. Cada decisión de diseño se basa en estos principios:
 
-| Principio | Aplicación |
-|-----------|-----------|
-| Tarjetas visuales | Selección por tarjetas grandes con ícono y descripción en vez de dropdowns pequeños. El usuario ve todas las opciones de un vistazo. |
-| Pasos guiados | Los procesos complejos (cotizar, crear pedido) se dividen en pasos con indicador de progreso. Un paso a la vez, sin abrumar. |
-| Feedback en vivo | Los precios y totales se actualizan en tiempo real mientras el usuario selecciona opciones. Sin botón 'calcular'. |
-| Colores que hablan | Verde = todo bien. Amarillo = atención. Rojo = urgente. Azul = listo para entregar. Sin necesidad de leer texto. |
-| Mínimos clics | Cada acción frecuente debe estar a máximo 2 clics desde la pantalla principal. |
-| Botones grandes | Elementos de interacción grandes y claros. Texto legible. Sin íconos ambiguos. |
-| Alertas proactivas | La app avisa antes de que haya un problema, no después. Recordatorios de entrega, pagos pendientes, clases. |
+| Principio          | Aplicación                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Tarjetas visuales  | Selección por tarjetas grandes con ícono y descripción en vez de dropdowns pequeños. El usuario ve todas las opciones de un vistazo. |
+| Pasos guiados      | Los procesos complejos (cotizar, crear pedido) se dividen en pasos con indicador de progreso. Un paso a la vez, sin abrumar.         |
+| Feedback en vivo   | Los precios y totales se actualizan en tiempo real mientras el usuario selecciona opciones. Sin botón 'calcular'.                    |
+| Colores que hablan | Verde = todo bien. Amarillo = atención. Rojo = urgente. Azul = listo para entregar. Sin necesidad de leer texto.                     |
+| Mínimos clics      | Cada acción frecuente debe estar a máximo 2 clics desde la pantalla principal.                                                       |
+| Botones grandes    | Elementos de interacción grandes y claros. Texto legible. Sin íconos ambiguos.                                                       |
+| Alertas proactivas | La app avisa antes de que haya un problema, no después. Recordatorios de entrega, pagos pendientes, clases.                          |
 
 ---
 
@@ -31,18 +31,18 @@ La app está diseñada para un usuario específico: un emprendedor de 36 años d
 
 La app usa una barra lateral izquierda fija con íconos y texto para cada módulo. El Dashboard es la pantalla de inicio. La navegación es siempre visible y muestra badges con contadores de alertas pendientes.
 
-| Ícono | Módulo | Descripción en la barra |
-|-------|--------|------------------------|
-| 🏠 | Dashboard | Inicio — Vista del día |
-| 🧮 | Cotizador | Nueva cotización |
-| 📋 | Pedidos | Trabajos activos |
-| 🧾 | Facturas | Facturación |
-| 👥 | Clientes | Base de clientes |
-| 🎨 | Clases | Dibujo y pintura |
-| 💰 | Finanzas | Ingresos y gastos |
-| 🚚 | Proveedores | Directorio |
-| 📄 | Contratos | Cotizaciones formales |
-| ⚙ | Config | Ajustes (para el desarrollador) |
+| Ícono | Módulo      | Descripción en la barra         |
+| ----- | ----------- | ------------------------------- |
+| 🏠    | Dashboard   | Inicio — Vista del día          |
+| 🧮    | Cotizador   | Nueva cotización                |
+| 📋    | Pedidos     | Trabajos activos                |
+| 🧾    | Facturas    | Facturación                     |
+| 👥    | Clientes    | Base de clientes                |
+| 🎨    | Clases      | Dibujo y pintura                |
+| 💰    | Finanzas    | Ingresos y gastos               |
+| 🚚    | Proveedores | Directorio                      |
+| 📄    | Contratos   | Cotizaciones formales           |
+| ⚙     | Config      | Ajustes (para el desarrollador) |
 
 ---
 
@@ -50,7 +50,7 @@ La app usa una barra lateral izquierda fija con íconos y texto para cada módul
 
 Lo primero que tu papá ve al abrir la app cada día. Muestra un resumen inteligente del estado del negocio en tres zonas claras.
 
-*Problemas que resuelve: P-003 (control de pedidos), P-004 (incumplimiento de entregas), P-006 (sin control de costos)*
+_Problemas que resuelve: P-003 (control de pedidos), P-004 (incumplimiento de entregas), P-006 (sin control de costos)_
 
 ### Zona 1: Timeline de Pedidos
 
@@ -97,22 +97,22 @@ Botones grandes en la parte superior del dashboard:
 
 Automatiza todo el cálculo de precios. El cliente escoge materiales, el dueño mete medidas y la app calcula el precio al instante con desglose completo.
 
-*Problemas que resuelve: P-008 (listas de precios en papel), base para P-001 y P-006*
+_Problemas que resuelve: P-008 (listas de precios en papel), base para P-001 y P-006_
 
 ### Pantalla Principal: Selección por Tarjetas
 
 Al entrar al cotizador, el dueño ve tarjetas grandes con ícono para seleccionar el tipo de trabajo:
 
-| Tarjeta | Descripción | Flujo |
-|---------|-------------|-------|
-| 🖼 Enmarcación Estándar | Marco + vidrio + respaldo | Wizard completo (6 pasos) |
-| 🎨 Con Paspartú | Marco + paspartú + vidrio | Wizard completo + paso paspartú |
-| 🛠 Acolchado | MDF + espuma + pegado | Fórmula acolchado + marco opcional |
-| 🖼 Retablo | 4 listones + tapa MDF | Selección directa por medida |
-| 🧱 Bastidor | Estructura para lienzo | Selección directa por medida |
-| 🖼 Tapa Portarretrato | Tapa de reemplazo | Selección directa por medida |
-| 🔧 Restauración | Reparación de piezas | Precio libre (criterio del dueño) |
-| 🪟 Vidrio/Espejo | Cotización a domicilio | Precio por m² + instalación |
+| Tarjeta                 | Descripción               | Flujo                              |
+| ----------------------- | ------------------------- | ---------------------------------- |
+| 🖼 Enmarcación Estándar | Marco + vidrio + respaldo | Wizard completo (6 pasos)          |
+| 🎨 Con Paspartú         | Marco + paspartú + vidrio | Wizard completo + paso paspartú    |
+| 🛠 Acolchado            | MDF + espuma + pegado     | Fórmula acolchado + marco opcional |
+| 🖼 Retablo              | 4 listones + tapa MDF     | Selección directa por medida       |
+| 🧱 Bastidor             | Estructura para lienzo    | Selección directa por medida       |
+| 🖼 Tapa Portarretrato   | Tapa de reemplazo         | Selección directa por medida       |
+| 🔧 Restauración         | Reparación de piezas      | Precio libre (criterio del dueño)  |
+| 🪟 Vidrio/Espejo        | Cotización a domicilio    | Precio por m² + instalación        |
 
 ### Wizard de Enmarcación (flujo principal)
 
@@ -141,20 +141,20 @@ Accesible desde el cotizador con un botón "Gestionar Precios". Pestañas para c
 
 El tablero de control de todos los trabajos activos. Reemplaza los cartones y libretas con un sistema visual de estados y alertas automáticas.
 
-*Problemas que resuelve: P-003 (control en cartón), P-004 (incumplimiento de entregas)*
+_Problemas que resuelve: P-003 (control en cartón), P-004 (incumplimiento de entregas)_
 
 ### Pantalla Principal: Tablero Kanban
 
 Vista tipo tablero con columnas por estado. Cada pedido es una tarjeta que se puede arrastrar de una columna a otra:
 
-| Columna | Descripción | Color de tarjeta |
-|---------|-------------|------------------|
-| Cotizado | Se hizo cotización pero el cliente no confirmó | ⚪ Gris |
-| Confirmado | Cliente aceptó y se recibió la pieza | 🔵 Azul |
-| En proceso | El trabajo está siendo elaborado | 🟢🟡🔴 Según urgencia |
-| Listo | Terminado, esperando recogida | 🔵 Azul (pulsando) |
-| Entregado | Cliente recogió y pagó saldo | ✅ Verde completado |
-| Sin reclamar | +15 días listo sin recoger | 🟣 Morado (alerta) |
+| Columna      | Descripción                                    | Color de tarjeta      |
+| ------------ | ---------------------------------------------- | --------------------- |
+| Cotizado     | Se hizo cotización pero el cliente no confirmó | ⚪ Gris               |
+| Confirmado   | Cliente aceptó y se recibió la pieza           | 🔵 Azul               |
+| En proceso   | El trabajo está siendo elaborado               | 🟢🟡🔴 Según urgencia |
+| Listo        | Terminado, esperando recogida                  | 🔵 Azul (pulsando)    |
+| Entregado    | Cliente recogió y pagó saldo                   | ✅ Verde completado   |
+| Sin reclamar | +15 días listo sin recoger                     | 🟣 Morado (alerta)    |
 
 ### Tarjeta de Pedido (lo que muestra cada tarjeta)
 
@@ -194,7 +194,7 @@ Al hacer clic en una tarjeta, se abre el detalle completo:
 
 Reemplaza las factureras de papel. Genera facturas con consecutivo automático, permite búsqueda instantánea, impresión y envío por correo.
 
-*Problemas que resuelve: P-001 (facturación en papel)*
+_Problemas que resuelve: P-001 (facturación en papel)_
 
 ### Generación de Factura
 
@@ -202,17 +202,17 @@ La factura se puede crear desde el módulo de Pedidos (botón "Generar Factura")
 
 **Campos de la factura:**
 
-| Campo | Comportamiento |
-|-------|---------------|
-| Número consecutivo | Autogenerado, secuencial, no editable |
-| Fecha | Fecha de creación (automática) |
-| Cliente | Nombre, teléfono, cédula (autocompletado si ya existe) |
-| Descripción | Tipo de trabajo y especificaciones |
-| Desglose | Marco, vidrio, paspartú, materiales adicionales |
-| Total | Precio final calculado |
-| Abono | Lo que pagó el cliente |
-| Saldo | Total - Abono (autocalculado) |
-| Fecha de entrega | Cuándo puede recoger el trabajo |
+| Campo              | Comportamiento                                         |
+| ------------------ | ------------------------------------------------------ |
+| Número consecutivo | Autogenerado, secuencial, no editable                  |
+| Fecha              | Fecha de creación (automática)                         |
+| Cliente            | Nombre, teléfono, cédula (autocompletado si ya existe) |
+| Descripción        | Tipo de trabajo y especificaciones                     |
+| Desglose           | Marco, vidrio, paspartú, materiales adicionales        |
+| Total              | Precio final calculado                                 |
+| Abono              | Lo que pagó el cliente                                 |
+| Saldo              | Total - Abono (autocalculado)                          |
+| Fecha de entrega   | Cuándo puede recoger el trabajo                        |
 
 ### Acciones de la Factura
 
@@ -231,7 +231,7 @@ Barra de búsqueda con filtros: por número, nombre del cliente, fecha, estado (
 
 Base de datos centralizada de todos los clientes. Reemplaza la información dispersa en facturas de papel con historial automático, frecuencia y total gastado.
 
-*Problemas que resuelve: P-002 (sin historial de clientes)*
+_Problemas que resuelve: P-002 (sin historial de clientes)_
 
 ### Pantalla Principal: Directorio de Clientes
 
@@ -246,10 +246,12 @@ Lista de clientes con tarjetas compactas. Cada tarjeta muestra iniciales del nom
 Al hacer clic en un cliente, se abre su ficha completa:
 
 **Datos personales:**
+
 - Nombre completo, teléfono, dirección, cédula, correo electrónico
 - Para menores (clases): nombre y teléfono del acudiente
 
 **Estadísticas automáticas:**
+
 - Total gastado histórico (suma de todas las facturas pagadas)
 - Cantidad de pedidos realizados
 - Frecuencia de visita (cada cuántas semanas/meses)
@@ -257,6 +259,7 @@ Al hacer clic en un cliente, se abre su ficha completa:
 - Saldo pendiente consolidado (si debe algo)
 
 **Historial de pedidos:**
+
 - Lista cronológica de todos los pedidos del cliente con estado y monto
 - Clic en cualquier pedido abre el detalle completo
 
@@ -266,7 +269,7 @@ Al hacer clic en un cliente, se abre su ficha completa:
 
 Gestiona las clases, los estudiantes, los pagos mensuales y el horario. Evita conflictos entre clases y salidas del dueño.
 
-*Problemas que resuelve: P-005 (conflicto clases vs salidas)*
+_Problemas que resuelve: P-005 (conflicto clases vs salidas)_
 
 ### Pantalla Principal: Calendario de Clases
 
@@ -299,7 +302,7 @@ Registro rápido de venta de kit de dibujo ($15.000) vinculado al estudiante. Se
 
 Visibilidad completa de la salud financiera del negocio. Reemplaza el libro de entradas y salidas con registro digital, gráficas y reportes.
 
-*Problemas que resuelve: P-006 (sin control de costos)*
+_Problemas que resuelve: P-006 (sin control de costos)_
 
 ### Pantalla Principal: Resumen Financiero
 
@@ -337,7 +340,7 @@ Las devoluciones se registran como movimiento negativo vinculado al pedido origi
 
 Directorio organizado de proveedores con días de pedido, productos que suministran y forma de pago. Reemplaza los contactos sueltos en el teléfono.
 
-*Problemas que resuelve: P-007 (proveedores sin directorio)*
+_Problemas que resuelve: P-007 (proveedores sin directorio)_
 
 ### Pantalla Principal: Directorio
 
@@ -365,7 +368,7 @@ Si hoy es un día de pedido de algún proveedor (ej: lunes o miércoles para mar
 
 Genera automáticamente cotizaciones formales y cuentas de cobro para contratos con conjuntos residenciales y entidades, usando la plantilla del negocio.
 
-*Problemas que resuelve: Del Bloque F.3 de la Fase 2*
+_Problemas que resuelve: Del Bloque F.3 de la Fase 2_
 
 ### Generación de Cotización Formal
 
@@ -392,7 +395,7 @@ Lista de todas las cotizaciones y cuentas de cobro generadas, con estado (enviad
 
 Ajustes técnicos de la app. Manejado por el desarrollador, no por el dueño. Acceso discreto con ícono de engranaje.
 
-*Problemas que resuelve: Soporte técnico general*
+_Problemas que resuelve: Soporte técnico general_
 
 ### Datos del Negocio
 
@@ -419,17 +422,17 @@ Ajustes técnicos de la app. Manejado por el desarrollador, no por el dueño. Ac
 
 Los módulos se desarrollan en orden de impacto en los problemas críticos del negocio. La prioridad combina urgencia del problema + dependencia entre módulos:
 
-| # | Prioridad | Módulo | Razón | Problemas |
-|---|-----------|--------|-------|-----------|
-| 1 | 🔴 Crítica | Cotizador Digital | Base de todo. Sin esto no hay pedidos ni facturas. | P-008 |
-| 2 | 🔴 Crítica | Gestión de Pedidos | Resuelve el dolor más grande: trabajos atrasados. | P-003, P-004 |
-| 3 | 🔴 Crítica | Facturación Digital | Depende de Cotizador y Pedidos. | P-001 |
-| 4 | 🟠 Alta | Clientes | Centraliza datos que usan todos los módulos. | P-002 |
-| 5 | 🟠 Alta | Dashboard | Necesita datos de Pedidos y Finanzas. | Todos |
-| 6 | 🟡 Media | Finanzas | Se alimenta de facturas y pedidos. | P-006 |
-| 7 | 🟡 Media | Clases de Dibujo | Módulo independiente. | P-005 |
-| 8 | 🟢 Normal | Proveedores | Complementario, bajo impacto inmediato. | P-007 |
-| 9 | 🟢 Normal | Documentos Contratos | 4-5 veces al mes, no urgente. | F.3 |
+| #   | Prioridad  | Módulo               | Razón                                              | Problemas    |
+| --- | ---------- | -------------------- | -------------------------------------------------- | ------------ |
+| 1   | 🔴 Crítica | Cotizador Digital    | Base de todo. Sin esto no hay pedidos ni facturas. | P-008        |
+| 2   | 🔴 Crítica | Gestión de Pedidos   | Resuelve el dolor más grande: trabajos atrasados.  | P-003, P-004 |
+| 3   | 🔴 Crítica | Facturación Digital  | Depende de Cotizador y Pedidos.                    | P-001        |
+| 4   | 🟠 Alta    | Clientes             | Centraliza datos que usan todos los módulos.       | P-002        |
+| 5   | 🟠 Alta    | Dashboard            | Necesita datos de Pedidos y Finanzas.              | Todos        |
+| 6   | 🟡 Media   | Finanzas             | Se alimenta de facturas y pedidos.                 | P-006        |
+| 7   | 🟡 Media   | Clases de Dibujo     | Módulo independiente.                              | P-005        |
+| 8   | 🟢 Normal  | Proveedores          | Complementario, bajo impacto inmediato.            | P-007        |
+| 9   | 🟢 Normal  | Documentos Contratos | 4-5 veces al mes, no urgente.                      | F.3          |
 
 > ⚠ **Recomendación:** desarrollar los módulos 1 al 4 primero como MVP (Producto Mínimo Viable). Con esos 4 módulos funcionando, el dueño ya puede cotizar, registrar pedidos, facturar y buscar clientes. El resto se agrega iterativamente.
 
@@ -445,4 +448,4 @@ Con la Fase 3 completada, el proyecto avanza a:
 
 ---
 
-*Documento generado como parte del levantamiento de requerimientos para CasaAlberto - Arte - Diseño - Decoración. Fase 3 — Definición de Funcionalidades.*
+_Documento generado como parte del levantamiento de requerimientos para CasaAlberto - Arte - Diseño - Decoración. Fase 3 — Definición de Funcionalidades._

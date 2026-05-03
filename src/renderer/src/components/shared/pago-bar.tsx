@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { cn } from '@renderer/lib/cn'
 import { formatCOP } from '@renderer/lib/format'
 
@@ -17,13 +18,21 @@ export function PagoBar({
   const porcentaje = total > 0 ? Math.min((pagado / total) * 100, 100) : 0
   const completo = total > 0 && pagado >= total
   const toneClass = completo ? 'bg-success' : porcentaje > 0 ? 'bg-warning' : 'bg-border-strong'
+  // Mount inicial: pintamos width=0 y en el siguiente frame cambiamos al
+  // porcentaje real, lo que dispara la transition CSS (progress-bar) y se ve
+  // crecer la barra. Si porcentaje cambia (nuevo abono), también se anima.
+  const [displayPct, setDisplayPct] = useState(0)
+  useEffect(() => {
+    const handle = requestAnimationFrame(() => setDisplayPct(porcentaje))
+    return () => cancelAnimationFrame(handle)
+  }, [porcentaje])
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
       <div className="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
         <div
           className={cn('h-full rounded-full transition-all progress-bar', toneClass)}
-          style={{ width: `${porcentaje}%` }}
+          style={{ width: `${displayPct}%` }}
         />
       </div>
       {showLabels && (

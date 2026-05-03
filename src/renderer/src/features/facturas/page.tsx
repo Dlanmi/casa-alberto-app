@@ -156,45 +156,55 @@ export default function FacturasPage(): React.JSX.Element {
         aria-labelledby={`facturas-tabs-tab-${tab}`}
         className="space-y-4"
       >
-        {filtered.length === 0 ? (
-          <EmptyState
-            icon={Receipt}
-            illustration={
-              !search && tab === 'todas' ? <CashRegisterIllustration size={140} /> : undefined
-            }
-            title={search || tab !== 'todas' ? 'Sin resultados' : 'No hay facturas'}
-            description="Confirma un pedido para poder facturarlo."
-          />
-        ) : (
-          <Table>
-            <Thead>
-              <Tr>
-                <Th>Número</Th>
-                <Th>Cliente</Th>
-                <Th>Fecha</Th>
-                <Th className="text-right">Total</Th>
-                <Th>Estado</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {filtered.map((f) => (
-                <Tr key={f.id} className="cursor-pointer" onClick={() => setSelectedFactura(f)}>
-                  <Td className="font-medium">{f.numero}</Td>
-                  <Td>{f.clienteNombre}</Td>
-                  <Td>
-                    <FechaDisplay fecha={f.fecha} relative />
-                  </Td>
-                  <Td className="text-right">
-                    <PrecioDisplay value={f.total} size="sm" />
-                  </Td>
-                  <Td>
-                    <EstadoFacturaDot estado={f.estado} />
-                  </Td>
+        {/* key derivado de "hay resultados" fuerza re-mount al cruzar el
+            umbral, lo que reaplica las animaciones internas (stagger de
+            rows o stagger del empty state). Suaviza el swap entre estados. */}
+        <div key={filtered.length === 0 ? 'empty' : 'results'}>
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon={Receipt}
+              illustration={
+                !search && tab === 'todas' ? <CashRegisterIllustration size={140} /> : undefined
+              }
+              title={search || tab !== 'todas' ? 'Sin resultados' : 'No hay facturas'}
+              description="Confirma un pedido para poder facturarlo."
+            />
+          ) : (
+            <Table>
+              <Thead>
+                <Tr>
+                  <Th>Número</Th>
+                  <Th>Cliente</Th>
+                  <Th>Fecha</Th>
+                  <Th className="text-right">Total</Th>
+                  <Th>Estado</Th>
                 </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        )}
+              </Thead>
+              <Tbody>
+                {filtered.map((f, index) => (
+                  <Tr
+                    key={f.id}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedFactura(f)}
+                    staggerIndex={index}
+                  >
+                    <Td className="font-medium">{f.numero}</Td>
+                    <Td>{f.clienteNombre}</Td>
+                    <Td>
+                      <FechaDisplay fecha={f.fecha} relative />
+                    </Td>
+                    <Td className="text-right">
+                      <PrecioDisplay value={f.total} size="sm" />
+                    </Td>
+                    <Td>
+                      <EstadoFacturaDot estado={f.estado} />
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          )}
+        </div>
       </div>
 
       {/* Detail modal */}

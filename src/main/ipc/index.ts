@@ -87,6 +87,7 @@ import {
 import {
   actualizarFechaEntrega,
   cambiarEstadoPedido,
+  crearPedidoConfirmadoConFactura,
   crearPedidoDesdeCotizacion,
   listarPedidos,
   obtenerMatrizUrgencia,
@@ -369,6 +370,9 @@ export function registerIpcHandlers(db: DB): void {
   )
   ipcMain.handle('pedidos:crear', (_e, datos, cotizacion) =>
     wrap(crearPedidoDesdeCotizacion)(db, datos, cotizacion)
+  )
+  ipcMain.handle('pedidos:crearConfirmado', (_e, input) =>
+    wrap(crearPedidoConfirmadoConFactura)(db, input)
   )
   ipcMain.handle('pedidos:cambiarEstado', (_e, id: number, estado) =>
     wrap(cambiarEstadoPedido)(

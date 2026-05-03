@@ -23,7 +23,7 @@ import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { cn } from '@renderer/lib/cn'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { useToast } from '@renderer/contexts/toast-context'
-import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
+import { useSlidePanel, SLIDE_PANEL_EXIT_MS } from '@renderer/hooks/use-slide-panel'
 import { TIPO_TRABAJO_LABEL, ESTADO_PEDIDO_LABEL } from '@renderer/lib/constants'
 import type { LucideIcon } from 'lucide-react'
 import type { Pedido, Factura, EstadoPedido, IpcResult } from '@shared/types'
@@ -71,7 +71,11 @@ export function PedidoDetailPanel({
   const navigate = useNavigate()
   const { showToast } = useToast()
   const closeRef = useRef<HTMLButtonElement>(null)
-  useSlidePanel({ onClose, closeRef })
+  const { closing, requestClose } = useSlidePanel({
+    onClose,
+    closeRef,
+    exitDurationMs: SLIDE_PANEL_EXIT_MS
+  })
   const [pagandoMonto, setPagandoMonto] = useState<number | null>(null)
   // C3 — Lock sincrónico para evitar double-submit en quick-pay. El estado
   // React se actualiza en el siguiente tick, así que clicks rapidísimos (o
@@ -165,7 +169,10 @@ export function PedidoDetailPanel({
 
   return (
     <div
-      className="fixed right-0 top-0 bottom-0 w-full sm:w-105 sm:max-w-[80vw] bg-surface border-l border-border shadow-4 z-40 flex flex-col animate-slide-in-right"
+      className={cn(
+        'fixed right-0 top-0 bottom-0 w-full sm:w-105 sm:max-w-[80vw] bg-surface border-l border-border shadow-4 z-40 flex flex-col',
+        closing ? 'animate-slide-out-right' : 'animate-slide-in-right'
+      )}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
@@ -175,7 +182,7 @@ export function PedidoDetailPanel({
         </div>
         <button
           ref={closeRef}
-          onClick={onClose}
+          onClick={requestClose}
           className="h-11 w-11 flex items-center justify-center rounded-md hover:bg-surface-muted text-text-muted hover:text-text cursor-pointer transition-colors"
           aria-label="Cerrar panel"
         >
@@ -473,7 +480,7 @@ export function PedidoDetailPanel({
               </Button>
             )}
         </div>
-        <Button variant="ghost" className="w-full" onClick={onClose}>
+        <Button variant="ghost" className="w-full" onClick={requestClose}>
           Cerrar
         </Button>
       </div>

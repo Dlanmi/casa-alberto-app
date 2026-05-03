@@ -26,6 +26,8 @@ export default function OnboardingPage(): React.JSX.Element {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [step, setStepState] = useState(0)
+  // Dirección del último cambio de paso, para escoger keyframe (right/left).
+  const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
   const [hydrated, setHydrated] = useState(false)
   const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -119,6 +121,13 @@ export default function OnboardingPage(): React.JSX.Element {
     [showToast]
   )
 
+  // Wrapper que captura la dirección antes de cambiar de paso, para que el
+  // contenedor animado escoja el keyframe correcto. setStep ya persiste.
+  function goToStep(target: number): void {
+    setDirection(target >= step ? 'forward' : 'backward')
+    setStep(target)
+  }
+
   /**
    * Marca el flag de onboarding completado y navega a la ruta destino. Se
    * llama tanto al terminar el wizard normal como al elegir "Explorar con
@@ -202,7 +211,7 @@ export default function OnboardingPage(): React.JSX.Element {
             ? `${errores.length} fila(s) con errores: ${errores.slice(0, 2).join('; ')}${errores.length > 2 ? '…' : ''}`
             : 'Los precios están listos para usar en el cotizador.'
       })
-      setStep(3)
+      goToStep(3)
     } finally {
       setImporting(false)
     }
@@ -280,217 +289,227 @@ export default function OnboardingPage(): React.JSX.Element {
         })}
       </div>
 
-      <Card padding="lg" className="w-full max-w-xl animate-fade-in-up">
-        {step === 0 && (
-          <div className="text-center">
-            <div className="h-16 w-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
-              <Sparkles size={32} className="text-accent-strong" />
-            </div>
-            <h1 className="text-2xl font-semibold text-text mb-3">Bienvenido a Casa Alberto</h1>
-            <p className="text-sm text-text-muted mb-6 max-w-sm mx-auto">
-              Tu nueva herramienta para gestionar la marquetería. Vamos a dejar lista la base para
-              cotizar, crear pedidos y facturar sin perder el hilo del proceso.
-            </p>
+      <Card padding="lg" className="w-full max-w-xl animate-fade-in-up overflow-hidden">
+        <div
+          key={step}
+          className={
+            direction === 'forward' ? 'animate-step-enter-forward' : 'animate-step-enter-backward'
+          }
+        >
+          {step === 0 && (
+            <div className="text-center">
+              <div className="h-16 w-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
+                <Sparkles size={32} className="text-accent-strong" />
+              </div>
+              <h1 className="text-2xl font-semibold text-text mb-3">Bienvenido a Casa Alberto</h1>
+              <p className="text-sm text-text-muted mb-6 max-w-sm mx-auto">
+                Tu nueva herramienta para gestionar la marquetería. Vamos a dejar lista la base para
+                cotizar, crear pedidos y facturar sin perder el hilo del proceso.
+              </p>
 
-            <GuidanceHint
-              tone="accent"
-              title="Qué vas a resolver en este onboarding"
-              message="Primero guardas los datos del negocio, luego decides cómo cargar precios y al final entras al flujo principal recomendado."
-              className="mb-8 text-left"
-            />
-
-            <div className="flex flex-col gap-3 max-w-xs mx-auto">
-              <Button className="w-full" onClick={() => setStep(1)} disabled={loadingDemo}>
-                <ArrowRight size={18} />
-                Comenzar configuración
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full"
-                onClick={cargarDatosDemo}
-                disabled={loadingDemo}
-              >
-                {loadingDemo ? 'Cargando datos de ejemplo…' : 'Explorar con datos de ejemplo'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {step === 1 && (
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-text mb-1">Datos del negocio</h2>
-            <p className="text-sm text-text-muted mb-6">
-              Estos datos aparecen en facturas, cotizaciones y contratos.
-            </p>
-
-            <GuidanceHint
-              tone="info"
-              title="Empieza por lo mínimo"
-              message="Si hoy solo tienes a mano nombre, teléfono y dirección, con eso ya puedes avanzar y completar el resto más tarde."
-              className="mb-6"
-            />
-
-            <div className="space-y-4">
-              <Input
-                label="Nombre del negocio"
-                value={datos.nombre}
-                onChange={(event) => setDatos((prev) => ({ ...prev, nombre: event.target.value }))}
+              <GuidanceHint
+                tone="accent"
+                title="Qué vas a resolver en este onboarding"
+                message="Primero guardas los datos del negocio, luego decides cómo cargar precios y al final entras al flujo principal recomendado."
+                className="mb-8 text-left"
               />
-              <Input
-                label="NIT / RUT"
-                value={datos.rut}
-                onChange={(event) => setDatos((prev) => ({ ...prev, rut: event.target.value }))}
-                placeholder="Ej: 79.234.567-1"
+
+              <div className="flex flex-col gap-3 max-w-xs mx-auto">
+                <Button className="w-full" onClick={() => goToStep(1)} disabled={loadingDemo}>
+                  <ArrowRight size={18} />
+                  Comenzar configuración
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={cargarDatosDemo}
+                  disabled={loadingDemo}
+                >
+                  {loadingDemo ? 'Cargando datos de ejemplo…' : 'Explorar con datos de ejemplo'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-text mb-1">Datos del negocio</h2>
+              <p className="text-sm text-text-muted mb-6">
+                Estos datos aparecen en facturas, cotizaciones y contratos.
+              </p>
+
+              <GuidanceHint
+                tone="info"
+                title="Empieza por lo mínimo"
+                message="Si hoy solo tienes a mano nombre, teléfono y dirección, con eso ya puedes avanzar y completar el resto más tarde."
+                className="mb-6"
               />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+              <div className="space-y-4">
                 <Input
-                  label="Teléfono"
-                  value={datos.telefono}
+                  label="Nombre del negocio"
+                  value={datos.nombre}
                   onChange={(event) =>
-                    setDatos((prev) => ({ ...prev, telefono: event.target.value }))
+                    setDatos((prev) => ({ ...prev, nombre: event.target.value }))
                   }
-                  placeholder="Ej: 310 234 5678"
                 />
                 <Input
-                  label="Correo"
-                  type="email"
-                  value={datos.correo}
+                  label="NIT / RUT"
+                  value={datos.rut}
+                  onChange={(event) => setDatos((prev) => ({ ...prev, rut: event.target.value }))}
+                  placeholder="Ej: 79.234.567-1"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Teléfono"
+                    value={datos.telefono}
+                    onChange={(event) =>
+                      setDatos((prev) => ({ ...prev, telefono: event.target.value }))
+                    }
+                    placeholder="Ej: 310 234 5678"
+                  />
+                  <Input
+                    label="Correo"
+                    type="email"
+                    value={datos.correo}
+                    onChange={(event) =>
+                      setDatos((prev) => ({ ...prev, correo: event.target.value }))
+                    }
+                    placeholder="correo@ejemplo.com"
+                  />
+                </div>
+                <Input
+                  label="Dirección"
+                  value={datos.direccion}
                   onChange={(event) =>
-                    setDatos((prev) => ({ ...prev, correo: event.target.value }))
+                    setDatos((prev) => ({ ...prev, direccion: event.target.value }))
                   }
-                  placeholder="correo@ejemplo.com"
+                  placeholder="Cra 7 #185-42, Bogotá"
                 />
               </div>
-              <Input
-                label="Dirección"
-                value={datos.direccion}
-                onChange={(event) =>
-                  setDatos((prev) => ({ ...prev, direccion: event.target.value }))
-                }
-                placeholder="Cra 7 #185-42, Bogotá"
-              />
+              <div className="flex justify-between mt-8">
+                <Button variant="secondary" onClick={() => goToStep(0)}>
+                  Atrás
+                </Button>
+                <Button
+                  onClick={async () => {
+                    await saveConfig()
+                    goToStep(2)
+                  }}
+                  disabled={saving}
+                >
+                  {saving ? 'Guardando...' : 'Guardar y continuar'}
+                </Button>
+              </div>
             </div>
-            <div className="flex justify-between mt-8">
-              <Button variant="secondary" onClick={() => setStep(0)}>
-                Atrás
-              </Button>
-              <Button
-                onClick={async () => {
-                  await saveConfig()
-                  setStep(2)
-                }}
-                disabled={saving}
-              >
-                {saving ? 'Guardando...' : 'Guardar y continuar'}
-              </Button>
-            </div>
-          </div>
-        )}
+          )}
 
-        {step === 2 && (
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-text mb-1">Precios iniciales</h2>
-            <p className="text-sm text-text-muted mb-6">
-              Puedes importar tu lista de precios o empezar con la base de ejemplo y ajustar luego.
-            </p>
-
-            <GuidanceHint
-              tone="info"
-              title="Recomendación para arrancar rápido"
-              message="Si todavía no tienes el Excel listo, entra primero al cotizador, valida el flujo y vuelve a Configuración cuando quieras afinar precios."
-              className="mb-6"
-            />
-
-            <div className="space-y-3 mb-8">
-              <button
-                className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:border-accent hover:bg-accent/5 cursor-pointer transition-colors text-left disabled:cursor-wait disabled:opacity-60"
-                onClick={importarDesdeExcel}
-                disabled={importing}
-              >
-                <FileSpreadsheet size={24} className="text-accent-strong shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-text">
-                    {importing ? 'Importando marcos…' : 'Importar marcos desde Excel'}
-                  </p>
-                  <p className="text-xs text-text-muted">
-                    Sube un archivo .xlsx con tu lista de marcos (referencia, colilla,
-                    precio/metro).
-                  </p>
-                </div>
-              </button>
-
-              <button
-                className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:border-border-strong cursor-pointer transition-colors text-left"
-                onClick={() => setStep(3)}
-              >
-                <ArrowRight size={24} className="text-text-soft shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-text">Ingresar manualmente después</p>
-                  <p className="text-xs text-text-muted">
-                    Puedes agregar y editar precios desde Configuración y desde el cotizador.
-                  </p>
-                </div>
-              </button>
-            </div>
-
-            <div className="flex justify-between">
-              <Button variant="secondary" onClick={() => setStep(1)}>
-                Atrás
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="text-center">
-            <div className="h-16 w-16 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-6">
-              <Rocket size={32} className="text-success-strong" />
-            </div>
-            <h2 className="text-xl font-bold tracking-tight text-text mb-3">Todo listo</h2>
-            <p className="text-sm text-text-muted mb-3 max-w-sm mx-auto">
-              Ya tienes la base mínima para trabajar. Estos son los siguientes pasos más útiles:
-            </p>
-            <div className="text-left space-y-2 mb-8 max-w-sm mx-auto">
-              {[
-                'Crear tu primera cotización con ayuda paso a paso.',
-                'Convertir una cotización en pedido y seguirla en el tablero.',
-                'Generar facturas y registrar abonos sin perder el saldo.'
-              ].map((text) => (
-                <div key={text} className="flex items-center gap-2 text-sm text-text-muted">
-                  <Check size={16} className="text-success-strong shrink-0" />
-                  {text}
-                </div>
-              ))}
-            </div>
-
-            <GuidanceHint
-              tone="success"
-              title="Siguiente módulo recomendado"
-              message="Empieza por el cotizador. Es la entrada natural del trabajo y desde ahí ya puedes crear pedidos y seguir el proceso completo."
-              className="mb-6 text-left"
-            />
-
-            <div className="flex flex-col gap-3 max-w-xs mx-auto">
-              <Button className="w-full" onClick={finishToCotizador}>
-                <Rocket size={18} />
-                Ir al cotizador
-              </Button>
-              <Button variant="secondary" className="w-full" onClick={finishToDashboard}>
-                Ir al dashboard
-              </Button>
-              <Button variant="ghost" className="w-full" onClick={() => setStep(2)}>
-                Atrás
-              </Button>
-              <p className="text-xs text-text-muted">
-                Tip: usa{' '}
-                <kbd className="px-1 py-0.5 bg-surface-muted rounded text-text-muted">
-                  {formatPrimaryShortcut('k')}
-                </kbd>{' '}
-                para buscar cualquier cosa.
+          {step === 2 && (
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-text mb-1">Precios iniciales</h2>
+              <p className="text-sm text-text-muted mb-6">
+                Puedes importar tu lista de precios o empezar con la base de ejemplo y ajustar
+                luego.
               </p>
+
+              <GuidanceHint
+                tone="info"
+                title="Recomendación para arrancar rápido"
+                message="Si todavía no tienes el Excel listo, entra primero al cotizador, valida el flujo y vuelve a Configuración cuando quieras afinar precios."
+                className="mb-6"
+              />
+
+              <div className="space-y-3 mb-8">
+                <button
+                  className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:border-accent hover:bg-accent/5 cursor-pointer transition-colors text-left disabled:cursor-wait disabled:opacity-60"
+                  onClick={importarDesdeExcel}
+                  disabled={importing}
+                >
+                  <FileSpreadsheet size={24} className="text-accent-strong shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-text">
+                      {importing ? 'Importando marcos…' : 'Importar marcos desde Excel'}
+                    </p>
+                    <p className="text-xs text-text-muted">
+                      Sube un archivo .xlsx con tu lista de marcos (referencia, colilla,
+                      precio/metro).
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:border-border-strong cursor-pointer transition-colors text-left"
+                  onClick={() => goToStep(3)}
+                >
+                  <ArrowRight size={24} className="text-text-soft shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-text">Ingresar manualmente después</p>
+                    <p className="text-xs text-text-muted">
+                      Puedes agregar y editar precios desde Configuración y desde el cotizador.
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              <div className="flex justify-between">
+                <Button variant="secondary" onClick={() => goToStep(1)}>
+                  Atrás
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {step === 3 && (
+            <div className="text-center">
+              <div className="h-16 w-16 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-6">
+                <Rocket size={32} className="text-success-strong" />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight text-text mb-3">Todo listo</h2>
+              <p className="text-sm text-text-muted mb-3 max-w-sm mx-auto">
+                Ya tienes la base mínima para trabajar. Estos son los siguientes pasos más útiles:
+              </p>
+              <div className="text-left space-y-2 mb-8 max-w-sm mx-auto">
+                {[
+                  'Crear tu primera cotización con ayuda paso a paso.',
+                  'Convertir una cotización en pedido y seguirla en el tablero.',
+                  'Generar facturas y registrar abonos sin perder el saldo.'
+                ].map((text) => (
+                  <div key={text} className="flex items-center gap-2 text-sm text-text-muted">
+                    <Check size={16} className="text-success-strong shrink-0" />
+                    {text}
+                  </div>
+                ))}
+              </div>
+
+              <GuidanceHint
+                tone="success"
+                title="Siguiente módulo recomendado"
+                message="Empieza por el cotizador. Es la entrada natural del trabajo y desde ahí ya puedes crear pedidos y seguir el proceso completo."
+                className="mb-6 text-left"
+              />
+
+              <div className="flex flex-col gap-3 max-w-xs mx-auto">
+                <Button className="w-full" onClick={finishToCotizador}>
+                  <Rocket size={18} />
+                  Ir al cotizador
+                </Button>
+                <Button variant="secondary" className="w-full" onClick={finishToDashboard}>
+                  Ir al dashboard
+                </Button>
+                <Button variant="ghost" className="w-full" onClick={() => goToStep(2)}>
+                  Atrás
+                </Button>
+                <p className="text-xs text-text-muted">
+                  Tip: usa{' '}
+                  <kbd className="px-1 py-0.5 bg-surface-muted rounded text-text-muted">
+                    {formatPrimaryShortcut('k')}
+                  </kbd>{' '}
+                  para buscar cualquier cosa.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   )

@@ -75,6 +75,17 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
       ).toThrow(/excede el saldo/i)
     })
 
+    it('rechaza NaN/Infinity antes de llegar a SQLite', () => {
+      expect(() =>
+        registrarPago(db, {
+          facturaId,
+          monto: Number.NaN,
+          metodoPago: 'efectivo',
+          fecha: '2026-04-02'
+        })
+      ).toThrow(/monto.*mayor a 0/i)
+    })
+
     it('happy path: marca la factura como pagada cuando el saldo llega a 0', () => {
       const result = registrarPago(db, {
         facturaId,
@@ -221,6 +232,63 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
           total: 100000
         })
       ).toThrow(/cancelado|estado/i)
+    })
+
+    it('rechaza cliente distinto al cliente del pedido', () => {
+      const clientePedido = db
+        .insert(clientes)
+        .values({ nombre: 'Cliente Pedido' })
+        .returning()
+        .get()
+      const clienteFactura = db
+        .insert(clientes)
+        .values({ nombre: 'Cliente Incorrecto' })
+        .returning()
+        .get()
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: 'P-9003',
+          clienteId: clientePedido.id,
+          tipoTrabajo: 'enmarcacion_estandar',
+          precioTotal: 100000,
+          estado: 'confirmado',
+          fechaIngreso: '2026-04-01'
+        })
+        .returning()
+        .get()
+      expect(() =>
+        crearFactura(db, {
+          pedidoId: pedido.id,
+          clienteId: clienteFactura.id,
+          fecha: '2026-04-01',
+          total: 100000
+        })
+      ).toThrow(/mismo cliente/i)
+    })
+
+    it('rechaza total distinto al total del pedido', () => {
+      const cliente = db.insert(clientes).values({ nombre: 'Cliente Total' }).returning().get()
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: 'P-9004',
+          clienteId: cliente.id,
+          tipoTrabajo: 'enmarcacion_estandar',
+          precioTotal: 100000,
+          estado: 'confirmado',
+          fechaIngreso: '2026-04-01'
+        })
+        .returning()
+        .get()
+      expect(() =>
+        crearFactura(db, {
+          pedidoId: pedido.id,
+          clienteId: cliente.id,
+          fecha: '2026-04-01',
+          total: 999999
+        })
+      ).toThrow(/coincidir/i)
     })
   })
 })

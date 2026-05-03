@@ -257,7 +257,7 @@ export function ClientePicker({
       </Modal>
 
       {open && !creatingMode && (
-        <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-lg border border-border bg-surface shadow-3">
+        <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-lg border border-border bg-surface shadow-3 animate-dropdown-enter">
           {searching ? (
             <div className="flex items-center justify-center py-6">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />

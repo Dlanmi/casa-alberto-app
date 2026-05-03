@@ -53,7 +53,17 @@ export function GuidanceHint({
   const { icon: Icon, container, iconColor, button } = toneStyles[tone]
 
   return (
-    <div className={cn('flex items-start gap-3 rounded-lg border px-4 py-3', container, className)}>
+    // key={title} fuerza re-mount cuando cambia el contenido (p. ej. al pasar
+    // de step en el wizard). Eso reaplica animate-hint-swap. Si el título no
+    // cambia entre renders, no hay animación — evita "flicker" de re-render.
+    <div
+      key={title}
+      className={cn(
+        'flex items-start gap-3 rounded-lg border px-4 py-3 animate-hint-swap',
+        container,
+        className
+      )}
+    >
       <Icon size={18} className={cn('mt-0.5 shrink-0', iconColor)} aria-hidden="true" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-text">{title}</p>

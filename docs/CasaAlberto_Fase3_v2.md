@@ -15,17 +15,17 @@ Abril 2026
 
 La app esta disenada para un usuario especifico: un emprendedor de 36 anos de experiencia que ha manejado todo en papel y esta dispuesto a usar tecnologia. Cada decision de diseno se basa en estos principios:
 
-| Principio | Aplicacion |
-|-----------|-----------|
-| Tarjetas visuales | Seleccion por tarjetas grandes con icono y descripcion en vez de dropdowns pequenos. El usuario ve todas las opciones de un vistazo. |
-| Pasos guiados | Los procesos complejos (cotizar, crear pedido) se dividen en pasos con indicador de progreso. Un paso a la vez, sin abrumar. |
-| Feedback en vivo | Los precios y totales se actualizan en tiempo real mientras el usuario selecciona opciones. Sin boton "calcular". |
-| Colores + texto + icono | Cada estado usa color, texto descriptivo e icono. Verde = todo bien, Amarillo = atencion, Rojo = urgente, Azul = en progreso. Nunca se usa color solo. |
-| Minimos clics | Cada accion frecuente debe estar a maximo 2 clics desde la pantalla principal. |
-| Botones grandes | Elementos de interaccion de minimo 48x48px. Texto legible de 14px+. Sin iconos ambiguos. |
-| Alertas proactivas | La app avisa antes de que haya un problema, no despues. Recordatorios de entrega, pagos pendientes, clases. |
-| Confianza y seguridad | Confirmacion antes de acciones destructivas. Deshacer disponible por 10 segundos. Eliminacion suave (archivar, no borrar). Auto-guardado cada 30 segundos. |
-| Onboarding progresivo | Guia paso a paso para usuario que migra de papel. Datos de ejemplo, tooltips, y tour guiado reutilizable. |
+| Principio               | Aplicacion                                                                                                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tarjetas visuales       | Seleccion por tarjetas grandes con icono y descripcion en vez de dropdowns pequenos. El usuario ve todas las opciones de un vistazo.                       |
+| Pasos guiados           | Los procesos complejos (cotizar, crear pedido) se dividen en pasos con indicador de progreso. Un paso a la vez, sin abrumar.                               |
+| Feedback en vivo        | Los precios y totales se actualizan en tiempo real mientras el usuario selecciona opciones. Sin boton "calcular".                                          |
+| Colores + texto + icono | Cada estado usa color, texto descriptivo e icono. Verde = todo bien, Amarillo = atencion, Rojo = urgente, Azul = en progreso. Nunca se usa color solo.     |
+| Minimos clics           | Cada accion frecuente debe estar a maximo 2 clics desde la pantalla principal.                                                                             |
+| Botones grandes         | Elementos de interaccion de minimo 48x48px. Texto legible de 14px+. Sin iconos ambiguos.                                                                   |
+| Alertas proactivas      | La app avisa antes de que haya un problema, no despues. Recordatorios de entrega, pagos pendientes, clases.                                                |
+| Confianza y seguridad   | Confirmacion antes de acciones destructivas. Deshacer disponible por 10 segundos. Eliminacion suave (archivar, no borrar). Auto-guardado cada 30 segundos. |
+| Onboarding progresivo   | Guia paso a paso para usuario que migra de papel. Datos de ejemplo, tooltips, y tour guiado reutilizable.                                                  |
 
 ---
 
@@ -35,46 +35,47 @@ El usuario principal tiene ~60 anos. Estos estandares son obligatorios en toda l
 
 ### Tipografia
 
-| Elemento | Tamano minimo | Peso | Line-height |
-|----------|--------------|------|-------------|
-| Headings (h1) | 24px | Bold (700) | 1.3x |
-| Headings (h2) | 20px | Semibold (600) | 1.3x |
-| Body / Labels | 14-16px | Regular (400) | 1.5x |
-| Botones | 14px | Medium (500) | 1.5x |
-| Info secundaria | 12px (solo timestamps, metadata) | Regular (400) | 1.4x |
+| Elemento        | Tamano minimo                    | Peso           | Line-height |
+| --------------- | -------------------------------- | -------------- | ----------- |
+| Headings (h1)   | 24px                             | Bold (700)     | 1.3x        |
+| Headings (h2)   | 20px                             | Semibold (600) | 1.3x        |
+| Body / Labels   | 14-16px                          | Regular (400)  | 1.5x        |
+| Botones         | 14px                             | Medium (500)   | 1.5x        |
+| Info secundaria | 12px (solo timestamps, metadata) | Regular (400)  | 1.4x        |
 
 Fuente del sistema (Inter o similar sans-serif). Respetar la configuracion de zoom del sistema operativo.
 
 ### Contraste de Colores
 
 Todas las combinaciones de texto/fondo deben cumplir WCAG AA:
+
 - Ratio minimo **4.5:1** para texto normal
 - Ratio minimo **3:1** para texto grande (18px+ bold o 24px+ regular)
 - Probar con simulador de daltonismo (Coblis) antes de cada release
 
 ### Tamano de Elementos Interactivos
 
-| Elemento | Tamano minimo | Espaciado minimo |
-|----------|--------------|-----------------|
-| Botones | 48 x 48px | 12px entre botones |
-| Inputs de formulario | 48px de alto | 8px entre campos |
-| Tarjetas seleccionables | 240 x 140px | 16px entre tarjetas |
-| Checkboxes / Radios | 24 x 24px area clic | 12px entre opciones |
-| Links en texto | Subrayado visible | N/A |
+| Elemento                | Tamano minimo       | Espaciado minimo    |
+| ----------------------- | ------------------- | ------------------- |
+| Botones                 | 48 x 48px           | 12px entre botones  |
+| Inputs de formulario    | 48px de alto        | 8px entre campos    |
+| Tarjetas seleccionables | 240 x 140px         | 16px entre tarjetas |
+| Checkboxes / Radios     | 24 x 24px area clic | 12px entre opciones |
+| Links en texto          | Subrayado visible   | N/A                 |
 
 ### Navegacion por Teclado
 
-| Tecla | Accion |
-|-------|--------|
-| Tab | Avanzar al siguiente elemento interactivo |
-| Shift+Tab | Retroceder al elemento anterior |
-| Enter | Confirmar / Activar boton seleccionado |
-| Escape | Cerrar modal, panel o menu. Cancelar accion en curso |
-| Ctrl+Z | Deshacer ultima accion |
-| Ctrl+K | Abrir busqueda global |
-| Ctrl+N | Nueva cotizacion |
-| Alt+1 a Alt+9 | Saltar al modulo 1-9 de la barra lateral |
-| Flechas | Navegar entre tarjetas, filas de tabla, opciones |
+| Tecla         | Accion                                               |
+| ------------- | ---------------------------------------------------- |
+| Tab           | Avanzar al siguiente elemento interactivo            |
+| Shift+Tab     | Retroceder al elemento anterior                      |
+| Enter         | Confirmar / Activar boton seleccionado               |
+| Escape        | Cerrar modal, panel o menu. Cancelar accion en curso |
+| Ctrl+Z        | Deshacer ultima accion                               |
+| Ctrl+K        | Abrir busqueda global                                |
+| Ctrl+N        | Nueva cotizacion                                     |
+| Alt+1 a Alt+9 | Saltar al modulo 1-9 de la barra lateral             |
+| Flechas       | Navegar entre tarjetas, filas de tabla, opciones     |
 
 Focus visible: todo elemento enfocado muestra borde azul de 2px (`outline: 2px solid #3b82f6`).
 
@@ -82,44 +83,45 @@ Focus visible: todo elemento enfocado muestra borde azul de 2px (`outline: 2px s
 
 ```css
 /* Colores de estado — siempre acompanados de texto + icono */
---status-success: #10b981;   /* Verde — Completado, Pagado, Entregado */
---status-warning: #f59e0b;   /* Amarillo — Proximo, Parcial, Atencion */
---status-error: #ef4444;     /* Rojo — Atrasado, Sin abono, Urgente */
---status-info: #3b82f6;      /* Azul — En progreso, Confirmado, Listo */
---status-neutral: #9ca3af;   /* Gris — Cotizado, Inactivo, Borrador */
+--status-success: #10b981; /* Verde — Completado, Pagado, Entregado */
+--status-warning: #f59e0b; /* Amarillo — Proximo, Parcial, Atencion */
+--status-error: #ef4444; /* Rojo — Atrasado, Sin abono, Urgente */
+--status-info: #3b82f6; /* Azul — En progreso, Confirmado, Listo */
+--status-neutral: #9ca3af; /* Gris — Cotizado, Inactivo, Borrador */
 
 /* Fondos para badges/tarjetas de estado */
---bg-success: #f0fdf4;       /* Verde claro */
---bg-warning: #fffbeb;       /* Amarillo claro */
---bg-error: #fef2f2;         /* Rojo claro */
---bg-info: #f0f9ff;          /* Azul claro */
---bg-neutral: #f9fafb;       /* Gris claro */
+--bg-success: #f0fdf4; /* Verde claro */
+--bg-warning: #fffbeb; /* Amarillo claro */
+--bg-error: #fef2f2; /* Rojo claro */
+--bg-info: #f0f9ff; /* Azul claro */
+--bg-neutral: #f9fafb; /* Gris claro */
 
 /* Texto */
---text-primary: #1f2937;     /* Texto principal oscuro */
---text-secondary: #6b7280;   /* Texto secundario gris */
+--text-primary: #1f2937; /* Texto principal oscuro */
+--text-secondary: #6b7280; /* Texto secundario gris */
 
 /* Bordes */
---border-light: #e5e7eb;     /* Borde claro */
+--border-light: #e5e7eb; /* Borde claro */
 
 /* Acento (botones primarios, seleccion) */
---accent: #3b82f6;           /* Azul principal */
---accent-hover: #2563eb;     /* Azul hover */
+--accent: #3b82f6; /* Azul principal */
+--accent-hover: #2563eb; /* Azul hover */
 ```
 
 **Regla fundamental**: NUNCA usar color solo para comunicar estado. Siempre combinar:
+
 - Color de fondo o borde
 - Texto descriptivo (ej: "ATRASADO", "Pagado", "En proceso")
 - Icono (ej: reloj para urgente, check para completado, circulo para en progreso)
 
 ### Formato de Datos
 
-| Tipo | Formato correcto | Formato incorrecto |
-|------|------------------|--------------------|
-| Fechas | "25 de Abril de 2026" | "2026-04-25" |
-| Moneda | $1.234.567 | $1234567 |
-| Telefonos | 301 234 5678 | 3012345678 |
-| Atajos de fecha | "Hoy", "Manana", "Proximo lunes" | Solo calendario |
+| Tipo            | Formato correcto                 | Formato incorrecto |
+| --------------- | -------------------------------- | ------------------ |
+| Fechas          | "25 de Abril de 2026"            | "2026-04-25"       |
+| Moneda          | $1.234.567                       | $1234567           |
+| Telefonos       | 301 234 5678                     | 3012345678         |
+| Atajos de fecha | "Hoy", "Manana", "Proximo lunes" | Solo calendario    |
 
 ---
 
@@ -130,21 +132,25 @@ Focus visible: todo elemento enfocado muestra borde azul de 2px (`outline: 2px s
 Al abrir la app por primera vez, se muestra un wizard de 4 pantallas:
 
 **Pantalla 1 — Bienvenida**
+
 - Logo de CasaAlberto + mensaje: "Bienvenido a tu nueva herramienta de trabajo"
 - Opcion: "Explorar con datos de ejemplo" o "Comenzar en limpio"
 - Si elige datos de ejemplo: se cargan 4 clientes ficticios, 10 pedidos y 5 facturas
 
 **Pantalla 2 — Datos del Negocio**
+
 - Campos: Nombre del negocio, RUT, telefono, direccion, logo (opcional)
 - Estos datos se usan en facturas, cotizaciones y contratos
 - Boton: "Guardar y continuar"
 
 **Pantalla 3 — Precios Iniciales**
+
 - Opcion A: "Importar desde Excel" — sube archivo .xlsx con lista de marcos, vidrios, etc.
 - Opcion B: "Ingresar manualmente despues" — salta al siguiente paso
 - Mensaje: "Puedes agregar y editar precios en cualquier momento desde el Cotizador"
 
 **Pantalla 4 — Tour Rapido**
+
 - Tour interactivo de 8 pasos con tooltips que resaltan cada zona:
   1. Barra lateral: "Aqui estan todos los modulos de la app"
   2. Dashboard zonas: "Esto es lo primero que ves cada dia"
@@ -160,6 +166,7 @@ Al abrir la app por primera vez, se muestra un wizard de 4 pantallas:
 ### Datos de Ejemplo
 
 Si el usuario elige "Explorar con datos de ejemplo":
+
 - 4 clientes: "Carlos Perez", "Maria Garcia", "Juan Lopez", "Ana Rodriguez" con datos ficticios
 - 10 pedidos en distintos estados (cotizado, confirmado, en proceso, listo, entregado)
 - 5 facturas (2 pagadas, 2 parciales, 1 pendiente)
@@ -172,6 +179,7 @@ Al limpiar: confirmacion "Se eliminaran todos los datos de ejemplo. Tus datos re
 ### Ayuda Contextual
 
 **Iconos "?" con tooltip** junto a terminos que pueden confundir:
+
 - Paspartu: "Marco interior de carton o MDF que rodea la imagen. Da profundidad y protege." + imagen de ejemplo
 - Vidrio Antirreflectivo: "Vidrio tratado que no produce brillo. Ideal para cuadros con iluminacion directa." + imagen comparativa
 - Retencion en la fuente: "Cuando un cliente empresa paga, retiene 2-5% para el gobierno. Se descuenta del total."
@@ -179,6 +187,7 @@ Al limpiar: confirmacion "Se eliminaran todos los datos de ejemplo. Tus datos re
 - Kanban: "Tablero visual con columnas. Cada columna es un estado del trabajo."
 
 **Seccion de Ayuda en Config**:
+
 - Acceso: Config → Ayuda
 - Contenido: Videos cortos (2-3 min) para cada modulo principal
 - Temas: "Como crear una cotizacion", "Como registrar un pedido", "Como imprimir una factura", "Como registrar un cobro"
@@ -194,21 +203,22 @@ La app usa una barra lateral izquierda fija con iconos y texto para cada modulo.
 
 Ancho: 240px. Fondo: gris claro (#f8f9fa). Cada item mide 44px de alto.
 
-| Icono | Modulo | Descripcion | Atajo |
-|-------|--------|-------------|-------|
-| Casa | Dashboard | Inicio — Vista del dia | Alt+1 |
-| Calculadora | Cotizador | Nueva cotizacion | Alt+2 |
-| Clipboard | Pedidos | Trabajos activos | Alt+3 |
-| Recibo | Facturas | Facturacion | Alt+4 |
-| Personas | Clientes | Base de clientes | Alt+5 |
-| Paleta | Clases | Dibujo y pintura | Alt+6 |
-| Moneda | Finanzas | Ingresos y gastos | Alt+7 |
-| Camion | Proveedores | Directorio | Alt+8 |
-| Documento | Contratos | Cotizaciones formales | Alt+9 |
-| Caja | Inventario | Stock de materiales | — |
-| Engranaje | Config | Ajustes | — |
+| Icono       | Modulo      | Descripcion            | Atajo |
+| ----------- | ----------- | ---------------------- | ----- |
+| Casa        | Dashboard   | Inicio — Vista del dia | Alt+1 |
+| Calculadora | Cotizador   | Nueva cotizacion       | Alt+2 |
+| Clipboard   | Pedidos     | Trabajos activos       | Alt+3 |
+| Recibo      | Facturas    | Facturacion            | Alt+4 |
+| Personas    | Clientes    | Base de clientes       | Alt+5 |
+| Paleta      | Clases      | Dibujo y pintura       | Alt+6 |
+| Moneda      | Finanzas    | Ingresos y gastos      | Alt+7 |
+| Camion      | Proveedores | Directorio             | Alt+8 |
+| Documento   | Contratos   | Cotizaciones formales  | Alt+9 |
+| Caja        | Inventario  | Stock de materiales    | —     |
+| Engranaje   | Config      | Ajustes                | —     |
 
 **Comportamiento**:
+
 - Item activo: texto bold + fondo azul claro (#eff6ff) + borde izquierdo azul 4px
 - Badges de alerta: circulo rojo con numero junto al nombre del modulo. Solo para items que requieren accion (no conteos generales)
 - Hover: fondo gris mas oscuro, cursor pointer
@@ -233,6 +243,7 @@ Barra de busqueda en la parte superior de la pantalla principal (fuera del sideb
 ### Breadcrumbs
 
 Cuando se navega dentro de un modulo, mostrar ruta de navegacion:
+
 - Dashboard > Clientes > Carlos Perez
 - Dashboard > Pedidos > #P-0045
 - Cada elemento es clickeable para navegar hacia atras
@@ -243,7 +254,7 @@ Cuando se navega dentro de un modulo, mostrar ruta de navegacion:
 
 Lo primero que el dueno ve al abrir la app cada dia. Muestra un resumen inteligente del estado del negocio.
 
-*Problemas que resuelve: P-003 (control de pedidos), P-004 (incumplimiento de entregas), P-006 (sin control de costos)*
+_Problemas que resuelve: P-003 (control de pedidos), P-004 (incumplimiento de entregas), P-006 (sin control de costos)_
 
 ### Acciones Rapidas
 
@@ -258,10 +269,10 @@ Botones grandes en la parte superior del dashboard (48px alto minimo):
 
 Cuadricula 2x2 que muestra el estado de los pedidos activos de un vistazo:
 
-|  | Urgente (0-2 dias) | Normal (3+ dias) |
-|--|-------------------|-----------------|
-| **Sin abono ($0)** | ROJO — Conteo + "Urgentes sin pago" | AMARILLO — Conteo + "Pendientes de pago" |
-| **Con abono** | AMARILLO — Conteo + "Proximos a entregar" | VERDE — Conteo + "En buen estado" |
+|                    | Urgente (0-2 dias)                        | Normal (3+ dias)                         |
+| ------------------ | ----------------------------------------- | ---------------------------------------- |
+| **Sin abono ($0)** | ROJO — Conteo + "Urgentes sin pago"       | AMARILLO — Conteo + "Pendientes de pago" |
+| **Con abono**      | AMARILLO — Conteo + "Proximos a entregar" | VERDE — Conteo + "En buen estado"        |
 
 - Cada cuadrante muestra el numero de pedidos en esa categoria
 - Clic en un cuadrante expande la lista de pedidos correspondientes
@@ -270,6 +281,7 @@ Cuadricula 2x2 que muestra el estado de los pedidos activos de un vistazo:
 
 **Vista alternativa: Timeline Vertical**
 Toggle para cambiar a vista de timeline vertical, agrupada por urgencia:
+
 - **Hoy** — pedidos que vencen hoy
 - **Manana - 2 dias** — urgencia media
 - **3 - 8 dias** — en buen tiempo
@@ -292,15 +304,15 @@ Panel compacto que muestra el flujo de dinero en tiempo real:
 
 Notificaciones consolidadas de todos los modulos, ordenadas por prioridad. Cada alerta tiene icono + texto descriptivo + color de fondo:
 
-| Prioridad | Alerta | Color | Icono |
-|-----------|--------|-------|-------|
-| 1 | Pedidos atrasados (pasaron fecha de entrega) | Rojo + "ATRASADO" | Reloj con exclamacion |
-| 2 | Entregas proximas (faltan 2 dias, trabajo no terminado) | Amarillo + "PROXIMO" | Calendario |
-| 3 | Pedidos sin abono ($0 abonado) | Amarillo + "SIN PAGO" | Moneda tachada |
-| 4 | Cuadros sin reclamar (+15 dias listos) | Gris + "SIN RECLAMAR" | Caja |
-| 5 | Clase de dibujo hoy | Azul + "CLASE HOY" | Paleta de arte |
-| 6 | Dia de pedido a proveedor | Azul + "PEDIR HOY" | Camion |
-| 7 | Backup desactualizado (>24h) | Rojo + "SIN BACKUP" | Disco |
+| Prioridad | Alerta                                                  | Color                 | Icono                 |
+| --------- | ------------------------------------------------------- | --------------------- | --------------------- |
+| 1         | Pedidos atrasados (pasaron fecha de entrega)            | Rojo + "ATRASADO"     | Reloj con exclamacion |
+| 2         | Entregas proximas (faltan 2 dias, trabajo no terminado) | Amarillo + "PROXIMO"  | Calendario            |
+| 3         | Pedidos sin abono ($0 abonado)                          | Amarillo + "SIN PAGO" | Moneda tachada        |
+| 4         | Cuadros sin reclamar (+15 dias listos)                  | Gris + "SIN RECLAMAR" | Caja                  |
+| 5         | Clase de dibujo hoy                                     | Azul + "CLASE HOY"    | Paleta de arte        |
+| 6         | Dia de pedido a proveedor                               | Azul + "PEDIR HOY"    | Camion                |
+| 7         | Backup desactualizado (>24h)                            | Rojo + "SIN BACKUP"   | Disco                 |
 
 Cada alerta es clickeable y navega al item correspondiente.
 
@@ -318,29 +330,31 @@ Tarjetas pequenas con metricas clave del mes:
 
 Automatiza todo el calculo de precios. El cliente escoge materiales, el dueno mete medidas y la app calcula el precio al instante con desglose completo.
 
-*Problemas que resuelve: P-008 (listas de precios en papel), base para P-001 y P-006*
+_Problemas que resuelve: P-008 (listas de precios en papel), base para P-001 y P-006_
 
 ### Pantalla Principal: Seleccion por Tarjetas
 
 Al entrar al cotizador, el dueno ve tarjetas grandes (240x140px) en grid de 2x4 con icono para seleccionar el tipo de trabajo:
 
-| Tarjeta | Descripcion | Flujo |
-|---------|-------------|-------|
-| Enmarcacion Estandar | Marco + vidrio + respaldo | Wizard completo (5 pasos) |
-| Con Paspartu | Marco + paspartu + vidrio | Wizard completo + paspartu activo |
-| Acolchado | MDF + espuma + pegado | Formula acolchado + marco opcional |
-| Retablo | 4 listones + tapa MDF | Seleccion directa por medida |
-| Bastidor | Estructura para lienzo | Seleccion directa por medida |
-| Tapa Portarretrato | Tapa de reemplazo | Seleccion directa por medida |
-| Restauracion | Reparacion de piezas | Precio libre (criterio del dueno) |
-| Vidrio/Espejo | Cotizacion a domicilio | Precio por m2 + instalacion |
+| Tarjeta              | Descripcion               | Flujo                              |
+| -------------------- | ------------------------- | ---------------------------------- |
+| Enmarcacion Estandar | Marco + vidrio + respaldo | Wizard completo (5 pasos)          |
+| Con Paspartu         | Marco + paspartu + vidrio | Wizard completo + paspartu activo  |
+| Acolchado            | MDF + espuma + pegado     | Formula acolchado + marco opcional |
+| Retablo              | 4 listones + tapa MDF     | Seleccion directa por medida       |
+| Bastidor             | Estructura para lienzo    | Seleccion directa por medida       |
+| Tapa Portarretrato   | Tapa de reemplazo         | Seleccion directa por medida       |
+| Restauracion         | Reparacion de piezas      | Precio libre (criterio del dueno)  |
+| Vidrio/Espejo        | Cotizacion a domicilio    | Precio por m2 + instalacion        |
 
 **Estado de tarjeta**:
+
 - Sin seleccionar: fondo blanco, borde gris claro 1px
 - Hover: fondo azul claro (#f0f7ff), borde azul (#2563eb)
 - Seleccionada: fondo azul (#2563eb), texto blanco, checkmark arriba a la derecha
 
 **Accesos rapidos debajo de las tarjetas**:
+
 - "Ultimas 10 cotizaciones" — lista de cotizaciones recientes con boton "Duplicar"
 - "Usar plantilla" — lista de plantillas guardadas por el usuario
 
@@ -351,18 +365,21 @@ Al seleccionar enmarcacion estandar o con paspartu, se abre un wizard paso a pas
 **Indicador de progreso**: Barra con 5 puntos conectados. Punto activo azul relleno, completados verdes con check, pendientes grises vacios. Texto del nombre de cada paso debajo.
 
 **Paso 1 — Medidas**
+
 - Campos: Ancho (cm) y Alto (cm)
 - Validacion en tiempo real: no puede ser 0, negativo, ni mayor a 500
 - Mensaje de error inline: "El ancho debe ser mayor a 0 cm" (borde rojo + texto rojo debajo del campo)
 - Icono "?" junto al titulo: "Mide el ancho y alto de la pieza que vas a enmarcar, en centimetros"
 
 **Paso 2 — Marco**
+
 - Busqueda por referencia con autocompletado: escribir "Roble" muestra todas las opciones de roble
 - Al seleccionar, muestra: nombre de referencia, colilla (imagen si disponible), precio por metro
 - Calculo automatico del perimetro y costo del marco
 - Si el marco seleccionado tiene stock registrado y no alcanza: aviso amarillo "Stock bajo: 2m disponibles"
 
 **Paso 3 — Paspartu y Vidrio (opcional)**
+
 - Seccion dividida en dos areas lado a lado (o tabs si pantalla pequena)
 - **Paspartu** (izquierda):
   - Toggle: "Incluir paspartu" (apagado por defecto)
@@ -377,11 +394,13 @@ Al seleccionar enmarcacion estandar o con paspartu, se abre un wizard paso a pas
   - Icono "?": "El vidrio antirreflectivo no produce brillo. Ideal para cuadros con luz directa" + foto comparativa
 
 **Paso 4 — Materiales Adicionales**
+
 - Slider del 5% al 10% con el monto calculado visible
 - Texto explicativo: "Cubre clavos, grapas, ganchos, papel kraft y otros materiales de armado"
 - Valor por defecto: 10% (configurable en Config)
 
 **Paso 5 — Resumen**
+
 - Desglose completo:
   - Marco: referencia, metros, precio/metro, subtotal
   - Paspartu: tipo, medidas, subtotal (si aplica)
@@ -395,12 +414,14 @@ Al seleccionar enmarcacion estandar o con paspartu, se abre un wizard paso a pas
   - **"Guardar como Plantilla"** → guarda para reutilizar con nombre personalizado
 
 **Panel de Precio en Tiempo Real (lateral derecho)**
+
 - Fijo en el costado derecho, visible durante todos los pasos
 - Muestra desglose parcial que se actualiza al cambiar cualquier valor
 - Cuando un precio se actualiza: flash amarillo de 1 segundo en el monto que cambio
 - En pantallas menores a 1200px: el panel se colapsa y aparece como barra fija en la parte inferior
 
 **Navegacion del Wizard**:
+
 - Boton "Siguiente" (azul, deshabilitado si hay campos requeridos vacios)
 - Boton "Atras" (gris, deshabilitado en paso 1)
 - Boton "Guardar borrador" (texto gris) — guarda la cotizacion incompleta para continuar despues
@@ -409,11 +430,13 @@ Al seleccionar enmarcacion estandar o con paspartu, se abre un wizard paso a pas
 ### Duplicar y Plantillas
 
 **Duplicar cotizacion**:
+
 - En "Ultimas 10 cotizaciones", cada item tiene boton "Duplicar"
 - Crea una copia editable con todos los datos de la cotizacion original
 - El usuario modifica solo lo que cambia (ej: nuevas medidas) y el precio se recalcula
 
 **Plantillas**:
+
 - Desde el Resumen del wizard: "Guardar como plantilla" → dar nombre (ej: "Marco Roble 20x30")
 - En la pantalla principal del cotizador: "Usar plantilla" → lista de plantillas guardadas
 - Seleccionar plantilla precarga todos los datos → el usuario ajusta medidas → precio recalculado
@@ -423,6 +446,7 @@ Al seleccionar enmarcacion estandar o con paspartu, se abre un wizard paso a pas
 Accesible desde el cotizador con un boton "Gestionar Precios". Pestanas para cada lista.
 
 Funcionalidades:
+
 - Ver y editar precios en tabla con busqueda instantanea
 - Agregar nueva referencia, editar existente, eliminar (con confirmacion)
 - Importar desde Excel (.xlsx) con validacion de formato: "Se importaron 45 marcos. 3 filas tienen errores (ver detalle)"
@@ -436,30 +460,32 @@ Funcionalidades:
 
 El tablero de control de todos los trabajos activos. Reemplaza los cartones y libretas con un sistema visual de estados y alertas automaticas.
 
-*Problemas que resuelve: P-003 (control en carton), P-004 (incumplimiento de entregas)*
+_Problemas que resuelve: P-003 (control en carton), P-004 (incumplimiento de entregas)_
 
 ### Pantalla Principal: Tablero Kanban
 
 Vista tipo tablero con columnas por estado. Cada pedido es una tarjeta que se puede mover entre columnas.
 
-| Columna | Descripcion | Color de tarjeta |
-|---------|-------------|-----------------|
-| Cotizado | Se hizo cotizacion pero el cliente no confirmo | Gris + "COTIZADO" |
-| Confirmado | Cliente acepto y se recibio la pieza | Azul + "CONFIRMADO" |
-| En proceso | El trabajo esta siendo elaborado | Verde/Amarillo/Rojo segun urgencia + dias restantes |
-| Listo | Terminado, esperando recogida | Azul con pulso + "LISTO" |
-| Entregado | Cliente recogio y pago saldo | Verde + icono check + "ENTREGADO" |
-| Sin reclamar | +15 dias listo sin recoger | Rojo + "SIN RECLAMAR +15 DIAS" |
+| Columna      | Descripcion                                    | Color de tarjeta                                    |
+| ------------ | ---------------------------------------------- | --------------------------------------------------- |
+| Cotizado     | Se hizo cotizacion pero el cliente no confirmo | Gris + "COTIZADO"                                   |
+| Confirmado   | Cliente acepto y se recibio la pieza           | Azul + "CONFIRMADO"                                 |
+| En proceso   | El trabajo esta siendo elaborado               | Verde/Amarillo/Rojo segun urgencia + dias restantes |
+| Listo        | Terminado, esperando recogida                  | Azul con pulso + "LISTO"                            |
+| Entregado    | Cliente recogio y pago saldo                   | Verde + icono check + "ENTREGADO"                   |
+| Sin reclamar | +15 dias listo sin recoger                     | Rojo + "SIN RECLAMAR +15 DIAS"                      |
 
 **Conteo por columna** en el header: "En proceso (12)" — en rojo si alguno esta atrasado.
 
 **Interaccion con tarjetas**:
+
 - **Drag-and-drop**: Arrastrar tarjeta de una columna a otra. Feedback visual: sombra, transparencia 70%
 - **Alternativa clic derecho**: Menu contextual → "Mover a: Confirmado / En proceso / Listo / Entregado"
 - **Confirmacion al mover**: Dialog "Cambiar estado de #P-0045 a 'Listo'?" con Cancelar / Aceptar
 - **Deshacer**: Toast de 10 segundos "Movido a Listo. [Deshacer]" (Ctrl+Z tambien funciona)
 
 **Manejo de columnas con muchos items**:
+
 - Primeras 5 tarjetas visibles
 - Si hay mas: boton "+N mas" que expande la columna con scroll
 - Scroll virtual (react-window) para columnas con 50+ items
@@ -467,6 +493,7 @@ Vista tipo tablero con columnas por estado. Cada pedido es una tarjeta que se pu
 ### Tarjeta de Pedido
 
 Cada tarjeta muestra:
+
 - **Nombre del cliente** (bold, 14px)
 - **Tipo de trabajo** + descripcion corta (12px, gris)
 - **Fecha de entrega** con indicador de dias restantes: "Entrega: 15 Abr (2 dias)" — color segun urgencia
@@ -477,17 +504,17 @@ Cada tarjeta muestra:
 
 Tabla ordenable y filtrable sincronizada con el Kanban. Cambios en una vista se reflejan en la otra en tiempo real.
 
-| Columna | Tipo | Ordenable |
-|---------|------|-----------|
-| # | Numero de pedido | Si |
-| Cliente | Nombre | Si |
-| Trabajo | Tipo y descripcion | No |
-| Fecha ingreso | Fecha | Si |
-| Fecha entrega | Fecha | Si |
-| Total | Monto | Si |
-| Abono | Monto | Si |
-| Saldo | Calculado | Si |
-| Estado | Badge con texto+color | Si (filtrable) |
+| Columna       | Tipo                  | Ordenable      |
+| ------------- | --------------------- | -------------- |
+| #             | Numero de pedido      | Si             |
+| Cliente       | Nombre                | Si             |
+| Trabajo       | Tipo y descripcion    | No             |
+| Fecha ingreso | Fecha                 | Si             |
+| Fecha entrega | Fecha                 | Si             |
+| Total         | Monto                 | Si             |
+| Abono         | Monto                 | Si             |
+| Saldo         | Calculado             | Si             |
+| Estado        | Badge con texto+color | Si (filtrable) |
 
 - Busqueda por nombre, numero o fecha
 - Filtros como tags removibles: [En proceso x] [Atrasado x] [Este mes x]
@@ -517,12 +544,12 @@ Al hacer clic en una tarjeta, se abre panel lateral derecho (no reemplaza la vis
 
 Todas las alertas incluyen texto descriptivo + icono + color:
 
-| Condicion | Alerta | Accion sugerida |
-|-----------|--------|----------------|
-| Pedido con $0 abonado | "SIN ABONO" badge rojo al registrar | Recordar al cliente |
-| Faltan 2 dias, trabajo no en 'Listo' | "PROXIMO" badge amarillo | Priorizar trabajo |
-| Paso la fecha de entrega | "ATRASADO" badge rojo | Contactar cliente |
-| +15 dias en estado 'Listo' | "SIN RECLAMAR" badge gris | Llamar cliente |
+| Condicion                            | Alerta                              | Accion sugerida     |
+| ------------------------------------ | ----------------------------------- | ------------------- |
+| Pedido con $0 abonado                | "SIN ABONO" badge rojo al registrar | Recordar al cliente |
+| Faltan 2 dias, trabajo no en 'Listo' | "PROXIMO" badge amarillo            | Priorizar trabajo   |
+| Paso la fecha de entrega             | "ATRASADO" badge rojo               | Contactar cliente   |
+| +15 dias en estado 'Listo'           | "SIN RECLAMAR" badge gris           | Llamar cliente      |
 
 ---
 
@@ -530,7 +557,7 @@ Todas las alertas incluyen texto descriptivo + icono + color:
 
 Reemplaza las factureras de papel. Genera facturas con consecutivo automatico, permite busqueda instantanea, impresion y envio por correo.
 
-*Problemas que resuelve: P-001 (facturacion en papel)*
+_Problemas que resuelve: P-001 (facturacion en papel)_
 
 ### Generacion de Factura
 
@@ -540,18 +567,18 @@ La factura se puede crear desde el modulo de Pedidos (boton "Generar Factura") o
 
 Campos de la factura:
 
-| Campo | Comportamiento |
-|-------|---------------|
-| Numero consecutivo | Autogenerado, secuencial, no editable |
-| Fecha | Fecha de creacion (automatica, formato: "12 de Abril de 2026") |
-| Cliente | Nombre, telefono, cedula (autocompletado si ya existe) |
-| Descripcion | Tipo de trabajo y especificaciones |
-| Desglose | Marco, vidrio, paspartu, materiales adicionales |
-| Total | Precio final calculado (formato: $1.234.567) |
-| Abono | Lo que pago el cliente |
-| Saldo | Total - Abono (autocalculado) |
-| Metodo de pago | Efectivo / Transferencia / Tarjeta / Cheque |
-| Fecha de entrega | Cuando puede recoger el trabajo |
+| Campo              | Comportamiento                                                 |
+| ------------------ | -------------------------------------------------------------- |
+| Numero consecutivo | Autogenerado, secuencial, no editable                          |
+| Fecha              | Fecha de creacion (automatica, formato: "12 de Abril de 2026") |
+| Cliente            | Nombre, telefono, cedula (autocompletado si ya existe)         |
+| Descripcion        | Tipo de trabajo y especificaciones                             |
+| Desglose           | Marco, vidrio, paspartu, materiales adicionales                |
+| Total              | Precio final calculado (formato: $1.234.567)                   |
+| Abono              | Lo que pago el cliente                                         |
+| Saldo              | Total - Abono (autocalculado)                                  |
+| Metodo de pago     | Efectivo / Transferencia / Tarjeta / Cheque                    |
+| Fecha de entrega   | Cuando puede recoger el trabajo                                |
 
 ### Acciones de la Factura
 
@@ -569,6 +596,7 @@ Campos de la factura:
 ### Busqueda de Facturas
 
 Barra de busqueda con filtros:
+
 - Por numero, nombre del cliente, fecha, estado (pendiente, pagada, devuelta)
 - Resultados instantaneos mientras se escribe
 - Filtros como tags: [Pendiente x] [Abril 2026 x]
@@ -626,17 +654,19 @@ Barra de busqueda con filtros:
 
 Base de datos centralizada de todos los clientes. Reemplaza la informacion dispersa en facturas de papel con historial automatico, frecuencia y total gastado.
 
-*Problemas que resuelve: P-002 (sin historial de clientes)*
+_Problemas que resuelve: P-002 (sin historial de clientes)_
 
 ### Pantalla Principal: Directorio de Clientes
 
 Lista de clientes con tarjetas compactas. Cada tarjeta muestra:
+
 - Iniciales del nombre como avatar (circulo de color)
 - Nombre completo (bold)
 - Telefono (clic para llamar)
 - Estadisticas rapidas: total gastado, cantidad de pedidos, ultima visita
 
 Funcionalidades:
+
 - **Busqueda instantanea** por nombre, telefono o cedula (Ctrl+K tambien funciona)
 - **Filtros como tags**: Todos, Frecuentes (3+ pedidos), Con saldo pendiente, Estudiantes de clase
 - **Boton "+ Nuevo Cliente"** para registro rapido (48px alto)
@@ -647,22 +677,26 @@ Funcionalidades:
 Al hacer clic en un cliente, se abre su ficha completa:
 
 **Datos personales**:
+
 - Nombre completo, telefono, direccion, cedula, correo electronico
 - Para menores (clases): nombre y telefono del acudiente
 - Boton "Editar" para modificar datos. Boton "Archivar" para desactivar (nunca eliminar si tiene pedidos)
 
 **Estadisticas automaticas** (calculadas por la app, no editables):
+
 - Total gastado historico (suma de todas las facturas pagadas)
 - Cantidad de pedidos realizados
 - Ultima visita (fecha del ultimo pedido): "Hace 45 dias (27 de Febrero de 2026)"
 - Saldo pendiente consolidado (si debe algo) — destacado en rojo si > $0
 
 **Historial de pedidos**:
+
 - Lista cronologica de todos los pedidos del cliente con estado y monto
 - Clic en cualquier pedido abre el detalle completo
 - Filtrable por estado y rango de fechas
 
 **Proteccion**:
+
 - Si se intenta archivar un cliente con pedidos activos: "No se puede archivar. Carlos Perez tiene 2 pedidos pendientes."
 - Si se intenta archivar un cliente con saldo: "Carlos Perez tiene saldo pendiente de $403.000. Archivar de todas formas?" con confirmacion doble
 
@@ -672,7 +706,7 @@ Al hacer clic en un cliente, se abre su ficha completa:
 
 Gestiona las clases, los estudiantes, los pagos mensuales y el horario. Evita conflictos entre clases y salidas del dueno.
 
-*Problemas que resuelve: P-005 (conflicto clases vs salidas)*
+_Problemas que resuelve: P-005 (conflicto clases vs salidas)_
 
 ### Pantalla Principal: Calendario de Clases
 
@@ -701,16 +735,17 @@ Vista semanal que muestra los bloques de clase programados como barras horizonta
 ### Gestion de Estudiantes
 
 Lista de estudiantes activos con tarjeta por cada uno:
+
 - Nombre, telefono, fecha de ingreso
 - Datos del acudiente (para menores de edad)
 - **Estado del pago mensual**: badge verde "PAGADO", amarillo "PARCIAL", rojo "PENDIENTE"
 - **Grid de pagos recientes** (ultimos 3 meses):
 
-| Estudiante | Abril | Marzo | Febrero |
-|-----------|-------|-------|---------|
-| Ana Lopez | PAGADO | PAGADO | PAGADO |
-| Pedro Ruiz | PENDIENTE | PAGADO | PAGADO |
-| Laura Garcia | PARCIAL | PAGADO | PAGADO |
+| Estudiante   | Abril     | Marzo  | Febrero |
+| ------------ | --------- | ------ | ------- |
+| Ana Lopez    | PAGADO    | PAGADO | PAGADO  |
+| Pedro Ruiz   | PENDIENTE | PAGADO | PAGADO  |
+| Laura Garcia | PARCIAL   | PAGADO | PAGADO  |
 
 - Ordenamiento por defecto: estudiantes con pago pendiente primero
 
@@ -727,6 +762,7 @@ Al inicio de cada mes, la app genera automaticamente los registros de pago para 
 ### Venta de Kits
 
 Boton rapido: "Vender Kit de Dibujo — $15.000"
+
 - Seleccionar estudiante de la lista
 - Confirmar venta
 - Se registra como ingreso en Finanzas vinculado al estudiante
@@ -737,20 +773,21 @@ Boton rapido: "Vender Kit de Dibujo — $15.000"
 
 Visibilidad completa de la salud financiera del negocio. Reemplaza el libro de entradas y salidas con registro digital, graficas y reportes.
 
-*Problemas que resuelve: P-006 (sin control de costos)*
+_Problemas que resuelve: P-006 (sin control de costos)_
 
 ### Pantalla Principal: Resumen Financiero
 
 Vista del mes actual con 4 tarjetas de metricas clave (cada una con monto, flecha de tendencia y comparacion vs mes anterior):
 
-| Tarjeta | Color | Contenido |
-|---------|-------|-----------|
-| Ingresos del mes | Verde | $2.450.000 ↑12% vs marzo |
-| Gastos del mes | Rojo | $1.200.000 ↓5% vs marzo |
-| Ganancia neta | Azul | $1.250.000 ↑28% vs marzo |
+| Tarjeta           | Color    | Contenido                   |
+| ----------------- | -------- | --------------------------- |
+| Ingresos del mes  | Verde    | $2.450.000 ↑12% vs marzo    |
+| Gastos del mes    | Rojo     | $1.200.000 ↓5% vs marzo     |
+| Ganancia neta     | Azul     | $1.250.000 ↑28% vs marzo    |
 | Saldos por cobrar | Amarillo | $803.000 (5 clientes deben) |
 
 **Grafica principal: Area apilada de ingresos vs gastos por dia**
+
 - Eje X: dias del mes (1-30)
 - Area verde: ingresos diarios
 - Area roja: gastos diarios
@@ -761,16 +798,19 @@ Vista del mes actual con 4 tarjetas de metricas clave (cada una con monto, flech
 ### Registro de Ingresos
 
 Se registran automaticamente desde:
+
 - Facturacion (abonos, pagos de saldo)
 - Clases (pagos mensuales, venta de kits)
 
 Tambien se pueden registrar manualmente:
+
 - Descripcion, monto, categoria, fecha
 - Categorias: Enmarcacion, Clases, Contratos, Restauracion, Otro
 
 ### Registro de Gastos
 
 Formulario rapido:
+
 - **Descripcion**: campo de texto libre
 - **Monto**: campo numerico (formato: $0) + botones rapidos ($50.000, $100.000)
 - **Categoria**: seleccion por tarjetas con icono
@@ -784,14 +824,15 @@ Formulario rapido:
 
 ### Reportes
 
-| Reporte | Contenido | Formato |
-|---------|-----------|---------|
-| Mensual | Ingresos, gastos, ganancia, desglose por categoria | Tabla + grafica |
-| Por tipo de trabajo | Cuanto genera cada servicio (enmarcacion, retablos, clases, contratos) | Grafico de pastel |
-| Saldos pendientes | Lista de clientes que deben dinero, ordenada por monto | Tabla |
-| Comparacion mes a mes | Tendencia de ingresos/gastos/ganancia de los ultimos 12 meses | Grafico de lineas |
+| Reporte               | Contenido                                                              | Formato           |
+| --------------------- | ---------------------------------------------------------------------- | ----------------- |
+| Mensual               | Ingresos, gastos, ganancia, desglose por categoria                     | Tabla + grafica   |
+| Por tipo de trabajo   | Cuanto genera cada servicio (enmarcacion, retablos, clases, contratos) | Grafico de pastel |
+| Saldos pendientes     | Lista de clientes que deben dinero, ordenada por monto                 | Tabla             |
+| Comparacion mes a mes | Tendencia de ingresos/gastos/ganancia de los ultimos 12 meses          | Grafico de lineas |
 
 Cada reporte:
+
 - Exportar a Excel o PDF
 - Vista previa antes de imprimir
 - Filtrable por rango de fechas
@@ -799,6 +840,7 @@ Cada reporte:
 ### Devoluciones
 
 Las devoluciones se registran como movimiento negativo vinculado al pedido original.
+
 - Campos: monto, motivo (obligatorio), fecha
 - Confirmacion: "Registrar devolucion de $X por motivo: [texto]. Esta seguro?"
 - Se reflejan en los reportes financieros como ingresos negativos
@@ -810,11 +852,12 @@ Las devoluciones se registran como movimiento negativo vinculado al pedido origi
 
 Directorio organizado de proveedores con dias de pedido, productos que suministran y forma de pago. Reemplaza los contactos sueltos en el telefono.
 
-*Problemas que resuelve: P-007 (proveedores sin directorio)*
+_Problemas que resuelve: P-007 (proveedores sin directorio)_
 
 ### Pantalla Principal: Directorio
 
 Tarjetas de proveedor con informacion clave visible de un vistazo:
+
 - Nombre/empresa (bold), producto que suministra
 - Telefono (clic para llamar)
 - Dias de pedido (badges: "Lun", "Mie")
@@ -824,6 +867,7 @@ Tarjetas de proveedor con informacion clave visible de un vistazo:
 ### Alerta de Dia de Pedido
 
 Si hoy es un dia de pedido de algun proveedor (ej: lunes o miercoles para marcos), se muestra:
+
 - Alerta en el Dashboard: "HOY es dia de pedido: [nombre proveedor] — [producto]" con boton "Llamar"
 - Badge azul en el modulo Proveedores en la barra lateral
 
@@ -839,7 +883,7 @@ Si hoy es un dia de pedido de algun proveedor (ej: lunes o miercoles para marcos
 
 Genera automaticamente cotizaciones formales y cuentas de cobro para contratos con conjuntos residenciales y entidades, usando la plantilla del negocio.
 
-*Problemas que resuelve: Del Bloque F.3 de la Fase 2*
+_Problemas que resuelve: Del Bloque F.3 de la Fase 2_
 
 ### Generacion de Cotizacion Formal
 
@@ -862,6 +906,7 @@ Formulario paso a paso que genera un documento PDF con la plantilla del negocio:
 ### Generacion de Cuenta de Cobro
 
 Si la cotizacion es aprobada, se genera la cuenta de cobro con la misma plantilla.
+
 - Incluye retencion en la fuente cuando aplica (toggle + campo de porcentaje)
 - Se puede generar directamente desde la cotizacion aprobada (boton "Generar Cuenta de Cobro")
 - Misma vista previa y opciones de exportacion
@@ -869,6 +914,7 @@ Si la cotizacion es aprobada, se genera la cuenta de cobro con la misma plantill
 ### Historial de Contratos
 
 Lista de todas las cotizaciones y cuentas de cobro generadas:
+
 - Estado: Enviada (azul), Aprobada (verde), Cobrada (verde oscuro), Rechazada (gris)
 - Busqueda por cliente, fecha o monto
 - Filtros como tags removibles
@@ -884,12 +930,12 @@ Control opcional del stock de materiales principales. Permite saber si hay mater
 
 Tabla con los materiales principales y su stock actual:
 
-| Material | Referencia | Stock actual | Unidad | Minimo | Estado |
-|----------|-----------|-------------|--------|--------|--------|
-| Marco Roble Natural | MRN-001 | 12m | metros | 5m | BIEN (verde) |
-| Vidrio Claro | VC-001 | 2m2 | m2 | 3m2 | BAJO (amarillo) |
-| Vidrio Antirreflectivo | VA-001 | 0.5m2 | m2 | 2m2 | CRITICO (rojo) |
-| Paspartu Carton | PC-001 | 8 laminas | unidades | 5 | BIEN (verde) |
+| Material               | Referencia | Stock actual | Unidad   | Minimo | Estado          |
+| ---------------------- | ---------- | ------------ | -------- | ------ | --------------- |
+| Marco Roble Natural    | MRN-001    | 12m          | metros   | 5m     | BIEN (verde)    |
+| Vidrio Claro           | VC-001     | 2m2          | m2       | 3m2    | BAJO (amarillo) |
+| Vidrio Antirreflectivo | VA-001     | 0.5m2        | m2       | 2m2    | CRITICO (rojo)  |
+| Paspartu Carton        | PC-001     | 8 laminas    | unidades | 5      | BIEN (verde)    |
 
 - Busqueda instantanea por nombre o referencia
 - Filtros: Todos, Stock bajo, Critico
@@ -898,11 +944,13 @@ Tabla con los materiales principales y su stock actual:
 ### Registro de Movimientos
 
 **Entrada de material** (cuando llega pedido del proveedor):
+
 - Seleccionar material, cantidad recibida, proveedor, fecha
 - Se actualiza el stock automaticamente
 - Se registra como gasto en Finanzas si se ingresa el costo
 
 **Salida de material** (cuando se usa en un pedido):
+
 - Opcion automatica: al crear pedido desde cotizacion, descontar materiales usados
 - Opcion manual: registrar salida por material y cantidad
 
@@ -936,30 +984,33 @@ Ajustes tecnicos de la app. Manejado por el desarrollador, no por el dueno. Acce
 ### Respaldo de Datos
 
 **Backup automatico diario** (activado por defecto, no se puede desactivar completamente):
+
 - Frecuencia: Diario (cada 24h) o cada vez que se cierra la app
 - Ubicacion: Carpeta Documentos del usuario, o carpeta personalizada (Dropbox, OneDrive)
 - Retencion: 7 backups diarios + 4 backups semanales
 - Indicador en barra lateral: "Backup: hace 2h" (verde si reciente, rojo si >24h)
 
 **Botones manuales**:
+
 - "Crear backup ahora" → copia el archivo .db a la ubicacion configurada
 - "Restaurar backup" → muestra lista de backups por fecha, seleccionar y confirmar
 
 **Verificacion de integridad**:
+
 - Al iniciar la app: ejecutar PRAGMA integrity_check en SQLite
 - Si detecta corrupcion: mostrar mensaje "Se detecto un problema con los datos. Restaurando desde el backup de ayer..." → restaurar automaticamente
 
 ### Ajustes de la App
 
-| Ajuste | Valor por defecto | Descripcion |
-|--------|------------------|-------------|
-| Consecutivo de facturas | 1 | Desde que numero arranca. Tooltip: "Si cambias a 500, la proxima factura sera #F-0500" |
-| Materiales adicionales | 10% | Porcentaje para materiales de armado |
-| Precio vidrio claro | $100.000/m2 | Editable |
-| Precio vidrio antirreflectivo | $115.000/m2 | Editable |
-| Tiempo de entrega por defecto | 8 dias | Se usa como sugerencia al crear pedidos |
-| Precio clase mensual | $110.000 | Se usa para generar pagos mensuales |
-| Precio kit dibujo | $15.000 | Se usa para registrar ventas de kit |
+| Ajuste                        | Valor por defecto | Descripcion                                                                            |
+| ----------------------------- | ----------------- | -------------------------------------------------------------------------------------- |
+| Consecutivo de facturas       | 1                 | Desde que numero arranca. Tooltip: "Si cambias a 500, la proxima factura sera #F-0500" |
+| Materiales adicionales        | 10%               | Porcentaje para materiales de armado                                                   |
+| Precio vidrio claro           | $100.000/m2       | Editable                                                                               |
+| Precio vidrio antirreflectivo | $115.000/m2       | Editable                                                                               |
+| Tiempo de entrega por defecto | 8 dias            | Se usa como sugerencia al crear pedidos                                                |
+| Precio clase mensual          | $110.000          | Se usa para generar pagos mensuales                                                    |
+| Precio kit dibujo             | $15.000           | Se usa para registrar ventas de kit                                                    |
 
 ### Seccion Ayuda
 
@@ -981,18 +1032,18 @@ Ajustes tecnicos de la app. Manejado por el desarrollador, no por el dueno. Acce
 
 ### Matriz de Errores y Recuperacion
 
-| Escenario | Prevencion | Recuperacion |
-|-----------|-----------|--------------|
-| Campo vacio requerido | Borde rojo + "Este campo es obligatorio" | No se puede avanzar sin completar |
-| Valor invalido (ancho = -5) | Validacion: "El ancho debe ser entre 1 y 500 cm" | Campo se limpia, foco vuelve al campo |
-| Cambio de estado accidental | Dialog: "Cambiar a Entregado?" + Cancelar/Aceptar | Toast "Deshacer" por 10 segundos |
-| Drag-and-drop accidental | Confirmacion al soltar tarjeta | Ctrl+Z deshace el movimiento |
-| Factura duplicada | "Ya existe factura para este pedido. Ver existente?" | Opcion de ver la existente o crear nueva |
-| Eliminar cliente con pedidos | "No se puede eliminar. Tiene 2 pedidos pendientes" | Boton "Archivar" disponible |
-| Eliminar cliente con saldo | "Tiene saldo de $403.000. Archivar?" + doble confirmacion | Archivado, recuperable desde Config |
-| Crash de la app | Auto-guardado cada 30 segundos | Al reiniciar: "Hay datos sin guardar. Recuperar?" |
-| Corrupcion de base de datos | PRAGMA integrity_check al iniciar | Restauracion automatica desde backup |
-| Cierre sin guardar cotizacion | Dialog: "Guardar borrador o descartar?" | Borradores accesibles desde Cotizador |
+| Escenario                     | Prevencion                                                | Recuperacion                                      |
+| ----------------------------- | --------------------------------------------------------- | ------------------------------------------------- |
+| Campo vacio requerido         | Borde rojo + "Este campo es obligatorio"                  | No se puede avanzar sin completar                 |
+| Valor invalido (ancho = -5)   | Validacion: "El ancho debe ser entre 1 y 500 cm"          | Campo se limpia, foco vuelve al campo             |
+| Cambio de estado accidental   | Dialog: "Cambiar a Entregado?" + Cancelar/Aceptar         | Toast "Deshacer" por 10 segundos                  |
+| Drag-and-drop accidental      | Confirmacion al soltar tarjeta                            | Ctrl+Z deshace el movimiento                      |
+| Factura duplicada             | "Ya existe factura para este pedido. Ver existente?"      | Opcion de ver la existente o crear nueva          |
+| Eliminar cliente con pedidos  | "No se puede eliminar. Tiene 2 pedidos pendientes"        | Boton "Archivar" disponible                       |
+| Eliminar cliente con saldo    | "Tiene saldo de $403.000. Archivar?" + doble confirmacion | Archivado, recuperable desde Config               |
+| Crash de la app               | Auto-guardado cada 30 segundos                            | Al reiniciar: "Hay datos sin guardar. Recuperar?" |
+| Corrupcion de base de datos   | PRAGMA integrity_check al iniciar                         | Restauracion automatica desde backup              |
+| Cierre sin guardar cotizacion | Dialog: "Guardar borrador o descartar?"                   | Borradores accesibles desde Cotizador             |
 
 ### Auto-Guardado
 
@@ -1005,6 +1056,7 @@ Ajustes tecnicos de la app. Manejado por el desarrollador, no por el dueno. Acce
 ### Eliminacion Suave
 
 Nunca se borran datos permanentemente. Todas las "eliminaciones" son archivados:
+
 - Clientes: se marcan como inactivos, no aparecen en busquedas normales
 - Pedidos: se marcan como cancelados, permanecen en historial
 - Facturas: se marcan como anuladas, mantienen consecutivo
@@ -1024,12 +1076,12 @@ Nunca se borran datos permanentemente. Todas las "eliminaciones" son archivados:
 
 Se generan 4 tipos de documentos:
 
-| Documento | Uso | Tamano |
-|-----------|-----|--------|
-| Factura de venta | Cada pedido entregado | Carta/A4 + Termico 80mm |
-| Cotizacion rapida | Cotizaciones del Cotizador | Carta/A4 |
-| Cotizacion formal | Contratos con entidades | Carta/A4 |
-| Cuenta de cobro | Cobro a entidades | Carta/A4 |
+| Documento         | Uso                        | Tamano                  |
+| ----------------- | -------------------------- | ----------------------- |
+| Factura de venta  | Cada pedido entregado      | Carta/A4 + Termico 80mm |
+| Cotizacion rapida | Cotizaciones del Cotizador | Carta/A4                |
+| Cotizacion formal | Contratos con entidades    | Carta/A4                |
+| Cuenta de cobro   | Cobro a entidades          | Carta/A4                |
 
 ### Especificaciones de Impresion
 
@@ -1053,20 +1105,21 @@ Se generan 4 tipos de documentos:
 
 Los modulos se desarrollan en orden de impacto en los problemas criticos del negocio. La prioridad combina urgencia del problema + dependencia entre modulos:
 
-| # | Prioridad | Modulo | Razon | Problemas |
-|---|-----------|--------|-------|-----------|
-| 1 | CRITICA | Cotizador Digital | Base de todo. Sin esto no hay pedidos ni facturas. | P-008 |
-| 2 | CRITICA | Gestion de Pedidos | Resuelve el dolor mas grande: trabajos atrasados. | P-003, P-004 |
-| 3 | CRITICA | Facturacion Digital | Depende de Cotizador y Pedidos. | P-001 |
-| 4 | ALTA | Clientes | Centraliza datos que usan todos los modulos. | P-002 |
-| 5 | ALTA | Dashboard | Necesita datos de Pedidos y Finanzas. | Todos |
-| 6 | MEDIA | Finanzas | Se alimenta de facturas y pedidos. | P-006 |
-| 7 | MEDIA | Clases de Dibujo | Modulo independiente. | P-005 |
-| 8 | NORMAL | Proveedores | Complementario, bajo impacto inmediato. | P-007 |
-| 9 | NORMAL | Documentos Contratos | 4-5 veces al mes, no urgente. | F.3 |
-| 10 | NORMAL | Inventario Basico | Complementario, se puede agregar despues. | Nuevo |
+| #   | Prioridad | Modulo               | Razon                                              | Problemas    |
+| --- | --------- | -------------------- | -------------------------------------------------- | ------------ |
+| 1   | CRITICA   | Cotizador Digital    | Base de todo. Sin esto no hay pedidos ni facturas. | P-008        |
+| 2   | CRITICA   | Gestion de Pedidos   | Resuelve el dolor mas grande: trabajos atrasados.  | P-003, P-004 |
+| 3   | CRITICA   | Facturacion Digital  | Depende de Cotizador y Pedidos.                    | P-001        |
+| 4   | ALTA      | Clientes             | Centraliza datos que usan todos los modulos.       | P-002        |
+| 5   | ALTA      | Dashboard            | Necesita datos de Pedidos y Finanzas.              | Todos        |
+| 6   | MEDIA     | Finanzas             | Se alimenta de facturas y pedidos.                 | P-006        |
+| 7   | MEDIA     | Clases de Dibujo     | Modulo independiente.                              | P-005        |
+| 8   | NORMAL    | Proveedores          | Complementario, bajo impacto inmediato.            | P-007        |
+| 9   | NORMAL    | Documentos Contratos | 4-5 veces al mes, no urgente.                      | F.3          |
+| 10  | NORMAL    | Inventario Basico    | Complementario, se puede agregar despues.          | Nuevo        |
 
 **Elementos transversales** (implementar desde el inicio, no como modulo aparte):
+
 - Onboarding (wizard primera vez + datos ejemplo)
 - Sistema de backup automatico
 - Busqueda global (Ctrl+K)
@@ -1082,18 +1135,18 @@ Los modulos se desarrollan en orden de impacto en los problemas criticos del neg
 
 Funcionalidades para considerar en versiones futuras, no necesarias para el lanzamiento:
 
-| Funcionalidad | Descripcion | Prioridad estimada |
-|--------------|-------------|-------------------|
-| Inventario completo | Alertas de reorden, historial de movimientos, costo promedio | Media |
-| Notificaciones al cliente | SMS/WhatsApp: "Tu marco esta listo para recoger" | Media |
-| Firma digital | Firmar contratos y cotizaciones formales dentro de la app | Baja |
-| Modo alto contraste | Opcion en Config para mejorar visibilidad | Baja |
-| Multi-usuario | Roles (admin/empleado) si el negocio contrata personal | Baja |
-| App movil companera | Consultar pedidos y finanzas desde el celular | Baja |
-| Integracion bancaria | Importar extractos bancarios para conciliar pagos | Baja |
-| Codigo QR en facturas | QR que enlaza al detalle del pedido | Baja |
-| Reportes avanzados | Tendencias, pronosticos, estacionalidad | Baja |
-| Entrada por voz | Dictar medidas en vez de escribirlas | Futura |
+| Funcionalidad             | Descripcion                                                  | Prioridad estimada |
+| ------------------------- | ------------------------------------------------------------ | ------------------ |
+| Inventario completo       | Alertas de reorden, historial de movimientos, costo promedio | Media              |
+| Notificaciones al cliente | SMS/WhatsApp: "Tu marco esta listo para recoger"             | Media              |
+| Firma digital             | Firmar contratos y cotizaciones formales dentro de la app    | Baja               |
+| Modo alto contraste       | Opcion en Config para mejorar visibilidad                    | Baja               |
+| Multi-usuario             | Roles (admin/empleado) si el negocio contrata personal       | Baja               |
+| App movil companera       | Consultar pedidos y finanzas desde el celular                | Baja               |
+| Integracion bancaria      | Importar extractos bancarios para conciliar pagos            | Baja               |
+| Codigo QR en facturas     | QR que enlaza al detalle del pedido                          | Baja               |
+| Reportes avanzados        | Tendencias, pronosticos, estacionalidad                      | Baja               |
+| Entrada por voz           | Dictar medidas en vez de escribirlas                         | Futura             |
 
 ---
 
@@ -1107,6 +1160,6 @@ Con la Fase 3 v2 completada, el proyecto avanza a:
 
 ---
 
-*Documento generado como parte del levantamiento de requerimientos para CasaAlberto - Arte - Diseno - Decoracion. Fase 3 v2 — Definicion de Funcionalidades (Mejorada).*
+_Documento generado como parte del levantamiento de requerimientos para CasaAlberto - Arte - Diseno - Decoracion. Fase 3 v2 — Definicion de Funcionalidades (Mejorada)._
 
-*Stack tecnologico: Electron 39 + React 19 + TypeScript + Tailwind CSS 4 + SQLite (better-sqlite3 + Drizzle ORM) + Recharts + Lucide Icons + pdfkit*
+_Stack tecnologico: Electron 39 + React 19 + TypeScript + Tailwind CSS 4 + SQLite (better-sqlite3 + Drizzle ORM) + Recharts + Lucide Icons + pdfkit_

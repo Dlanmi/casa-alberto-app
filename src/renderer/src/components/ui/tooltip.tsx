@@ -39,10 +39,18 @@ export function Tooltip({ content, children, position = 'top' }: TooltipProps): 
           role="tooltip"
           className={cn(
             'absolute z-50 px-2.5 py-1.5 text-xs font-medium text-white bg-text rounded-sm whitespace-normal max-w-50 text-center shadow-2',
-            position === 'top' && 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-            position === 'bottom' && 'top-full left-1/2 -translate-x-1/2 mt-2',
-            position === 'left' && 'right-full top-1/2 -translate-y-1/2 mr-2',
-            position === 'right' && 'left-full top-1/2 -translate-y-1/2 ml-2'
+            // La animación entra desde la dirección OPUESTA al lado donde
+            // se renderiza el tooltip (un tooltip 'top' aparece arriba del
+            // trigger y entra desde abajo). Mantenemos los translates de
+            // centrado dentro del propio keyframe para evitar conflictos.
+            position === 'top' &&
+              'bottom-full left-1/2 -translate-x-1/2 mb-2 animate-tooltip-from-bottom',
+            position === 'bottom' &&
+              'top-full left-1/2 -translate-x-1/2 mt-2 animate-tooltip-from-top',
+            position === 'left' &&
+              'right-full top-1/2 -translate-y-1/2 mr-2 animate-tooltip-from-right',
+            position === 'right' &&
+              'left-full top-1/2 -translate-y-1/2 ml-2 animate-tooltip-from-left'
           )}
         >
           {content}

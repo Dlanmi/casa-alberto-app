@@ -13,6 +13,7 @@ import {
   type MetodoPago
 } from '../schema'
 import { validarEnum } from '../../lib/validar-enum'
+import { validarFechaISO } from '../../lib/validar-fecha'
 
 export type NuevaFactura = {
   pedidoId: number
@@ -25,6 +26,14 @@ export type NuevaFactura = {
 
 export function crearFactura(db: DB, data: NuevaFactura) {
   return db.transaction((tx) => {
+    validarFechaISO(data.fecha, 'YYYY-MM-DD', 'fecha')
+    if (data.fechaEntrega) {
+      validarFechaISO(data.fechaEntrega, 'YYYY-MM-DD', 'fechaEntrega')
+    }
+    if (!Number.isFinite(data.total) || data.total <= 0) {
+      throw new Error('El total de la factura debe ser mayor a 0')
+    }
+
     // SPEC-007 — Prevenir facturas duplicadas por pedido. Si ya existe una
     // factura activa (no anulada), devolvemos un error con el número para
     // que el usuario pueda encontrarla rápido en la vista de facturas.
@@ -48,6 +57,12 @@ export function crearFactura(db: DB, data: NuevaFactura) {
         `No se puede facturar un pedido en estado "${pedido.estado}". ` +
           'Confirma el pedido antes de generar la factura.'
       )
+    }
+    if (data.clienteId !== pedido.clienteId) {
+      throw new Error('La factura debe usar el mismo cliente del pedido')
+    }
+    if (data.total !== pedido.precioTotal) {
+      throw new Error('El total de la factura debe coincidir con el total del pedido')
     }
 
     const numero = generarConsecutivo(tx as unknown as DB, 'factura')
@@ -122,10 +137,11 @@ export type NuevoPago = {
 
 export function registrarPago(db: DB, data: NuevoPago) {
   return db.transaction((tx) => {
-    if (data.monto <= 0) {
+    if (!Number.isFinite(data.monto) || data.monto <= 0) {
       throw new Error('El monto del pago debe ser mayor a 0')
     }
     validarEnum(data.metodoPago, METODOS_PAGO, 'metodoPago')
+    validarFechaISO(data.fecha, 'YYYY-MM-DD', 'fecha')
 
     const factura = tx.select().from(facturas).where(eq(facturas.id, data.facturaId)).get()
     if (!factura) throw new Error(`Factura ${data.facturaId} no encontrada`)

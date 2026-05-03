@@ -484,33 +484,40 @@ export default function PedidosPage(): React.JSX.Element {
         </div>
       }
     >
-      {(pedidos ?? []).length === 0 ? (
-        <EmptyState
-          icon={ClipboardList}
-          illustration={<FrameIllustration size={140} />}
-          title="Aún no hay pedidos"
-          description="Crea una cotización y confírmala para verlos aquí."
-          actionLabel="Ir al Cotizador"
-          onAction={() => navigate('/cotizador')}
-        />
-      ) : view === 'kanban' ? (
-        <KanbanBoard
-          pedidos={filteredPedidos}
-          clienteMap={clienteMap}
-          saldosMap={saldosMap}
-          onCardClick={setSelected}
-          onChangeEstado={handleChangeEstado}
-          highlightedId={highlightedId}
-        />
-      ) : (
-        <PedidoListView
-          pedidos={filteredPedidos}
-          onRowClick={setSelected}
-          clienteMap={clienteMap}
-          saldosInfoMap={saldosInfoMap}
-          highlightedId={highlightedId}
-        />
-      )}
+      {/* Cuando un detail panel está abierto, atenuamos el board/lista de
+          fondo para que el foco visual se quede en el panel. transition-
+          opacity para que el cambio se sienta orquestado, no de golpe. */}
+      <div
+        className={cn('transition-opacity duration-200', selected ? 'opacity-50' : 'opacity-100')}
+      >
+        {(pedidos ?? []).length === 0 ? (
+          <EmptyState
+            icon={ClipboardList}
+            illustration={<FrameIllustration size={140} />}
+            title="Aún no hay pedidos"
+            description="Crea una cotización y confírmala para verlos aquí."
+            actionLabel="Ir al Cotizador"
+            onAction={() => navigate('/cotizador')}
+          />
+        ) : view === 'kanban' ? (
+          <KanbanBoard
+            pedidos={filteredPedidos}
+            clienteMap={clienteMap}
+            saldosMap={saldosMap}
+            onCardClick={setSelected}
+            onChangeEstado={handleChangeEstado}
+            highlightedId={highlightedId}
+          />
+        ) : (
+          <PedidoListView
+            pedidos={filteredPedidos}
+            onRowClick={setSelected}
+            clienteMap={clienteMap}
+            saldosInfoMap={saldosInfoMap}
+            highlightedId={highlightedId}
+          />
+        )}
+      </div>
 
       {selected && (
         <PedidoDetailPanel

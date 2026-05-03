@@ -7,9 +7,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { sql } from 'drizzle-orm'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
-import { clientes, pedidos, facturas, pagos } from '../schema'
+import { clientes, facturas, muestrasMarcos, pagos, pedidos, preciosVidrios } from '../schema'
+import { cotizarEnmarcacionEstandar } from './cotizador'
 import {
   cambiarEstadoPedido,
+  crearPedidoConfirmadoConFactura,
+  crearPedidoDesdeCotizacion,
   obtenerSaldosPorPedido,
   pedidosSinAbonoConSaldo,
   pedidosSinReclamar,
@@ -506,3 +509,137 @@ describe.runIf(nativeAbiAvailable)(
     })
   }
 )
+
+describe.runIf(nativeAbiAvailable)('crearPedidoDesdeCotizacion · defensas de cotización', () => {
+  let db: DB
+  let clienteId: number
+  let muestraMarcoId: number
+
+  beforeEach(() => {
+    db = createTestDb().db
+    clienteId = db.insert(clientes).values({ nombre: 'Cliente Cotización' }).returning().get().id
+    muestraMarcoId = db
+      .insert(muestrasMarcos)
+      .values({
+        referencia: 'AUD-001',
+        colillaCm: 20,
+        precioMetro: 10000
+      })
+      .returning()
+      .get().id
+    db.insert(preciosVidrios).values({ tipo: 'claro', precioM2: 100000 }).run()
+  })
+
+  it('rechaza una cotización manipulada aunque el renderer la envíe por IPC', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 50,
+      altoCm: 70,
+      muestraMarcoId,
+      tipoVidrio: 'claro'
+    })
+
+    expect(() =>
+      crearPedidoDesdeCotizacion(
+        db,
+        {
+          clienteId,
+          tipoTrabajo: 'enmarcacion_estandar',
+          descripcion: 'Intento manipulado',
+          anchoCm: 50,
+          altoCm: 70,
+          muestraMarcoId,
+          tipoVidrio: 'claro',
+          porcentajeMateriales: 10,
+          fechaIngreso: '2026-04-01'
+        },
+        { ...cotizacion, precioTotal: 1 }
+      )
+    ).toThrow(/listas de precios actuales/i)
+
+    const count = db
+      .select({ n: sql<number>`count(*)` })
+      .from(pedidos)
+      .get()
+    expect(count?.n).toBe(0)
+  })
+
+  it('crea pedido confirmado, factura y abono en una sola operación', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro'
+    })
+
+    const result = crearPedidoConfirmadoConFactura(db, {
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        descripcion: 'Pedido atómico',
+        anchoCm: 30,
+        altoCm: 40,
+        muestraMarcoId,
+        tipoVidrio: 'claro',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-04-01'
+      },
+      cotizacion,
+      facturaFecha: '2026-04-01',
+      abono: {
+        monto: 10000,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-01'
+      }
+    })
+
+    expect(result.pedido.estado).toBe('confirmado')
+    expect(result.factura.pedidoId).toBe(result.pedido.id)
+    expect(result.factura.clienteId).toBe(clienteId)
+    expect(result.factura.total).toBe(result.pedido.precioTotal)
+    expect(result.pago?.monto).toBe(10000)
+    expect(result.saldo).toBe(result.factura.total - 10000)
+  })
+
+  it('no deja pedido parcial si falla la validación del abono', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro'
+    })
+
+    expect(() =>
+      crearPedidoConfirmadoConFactura(db, {
+        datos: {
+          clienteId,
+          tipoTrabajo: 'enmarcacion_estandar',
+          descripcion: 'Pedido con abono inválido',
+          anchoCm: 30,
+          altoCm: 40,
+          muestraMarcoId,
+          tipoVidrio: 'claro',
+          porcentajeMateriales: 10,
+          fechaIngreso: '2026-04-01'
+        },
+        cotizacion,
+        facturaFecha: '2026-04-01',
+        abono: {
+          monto: cotizacion.precioTotal + 1,
+          metodoPago: 'efectivo',
+          fecha: '2026-04-01'
+        }
+      })
+    ).toThrow(/excede el total/i)
+
+    const pedidoCount = db
+      .select({ n: sql<number>`count(*)` })
+      .from(pedidos)
+      .get()
+    const facturaCount = db
+      .select({ n: sql<number>`count(*)` })
+      .from(facturas)
+      .get()
+    expect(pedidoCount?.n).toBe(0)
+    expect(facturaCount?.n).toBe(0)
+  })
+})

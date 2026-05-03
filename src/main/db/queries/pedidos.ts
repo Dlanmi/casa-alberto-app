@@ -20,16 +20,30 @@ import {
   devoluciones,
   facturas,
   historialCambios,
+  METODOS_PAGO,
+  movimientosFinancieros,
   pagos,
   pedidoItems,
   pedidos,
   type EstadoPedido,
+  type MetodoPago,
   type TipoEntrega,
   type TipoTrabajo
 } from '../schema'
-import type { ResultadoCotizacion } from './cotizador'
+import {
+  cotizarAcolchado,
+  cotizarAdherido,
+  cotizarBastidor,
+  cotizarEnmarcacionEstandar,
+  cotizarEnmarcacionPaspartu,
+  cotizarRetablo,
+  cotizarTapa,
+  cotizarVidrioEspejo,
+  type ResultadoCotizacion
+} from './cotizador'
 import { TRANSICIONES_VALIDAS } from '@shared/pedido-transitions'
 import { validarFechaISO } from '../../lib/validar-fecha'
+import { validarEnum } from '../../lib/validar-enum'
 
 export { TRANSICIONES_VALIDAS }
 
@@ -50,24 +64,40 @@ export type NuevoPedidoDatos = {
   descripcion?: string | null
   anchoCm?: number | null
   altoCm?: number | null
+  muestraMarcoId?: number | null
   anchoPaspartuCm?: number | null
   tipoPaspartu?: 'pintado' | 'acrilico' | null
+  conSuplemento?: boolean
   tipoVidrio?: string | null
   porcentajeMateriales?: number
+  precioManual?: number
+  precioInstalacion?: number
   tipoEntrega?: TipoEntrega
   fechaIngreso: string
   fechaEntrega?: string | null
   notas?: string | null
 }
 
-export function crearPedidoDesdeCotizacion(
-  db: DB,
-  datos: NuevoPedidoDatos,
+export type CrearPedidoConfirmadoData = {
+  datos: NuevoPedidoDatos
   cotizacion: ResultadoCotizacion
-) {
-  // Validar formato y existencia real de las fechas antes del compare.
-  // String compare lexicográfico permite que "2026-13-50" pase el `<`
-  // cuando la fecha es semánticamente imposible.
+  facturaFecha: string
+  abono?: {
+    monto: number
+    metodoPago: MetodoPago
+    fecha: string
+    notas?: string | null
+  } | null
+}
+
+export type CrearPedidoConfirmadoResult = {
+  pedido: typeof pedidos.$inferSelect
+  factura: typeof facturas.$inferSelect
+  pago: typeof pagos.$inferSelect | null
+  saldo: number
+}
+
+function validarFechasPedido(datos: NuevoPedidoDatos): void {
   if (datos.fechaIngreso) {
     validarFechaISO(datos.fechaIngreso, 'YYYY-MM-DD', 'fechaIngreso')
   }
@@ -77,50 +107,303 @@ export function crearPedidoDesdeCotizacion(
   if (datos.fechaEntrega && datos.fechaIngreso && datos.fechaEntrega < datos.fechaIngreso) {
     throw new Error('La fecha de entrega no puede ser anterior a la fecha de ingreso')
   }
+}
+
+function assertNumeroFinito(valor: unknown, campo: string): asserts valor is number {
+  if (!Number.isFinite(valor)) throw new Error(`${campo} no es un número válido`)
+}
+
+function getMedidas(datos: NuevoPedidoDatos): { anchoCm: number; altoCm: number } {
+  assertNumeroFinito(datos.anchoCm, 'El ancho')
+  assertNumeroFinito(datos.altoCm, 'El alto')
+  return { anchoCm: datos.anchoCm, altoCm: datos.altoCm }
+}
+
+function requireMuestraMarcoId(datos: NuevoPedidoDatos): number {
+  assertNumeroFinito(datos.muestraMarcoId, 'La muestra de marco')
+  return datos.muestraMarcoId
+}
+
+function validarCotizacionAritmetica(cotizacion: ResultadoCotizacion): void {
+  if (!cotizacion.items.length) throw new Error('La cotización no tiene ítems')
+  for (const [index, item] of cotizacion.items.entries()) {
+    assertNumeroFinito(item.cantidad, `La cantidad del ítem ${index + 1}`)
+    assertNumeroFinito(item.subtotal, `El subtotal del ítem ${index + 1}`)
+    if (item.precioUnitario !== null) {
+      assertNumeroFinito(item.precioUnitario, `El precio unitario del ítem ${index + 1}`)
+    }
+    if (item.cantidad <= 0) throw new Error(`La cantidad del ítem ${index + 1} debe ser mayor a 0`)
+    if (item.subtotal < 0)
+      throw new Error(`El subtotal del ítem ${index + 1} no puede ser negativo`)
+  }
+  assertNumeroFinito(cotizacion.subtotal, 'El subtotal de la cotización')
+  assertNumeroFinito(cotizacion.totalMateriales, 'Los materiales de la cotización')
+  assertNumeroFinito(cotizacion.precioTotal, 'El total de la cotización')
+}
+
+function validarCotizacionesIguales(
+  recibida: ResultadoCotizacion,
+  esperada: ResultadoCotizacion
+): void {
+  validarCotizacionAritmetica(recibida)
+  if (
+    recibida.subtotal !== esperada.subtotal ||
+    recibida.totalMateriales !== esperada.totalMateriales ||
+    recibida.precioTotal !== esperada.precioTotal ||
+    recibida.items.length !== esperada.items.length
+  ) {
+    throw new Error('La cotización no coincide con las listas de precios actuales')
+  }
+
+  for (let i = 0; i < esperada.items.length; i += 1) {
+    const actual = recibida.items[i]
+    const esperado = esperada.items[i]
+    if (
+      !actual ||
+      actual.tipoItem !== esperado.tipoItem ||
+      actual.cantidad !== esperado.cantidad ||
+      actual.precioUnitario !== esperado.precioUnitario ||
+      actual.subtotal !== esperado.subtotal ||
+      (actual.referencia ?? null) !== (esperado.referencia ?? null)
+    ) {
+      throw new Error('La cotización no coincide con las listas de precios actuales')
+    }
+  }
+}
+
+function cotizacionAutorizada(
+  db: DB,
+  datos: NuevoPedidoDatos,
+  recibida: ResultadoCotizacion
+): ResultadoCotizacion {
+  const porcentajeMateriales = datos.porcentajeMateriales ?? 10
+  const tipoVidrio = datos.tipoVidrio ?? 'ninguno'
+  let esperada: ResultadoCotizacion
+
+  if (datos.tipoTrabajo === 'restauracion') {
+    validarCotizacionAritmetica(recibida)
+    if (datos.precioManual !== undefined && datos.precioManual !== recibida.subtotal) {
+      throw new Error('La cotización manual no coincide con el precio ingresado')
+    }
+    return recibida
+  }
+
+  const { anchoCm, altoCm } = getMedidas(datos)
+
+  if (datos.tipoTrabajo === 'enmarcacion_estandar') {
+    const muestraMarcoId = requireMuestraMarcoId(datos)
+    if (datos.anchoPaspartuCm && datos.tipoPaspartu) {
+      esperada = cotizarEnmarcacionPaspartu(db, {
+        anchoCm,
+        altoCm,
+        anchoPaspartuCm: datos.anchoPaspartuCm,
+        tipoPaspartu: datos.tipoPaspartu,
+        muestraMarcoId,
+        tipoVidrio,
+        porcentajeMateriales,
+        conSuplemento: datos.conSuplemento ?? false
+      })
+    } else {
+      esperada = cotizarEnmarcacionEstandar(db, {
+        anchoCm,
+        altoCm,
+        muestraMarcoId,
+        tipoVidrio,
+        porcentajeMateriales
+      })
+    }
+  } else if (datos.tipoTrabajo === 'acolchado') {
+    esperada = cotizarAcolchado(db, {
+      anchoCm,
+      altoCm,
+      muestraMarcoId: datos.muestraMarcoId ?? null,
+      porcentajeMateriales
+    })
+  } else if (datos.tipoTrabajo === 'adherido') {
+    esperada = cotizarAdherido(db, { anchoCm, altoCm, porcentajeMateriales })
+  } else if (datos.tipoTrabajo === 'retablo') {
+    esperada = cotizarRetablo(db, { anchoCm, altoCm, porcentajeMateriales })
+  } else if (datos.tipoTrabajo === 'bastidor') {
+    esperada = cotizarBastidor(db, { anchoCm, altoCm, porcentajeMateriales })
+  } else if (datos.tipoTrabajo === 'tapa') {
+    esperada = cotizarTapa(db, { anchoCm, altoCm, porcentajeMateriales })
+  } else if (datos.tipoTrabajo === 'vidrio_espejo') {
+    if (!datos.tipoVidrio || datos.tipoVidrio === 'ninguno') {
+      throw new Error('El tipo de vidrio es obligatorio para vidrio/espejo')
+    }
+    esperada = cotizarVidrioEspejo(db, {
+      anchoCm,
+      altoCm,
+      tipoVidrio: datos.tipoVidrio,
+      precioInstalacion: datos.precioInstalacion ?? 0,
+      descripcion: datos.descripcion ?? null
+    })
+  } else {
+    throw new Error(`Tipo de trabajo no soportado: ${datos.tipoTrabajo}`)
+  }
+
+  validarCotizacionesIguales(recibida, esperada)
+  return esperada
+}
+
+function insertarPedidoDesdeCotizacion(
+  db: DB,
+  datos: NuevoPedidoDatos,
+  cotizacion: ResultadoCotizacion
+) {
+  const numero = generarConsecutivo(db, 'pedido')
+  const pedido = db
+    .insert(pedidos)
+    .values({
+      numero,
+      clienteId: datos.clienteId,
+      tipoTrabajo: datos.tipoTrabajo,
+      descripcion: datos.descripcion ?? null,
+      anchoCm: datos.anchoCm ?? null,
+      altoCm: datos.altoCm ?? null,
+      anchoPaspartuCm: datos.anchoPaspartuCm ?? null,
+      tipoPaspartu: datos.tipoPaspartu ?? null,
+      tipoVidrio: datos.tipoVidrio ?? null,
+      porcentajeMateriales: datos.porcentajeMateriales ?? 10,
+      subtotal: cotizacion.subtotal,
+      totalMateriales: cotizacion.totalMateriales,
+      precioTotal: cotizacion.precioTotal,
+      estado: 'cotizado',
+      tipoEntrega: datos.tipoEntrega ?? 'estandar',
+      fechaIngreso: datos.fechaIngreso,
+      fechaEntrega: datos.fechaEntrega ?? null,
+      notas: datos.notas ?? null
+    })
+    .returning()
+    .get()
+
+  for (const item of cotizacion.items) {
+    db.insert(pedidoItems)
+      .values({
+        pedidoId: pedido.id,
+        tipoItem: item.tipoItem,
+        descripcion: item.descripcion ?? null,
+        referencia: item.referencia ?? null,
+        cantidad: item.cantidad,
+        precioUnitario: item.precioUnitario ?? null,
+        subtotal: item.subtotal,
+        metadata: item.metadata ?? null
+      })
+      .run()
+  }
+
+  return pedido
+}
+
+export function crearPedidoDesdeCotizacion(
+  db: DB,
+  datos: NuevoPedidoDatos,
+  cotizacion: ResultadoCotizacion
+) {
+  validarFechasPedido(datos)
+  const cotizacionValidada = cotizacionAutorizada(db, datos, cotizacion)
 
   return db.transaction((tx) => {
-    const numero = generarConsecutivo(tx as unknown as DB, 'pedido')
+    return insertarPedidoDesdeCotizacion(tx as unknown as DB, datos, cotizacionValidada)
+  })
+}
+
+function categoriaDesdePedido(tipoTrabajo: TipoTrabajo) {
+  if (tipoTrabajo === 'restauracion') return 'restauracion'
+  return 'enmarcacion'
+}
+
+export function crearPedidoConfirmadoConFactura(
+  db: DB,
+  input: CrearPedidoConfirmadoData
+): CrearPedidoConfirmadoResult {
+  validarFechasPedido(input.datos)
+  validarFechaISO(input.facturaFecha, 'YYYY-MM-DD', 'facturaFecha')
+  const cotizacionValidada = cotizacionAutorizada(db, input.datos, input.cotizacion)
+  const abono = input.abono?.monto ?? 0
+  if (!Number.isFinite(abono) || abono < 0) {
+    throw new Error('El abono debe ser un número válido mayor o igual a 0')
+  }
+  if (abono > cotizacionValidada.precioTotal) {
+    throw new Error(`El abono excede el total del pedido (${cotizacionValidada.precioTotal})`)
+  }
+  if (input.abono && abono > 0) {
+    validarEnum(input.abono.metodoPago, METODOS_PAGO, 'metodoPago')
+    validarFechaISO(input.abono.fecha, 'YYYY-MM-DD', 'fechaPago')
+  }
+
+  return db.transaction((tx) => {
+    const txDb = tx as unknown as DB
+    const pedidoCotizado = insertarPedidoDesdeCotizacion(txDb, input.datos, cotizacionValidada)
     const pedido = tx
-      .insert(pedidos)
+      .update(pedidos)
+      .set({ estado: 'confirmado', updatedAt: sql`(datetime('now'))` })
+      .where(eq(pedidos.id, pedidoCotizado.id))
+      .returning()
+      .get()
+
+    tx.insert(historialCambios)
       .values({
-        numero,
-        clienteId: datos.clienteId,
-        tipoTrabajo: datos.tipoTrabajo,
-        descripcion: datos.descripcion ?? null,
-        anchoCm: datos.anchoCm ?? null,
-        altoCm: datos.altoCm ?? null,
-        anchoPaspartuCm: datos.anchoPaspartuCm ?? null,
-        tipoPaspartu: datos.tipoPaspartu ?? null,
-        tipoVidrio: datos.tipoVidrio ?? null,
-        porcentajeMateriales: datos.porcentajeMateriales ?? 10,
-        subtotal: cotizacion.subtotal,
-        totalMateriales: cotizacion.totalMateriales,
-        precioTotal: cotizacion.precioTotal,
-        estado: 'cotizado',
-        tipoEntrega: datos.tipoEntrega ?? 'estandar',
-        fechaIngreso: datos.fechaIngreso,
-        fechaEntrega: datos.fechaEntrega ?? null,
-        notas: datos.notas ?? null
+        tabla: 'pedidos',
+        registroId: pedido.id,
+        campo: 'estado',
+        valorAnterior: 'cotizado',
+        valorNuevo: 'confirmado',
+        fecha: sql`(datetime('now'))`
+      })
+      .run()
+
+    const factura = tx
+      .insert(facturas)
+      .values({
+        numero: generarConsecutivo(txDb, 'factura'),
+        pedidoId: pedido.id,
+        clienteId: pedido.clienteId,
+        fecha: input.facturaFecha,
+        total: pedido.precioTotal,
+        fechaEntrega: pedido.fechaEntrega ?? null
       })
       .returning()
       .get()
 
-    for (const item of cotizacion.items) {
-      tx.insert(pedidoItems)
+    let pago: typeof pagos.$inferSelect | null = null
+    let saldo = factura.total
+    if (input.abono && abono > 0) {
+      pago = tx
+        .insert(pagos)
         .values({
-          pedidoId: pedido.id,
-          tipoItem: item.tipoItem,
-          descripcion: item.descripcion ?? null,
-          referencia: item.referencia ?? null,
-          cantidad: item.cantidad,
-          precioUnitario: item.precioUnitario ?? null,
-          subtotal: item.subtotal,
-          metadata: item.metadata ?? null
+          facturaId: factura.id,
+          monto: abono,
+          metodoPago: input.abono.metodoPago,
+          fecha: input.abono.fecha,
+          notas: input.abono.notas ?? null
+        })
+        .returning()
+        .get()
+
+      tx.insert(movimientosFinancieros)
+        .values({
+          tipo: 'ingreso',
+          categoria: categoriaDesdePedido(pedido.tipoTrabajo as TipoTrabajo),
+          descripcion: `Pago factura ${factura.numero}`,
+          monto: abono,
+          fecha: input.abono.fecha,
+          referenciaTipo: 'pago',
+          referenciaId: pago.id
         })
         .run()
+
+      saldo = factura.total - abono
+      if (saldo <= 0) {
+        tx.update(facturas)
+          .set({ estado: 'pagada', updatedAt: sql`(datetime('now'))` })
+          .where(eq(facturas.id, factura.id))
+          .run()
+        factura.estado = 'pagada'
+      }
     }
 
-    return pedido
+    return { pedido, factura, pago, saldo }
   })
 }
 

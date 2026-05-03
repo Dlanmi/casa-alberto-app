@@ -31,6 +31,9 @@ type ShowToast = {
 
 type ToastRecord = ToastOptions & {
   id: number
+  // Cuando el toast está saliendo, aplicamos animate-toast-out por
+  // TOAST_EXIT_MS antes de eliminarlo del array (para que termine la animación).
+  exiting?: boolean
 }
 
 type ToastContextValue = {
@@ -52,6 +55,9 @@ const DURATION_WITH_ACTION = 15_000
 // se descarta el más viejo para mantener la UI legible. El papá de 60 años no
 // debe ver una pila de 10 notificaciones solapadas.
 const MAX_TOASTS = 3
+// Duración del keyframe toast-out en main.css. Tras marcar exiting=true,
+// esperamos esto antes de eliminar el toast del array (deja correr la animación).
+const TOAST_EXIT_MS = 200
 
 export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext)
@@ -91,7 +97,15 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
   const removeToast = useCallback(
     (id: number): void => {
       clearTimer(id)
-      setToasts((prev) => prev.filter((toast) => toast.id !== id))
+      // Marca exiting=true para disparar animate-toast-out, y elimina del
+      // array después de TOAST_EXIT_MS. Si el toast ya estaba marcado exiting
+      // (doble click en X), el segundo no-op porque el filter no lo encuentra.
+      setToasts((prev) =>
+        prev.map((toast) => (toast.id === id ? { ...toast, exiting: true } : toast))
+      )
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((toast) => toast.id !== id))
+      }, TOAST_EXIT_MS)
     },
     [clearTimer]
   )
@@ -171,7 +185,8 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
               key={toast.id}
               role={role}
               className={cn(
-                'flex items-start gap-3 px-4 py-3 rounded-lg shadow-3 min-w-0 w-[min(320px,calc(100vw-3rem))] max-w-120 animate-toast-in border bg-surface',
+                'flex items-start gap-3 px-4 py-3 rounded-lg shadow-3 min-w-0 w-[min(320px,calc(100vw-3rem))] max-w-120 border bg-surface',
+                toast.exiting ? 'animate-toast-out' : 'animate-toast-in',
                 toast.tone === 'success' && 'border-success/20',
                 toast.tone === 'error' && 'border-error/20',
                 toast.tone === 'info' && 'border-info/20',

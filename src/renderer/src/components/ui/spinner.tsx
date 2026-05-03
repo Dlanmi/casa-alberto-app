@@ -9,7 +9,10 @@ export function Spinner({ size = 'md', className }: SpinnerProps) {
   return (
     <div
       className={cn(
-        'animate-spin rounded-full border-2 border-border border-t-accent',
+        'rounded-full border-2 border-border border-t-accent',
+        // El lg (PageLoader) suma respiración para no sentirse mecánico
+        // durante esperas largas. sm/md mantienen el spin lineal estándar.
+        size === 'lg' ? 'animate-spin-breath' : 'animate-spin',
         size === 'sm' && 'h-4 w-4',
         size === 'md' && 'h-6 w-6',
         size === 'lg' && 'h-10 w-10',

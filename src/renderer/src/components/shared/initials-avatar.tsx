@@ -29,6 +29,11 @@ type InitialsAvatarProps = {
   id?: number
   size?: 'sm' | 'md' | 'lg'
   className?: string
+  /** Cuando true, el avatar reacciona al hover del ancestro con `group`
+   *  (por ej. una card clicable). Aplica un scale leve para comunicar que
+   *  el contenedor es interactivo, sin forzar al consumidor a duplicar
+   *  estilos. Si el padre no usa `group`, no hay efecto visual. */
+  interactive?: boolean
 }
 
 const SIZE_CLASS: Record<NonNullable<InitialsAvatarProps['size']>, string> = {
@@ -47,12 +52,20 @@ export function InitialsAvatar({
   nombre,
   id,
   size = 'md',
-  className
+  className,
+  interactive = false
 }: InitialsAvatarProps): React.JSX.Element {
   const { enabled: emojisEnabled } = useEmojis()
   const seed = id ?? nombre.length
   return (
-    <div className={cn('relative shrink-0', className)} aria-hidden="true">
+    <div
+      className={cn(
+        'relative shrink-0',
+        interactive && 'transition-transform duration-150 group-hover:scale-105',
+        className
+      )}
+      aria-hidden="true"
+    >
       <div
         className={cn(
           'flex items-center justify-center rounded-full font-semibold select-none',

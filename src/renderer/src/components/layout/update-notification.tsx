@@ -59,7 +59,7 @@ export function UpdateNotification(): React.JSX.Element | null {
         <div className="p-4">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-muted text-accent-strong">
-              <Download size={18} className="animate-pulse" />
+              <Download size={18} className="animate-download-bob" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-base font-semibold text-text">Descargando actualización</p>

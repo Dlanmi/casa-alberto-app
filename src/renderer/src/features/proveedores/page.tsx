@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import {
   Truck,
   Plus,
@@ -12,12 +12,14 @@ import {
   PackageCheck
 } from 'lucide-react'
 import { useIpc } from '@renderer/hooks/use-ipc'
-import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
+import { useSlidePanel, SLIDE_PANEL_EXIT_MS } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
+import { useErrorShake } from '@renderer/hooks/use-error-shake'
 import { useToast } from '@renderer/contexts/toast-context'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
+import { SubmitButton, SUBMIT_SUCCESS_VISIBLE_MS } from '@renderer/components/ui/submit-button'
 import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
 import { Select } from '@renderer/components/ui/select'
@@ -27,6 +29,7 @@ import { TruckIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { DirectoryScreen, MetricCard, PageSection } from '@renderer/components/layout/page-frame'
 import { formatTelefono } from '@renderer/lib/format'
+import { cn } from '@renderer/lib/cn'
 import { TIPOS_PROVEEDOR, type Proveedor, type TipoProveedor } from '@shared/types'
 
 const TIPO_LABELS: Record<TipoProveedor, string> = {
@@ -261,19 +264,26 @@ function ProveedorDetailPanel({
   onEdit: () => void
 }): React.JSX.Element {
   const closeRef = useRef<HTMLButtonElement>(null)
-  useSlidePanel({ onClose, closeRef })
+  const { closing, requestClose } = useSlidePanel({
+    onClose,
+    closeRef,
+    exitDurationMs: SLIDE_PANEL_EXIT_MS
+  })
   return (
     <div
       className="fixed inset-0 z-40 flex justify-end"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div className="absolute inset-0 bg-black/20" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Detalle de ${proveedor.nombre}`}
-        className="relative h-full w-full sm:w-105 sm:max-w-[80vw] overflow-y-auto bg-surface shadow-4 animate-slide-in-right"
+        className={cn(
+          'relative h-full w-full sm:w-105 sm:max-w-[80vw] overflow-y-auto bg-surface shadow-4',
+          closing ? 'animate-slide-out-right' : 'animate-slide-in-right'
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 space-y-6">
@@ -305,7 +315,7 @@ function ProveedorDetailPanel({
               </button>
               <button
                 ref={closeRef}
-                onClick={onClose}
+                onClick={requestClose}
                 className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
                 aria-label="Cerrar detalle"
               >
@@ -425,6 +435,15 @@ function ProveedorFormModal({
     notas: proveedor?.notas ?? ''
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [success, setSuccess] = useState(false)
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { ref: shakeRef, shake } = useErrorShake<HTMLFormElement>()
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+    }
+  }, [])
 
   const { execute: crear, loading: creando } = useIpcMutation(
     useCallback(
@@ -454,6 +473,7 @@ function ProveedorFormModal({
     if (!form.nombre.trim()) newErrors.nombre = 'El nombre es obligatorio'
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
+      shake()
       return
     }
 
@@ -474,7 +494,11 @@ function ProveedorFormModal({
       } else {
         await crear(data)
       }
-      onSaved()
+      setSuccess(true)
+      successTimerRef.current = setTimeout(() => {
+        setSuccess(false)
+        onSaved()
+      }, SUBMIT_SUCCESS_VISIBLE_MS)
     } catch {
       // handled by hook
     }
@@ -482,7 +506,7 @@ function ProveedorFormModal({
 
   return (
     <Modal open onClose={onClose} title={isEdit ? 'Editar proveedor' : 'Nuevo proveedor'} size="md">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form ref={shakeRef} onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-text-muted">
           Completa lo esencial para poder llamar, pedir o coordinar entregas sin tener que salir de
           esta ficha.
@@ -544,9 +568,14 @@ function ProveedorFormModal({
           <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit" className="flex-1" disabled={loading}>
-            {loading ? 'Guardando...' : isEdit ? 'Actualizar' : 'Crear proveedor'}
-          </Button>
+          <SubmitButton
+            className="flex-1"
+            loading={loading}
+            success={success}
+            successLabel={isEdit ? '¡Actualizado!' : '¡Proveedor creado!'}
+          >
+            {isEdit ? 'Actualizar' : 'Crear proveedor'}
+          </SubmitButton>
         </div>
       </form>
     </Modal>

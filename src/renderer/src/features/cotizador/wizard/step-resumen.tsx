@@ -29,9 +29,8 @@ import type { WizardData } from './wizard-shell'
 import type {
   TipoTrabajo,
   Cliente,
-  Pedido,
-  Factura,
   IpcResult,
+  CrearPedidoConfirmadoResult,
   ResultadoCotizacion
 } from '@shared/types'
 
@@ -78,56 +77,54 @@ export function StepResumen({
     if (!cliente || !cotizacion) return
     setCreating(true)
     try {
-      // 1. Crear el pedido con fecha de entrega y notas
-      const result = (await window.api.pedidos.crear(
-        {
+      const abonoEfectivo = conAbono ? abonoNum : 0
+      const tipoVidrioPedido =
+        tipoTrabajo === 'vidrio_espejo'
+          ? data.tipoVidrioEspejo
+          : data.conVidrio
+            ? data.tipoVidrio
+            : 'ninguno'
+      const descripcion =
+        data.descripcionManual.trim() ||
+        `${TIPO_TRABAJO_LABEL[tipoTrabajo]} ${data.anchoCm}x${data.altoCm}`
+
+      const result = (await window.api.pedidos.crearConfirmado({
+        datos: {
           clienteId: cliente.id,
           tipoTrabajo,
-          descripcion: `${TIPO_TRABAJO_LABEL[tipoTrabajo]} ${data.anchoCm}x${data.altoCm}`,
+          descripcion,
           anchoCm: data.anchoCm,
           altoCm: data.altoCm,
+          muestraMarcoId: data.muestraMarcoId,
           anchoPaspartuCm: data.conPaspartu ? data.anchoPaspartuCm : undefined,
           tipoPaspartu: data.conPaspartu ? data.tipoPaspartu : undefined,
-          tipoVidrio: data.conVidrio ? data.tipoVidrio : 'ninguno',
+          conSuplemento: data.conSuplemento,
+          tipoVidrio: tipoVidrioPedido,
           porcentajeMateriales: data.porcentajeMateriales,
+          precioManual: tipoTrabajo === 'restauracion' ? data.precioManual : undefined,
+          precioInstalacion: tipoTrabajo === 'vidrio_espejo' ? data.precioInstalacion : undefined,
           fechaIngreso: hoyISO(),
           fechaEntrega: fechaEntrega || undefined,
           notas: notas.trim() || undefined
         },
-        cotizacion
-      )) as IpcResult<Pedido>
+        cotizacion,
+        facturaFecha: hoyISO(),
+        abono:
+          abonoEfectivo > 0
+            ? {
+                monto: abonoEfectivo,
+                fecha: hoyISO(),
+                metodoPago
+              }
+            : null
+      })) as IpcResult<CrearPedidoConfirmadoResult>
 
       if (!result.ok) {
         showToast({ tone: 'error', title: 'No se pudo crear el pedido', message: result.error })
         return
       }
 
-      const pedido = result.data
-      const abonoEfectivo = conAbono ? abonoNum : 0
-
-      // 2. Confirmar pedido + crear factura SIEMPRE que el dueño finalice el
-      //    wizard — el cliente ya comprometió el trabajo aunque aún no pague.
-      //    La factura queda en "pendiente" hasta que registre el primer pago.
-      //    Antes: sólo se creaba factura si había abono, por lo que los
-      //    trabajos "fiados" no aparecían en la sección Facturas.
-      await window.api.pedidos.cambiarEstado(pedido.id, 'confirmado')
-
-      const factRes = (await window.api.facturas.crear({
-        pedidoId: pedido.id,
-        clienteId: cliente.id,
-        fecha: hoyISO(),
-        total: cotizacion.precioTotal
-      })) as IpcResult<Factura>
-
-      if (factRes.ok && abonoEfectivo > 0) {
-        // Registrar el abono como primer pago si lo hay
-        await window.api.facturas.registrarPago({
-          facturaId: factRes.data.id,
-          monto: abonoEfectivo,
-          fecha: hoyISO(),
-          metodoPago
-        })
-      }
+      const { pedido } = result.data
 
       showToast({
         tone: 'success',

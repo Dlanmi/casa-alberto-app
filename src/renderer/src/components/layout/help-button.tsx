@@ -222,7 +222,26 @@ export function HelpButton(): React.JSX.Element {
         )}
         title="Ayuda sobre esta pantalla"
       >
-        {open ? <X size={22} /> : <HelpCircle size={22} />}
+        {/* Cross-fade entre HelpCircle y X. Ambos posicionados absolute en el
+            mismo punto; rotación opuesta para reforzar el cambio. */}
+        <span className="relative h-[22px] w-[22px]">
+          <HelpCircle
+            size={22}
+            className={cn(
+              'absolute inset-0 transition-all duration-200 ease-out',
+              open ? 'opacity-0 rotate-90 scale-75' : 'opacity-100 rotate-0 scale-100'
+            )}
+            aria-hidden="true"
+          />
+          <X
+            size={22}
+            className={cn(
+              'absolute inset-0 transition-all duration-200 ease-out',
+              open ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-75'
+            )}
+            aria-hidden="true"
+          />
+        </span>
       </button>
 
       {open && (

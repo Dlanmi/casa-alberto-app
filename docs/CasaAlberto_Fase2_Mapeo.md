@@ -26,11 +26,13 @@ Precio del marco = Total centímetros × Precio por metro de la referencia
 ```
 
 **Ejemplo:** Pieza de 50cm × 70cm, Ref. K473 (colilla: 48cm, precio: $48.000/m)
+
 - Perímetro: (50 + 70) × 2 = 240 cm
 - Total: 240 + 48 (colilla) = 288 cm = 2.88 metros
 - Precio marco: 2.88 × $48.000 = $138.240
 
 **Datos requeridos por muestra en la app:**
+
 - Referencia (código único de la muestra)
 - Colilla en centímetros (fija por referencia)
 - Precio por metro lineal en pesos
@@ -45,17 +47,19 @@ Medida redondeada = cada lado se redondea al múltiplo de 10 superior
 Precio vidrio = Área en m² × Precio por m² según tipo
 ```
 
-| Tipo de Vidrio | Precio por m² |
-|----------------|---------------|
-| Vidrio claro 2mm | $100.000 |
-| Vidrio antirreflectivo | $115.000 |
+| Tipo de Vidrio         | Precio por m² |
+| ---------------------- | ------------- |
+| Vidrio claro 2mm       | $100.000      |
+| Vidrio antirreflectivo | $115.000      |
 
 **Ejemplo:** Vidrio para pieza de 46cm × 37cm antirreflectivo
+
 - Redondeo: 46 → 50cm, 37 → 40cm
 - Área: 0.50 × 0.40 = 0.20 m²
 - Precio: 0.20 × $115.000 = $23.000
 
 **Ejemplo:** Vidrio para marco de 50cm × 70cm antirreflectivo (ya múltiplos de 10)
+
 - Área: 0.50 × 0.70 = 0.35 m²
 - Precio: 0.35 × $115.000 = $40.250
 
@@ -63,10 +67,10 @@ Precio vidrio = Área en m² × Precio por m² según tipo
 
 El paspartú se coloca como decoración alrededor de la obra. El cliente escoge el color y el ancho deseado. Existen dos tipos de paspartú con precios diferentes:
 
-| Tipo | Material | Precio |
-|------|----------|--------|
-| Paspartú pintado | Cartón prensado pintado a mano | Según lista (por medida exterior) |
-| Paspartú acrílico | MDF pintado | Según lista (precio diferente, más alto) |
+| Tipo              | Material                       | Precio                                   |
+| ----------------- | ------------------------------ | ---------------------------------------- |
+| Paspartú pintado  | Cartón prensado pintado a mano | Según lista (por medida exterior)        |
+| Paspartú acrílico | MDF pintado                    | Según lista (precio diferente, más alto) |
 
 **Regla crítica:** el paspartú amplía las dimensiones del marco y del vidrio.
 
@@ -80,6 +84,7 @@ Precio paspartú = según lista de precios por medida exterior
 El precio del paspartú depende de la medida exterior final (no del ancho del paspartú). Se consulta en la lista de precios correspondiente según el tipo (cartón pintado o acrílico/MDF).
 
 **Ejemplo:** Obra de 50cm × 70cm con paspartú pintado de 5cm de ancho
+
 - Nuevo ancho: 50 + (5 × 2) = 60cm
 - Nuevo alto: 70 + (5 × 2) = 80cm
 - Marco se calcula sobre 60 × 80 (ref K473): $157.440
@@ -103,6 +108,7 @@ Las medidas usadas son las de la **obra** (las interiores del paspartú, no las 
 El retablo es un tipo de enmarcación que no lleva marco ni vidrio. Consiste en 4 listones y una tapa de MDF pegados que forman la base donde se adhiere o pega el póster u obra.
 
 **Componentes obligatorios:**
+
 - 4 listones (forman el borde)
 - Tapa de MDF (base rígida)
 - Pegado y acabado
@@ -122,10 +128,12 @@ En metros:       Ancho (m) × Alto (m) × $150.000/m²
 Este precio cubre solo la lámina acolchada (MDF + espuma + pegado + mano de obra). Si el cliente desea marco, paspartú acrílico u otros elementos, se suman por separado.
 
 **Combinaciones posibles:**
+
 - Acolchado + marco (al tamaño)
 - Acolchado + paspartú acrílico + marco
 
 **Ejemplo:** Acolchado de 50cm × 70cm con marco ref K473
+
 - Acolchado: 50 × 70 × 15 = $52.500
 - Verificación en m²: 0.50 × 0.70 × $150.000 = $52.500 ✓
 - Marco (50×70, ref K473): $138.240
@@ -145,6 +153,7 @@ Cualquier lado mayor al límite → Ancho × Alto × 7
 La frontera es inclusiva: 55×65 exacto usa la tarifa pequeña (×10). Basta con que un solo lado supere 55 o 65 cm para usar la tarifa grande (×7). La orientación no importa (65×55 da lo mismo que 55×65).
 
 **Ejemplos:**
+
 - 30 × 40 → ambos lados dentro → 30 × 40 × 10 = **$12.000**
 - 55 × 65 → frontera exacta → 55 × 65 × 10 = **$35.750**
 - 56 × 65 → 56 > 55 → 56 × 65 × 7 = **$25.480**
@@ -175,18 +184,20 @@ Precio final = Subtotal + porcentaje de materiales
 
 **Regla para determinar el porcentaje:**
 
-| Valor del trabajo | Porcentaje | Razón |
-|-------------------|-----------|-------|
-| Bajo (cuadros económicos) | 10% | Los materiales pesan más en proporción |
-| Medio a alto (cuadros grandes o costosos) | 5% a 10% | El dueño ajusta según su criterio |
+| Valor del trabajo                         | Porcentaje | Razón                                  |
+| ----------------------------------------- | ---------- | -------------------------------------- |
+| Bajo (cuadros económicos)                 | 10%        | Los materiales pesan más en proporción |
+| Medio a alto (cuadros grandes o costosos) | 5% a 10%   | El dueño ajusta según su criterio      |
 
 > ⚠ En la app, el porcentaje de materiales adicionales será un campo editable (entre 5% y 10%) que el dueño puede ajustar en cada cotización según el tipo de trabajo.
 
 **Ejemplo A:** Cuadro económico (subtotal $80.000, se aplica 10%)
+
 - Materiales adicionales: $80.000 × 10% = $8.000
 - **PRECIO FINAL: $88.000**
 
 **Ejemplo B:** Cuadro de valor medio (subtotal $234.640, se aplica 7%)
+
 - Materiales adicionales: $234.640 × 7% = $16.425
 - **PRECIO FINAL: $251.065**
 
@@ -194,33 +205,33 @@ Precio final = Subtotal + porcentaje de materiales
 
 La siguiente tabla muestra todos los componentes posibles de una cotización y cómo se calcula cada uno:
 
-| Componente | Fórmula / Método | Fuente de Precio |
-|------------|------------------|------------------|
-| Marco | (L₁+L₂)×2 + colilla × precio/m | Muestras físicas (ref, colilla, precio) |
-| Vidrio | L₁×L₂ en m² (redondeado 10 en 10) | $100.000/m² claro, $115.000/m² anti. |
-| Paspartú pintado | Medida exterior según lista | Lista precios cartón pintado |
-| Paspartú acrílico | Medida exterior según lista | Lista precios MDF (precio diferente) |
-| Retablo | Medida según lista | Lista de precios retablos |
-| Acolchado | L×L×15 (cm) o L×L×$150.000 (m²) | Fórmula fija (mano de obra) |
-| Adherido | L×L×10 (≤55×65) o L×L×7 (mayor) | Fórmula fija con 2 tarifas |
-| Suplemento paspartú | (L₁+L₂)×2 × $15.000/m | Opcional, solo con paspartú |
-| Bastidores/Tapas | Medida según lista | Lista de precios |
-| Restauración | Cotización individual | Criterio del dueño |
-| Materiales adic. | 5% a 10% sobre subtotal | Porcentaje variable (editable) |
+| Componente          | Fórmula / Método                  | Fuente de Precio                        |
+| ------------------- | --------------------------------- | --------------------------------------- |
+| Marco               | (L₁+L₂)×2 + colilla × precio/m    | Muestras físicas (ref, colilla, precio) |
+| Vidrio              | L₁×L₂ en m² (redondeado 10 en 10) | $100.000/m² claro, $115.000/m² anti.    |
+| Paspartú pintado    | Medida exterior según lista       | Lista precios cartón pintado            |
+| Paspartú acrílico   | Medida exterior según lista       | Lista precios MDF (precio diferente)    |
+| Retablo             | Medida según lista                | Lista de precios retablos               |
+| Acolchado           | L×L×15 (cm) o L×L×$150.000 (m²)   | Fórmula fija (mano de obra)             |
+| Adherido            | L×L×10 (≤55×65) o L×L×7 (mayor)   | Fórmula fija con 2 tarifas              |
+| Suplemento paspartú | (L₁+L₂)×2 × $15.000/m             | Opcional, solo con paspartú             |
+| Bastidores/Tapas    | Medida según lista                | Lista de precios                        |
+| Restauración        | Cotización individual             | Criterio del dueño                      |
+| Materiales adic.    | 5% a 10% sobre subtotal           | Porcentaje variable (editable)          |
 
 ### A.11 Listas de Precios Importables desde Excel
 
 La app permitirá importar y actualizar las listas de precios desde archivos Excel (.xlsx). Esto facilita la actualización masiva de precios sin tener que editar uno por uno en la app.
 
-| # | Lista | Columnas Esperadas | Método |
-|---|-------|-------------------|--------|
-| 1 | Muestras de marcos | Referencia, colilla (cm), precio/metro | Por muestra |
-| 2 | Paspartú pintado | Ítems, medidas, tipo cartón, precio | Por medida ext. |
-| 3 | Paspartú acrílico (MDF) | Medidas, tipo MDF, precio | Por medida ext. |
-| 4 | Retablos | Medidas, precio | Por medida |
-| 5 | Vidrios y espejos | Tipo, precio m² | Por m² |
-| 6 | Bastidores | Medidas, precio | Por medida |
-| 7 | Tapas portarretratos | Medidas, precio | Por medida |
+| #   | Lista                   | Columnas Esperadas                     | Método          |
+| --- | ----------------------- | -------------------------------------- | --------------- |
+| 1   | Muestras de marcos      | Referencia, colilla (cm), precio/metro | Por muestra     |
+| 2   | Paspartú pintado        | Ítems, medidas, tipo cartón, precio    | Por medida ext. |
+| 3   | Paspartú acrílico (MDF) | Medidas, tipo MDF, precio              | Por medida ext. |
+| 4   | Retablos                | Medidas, precio                        | Por medida      |
+| 5   | Vidrios y espejos       | Tipo, precio m²                        | Por m²          |
+| 6   | Bastidores              | Medidas, precio                        | Por medida      |
+| 7   | Tapas portarretratos    | Medidas, precio                        | Por medida      |
 
 > ⚠ Las listas de precios se podrán exportar desde la app a Excel para respaldo, y también importar desde Excel para actualizaciones masivas. La app validará el formato al importar.
 
@@ -248,23 +259,23 @@ Este bloque documenta el flujo completo desde que un cliente entra al local hast
 
 ### B.2 Tiempos de Entrega
 
-| Tipo | Tiempo | Condición |
-|------|--------|-----------|
-| Estándar | 8 días hábiles | Flujo normal |
-| Urgente | 2 a 5 días | Regalos, eventos especiales o solicitud del cliente |
-| Sin afán | Hasta 2 semanas | Cliente sin prisa |
+| Tipo     | Tiempo          | Condición                                           |
+| -------- | --------------- | --------------------------------------------------- |
+| Estándar | 8 días hábiles  | Flujo normal                                        |
+| Urgente  | 2 a 5 días      | Regalos, eventos especiales o solicitud del cliente |
+| Sin afán | Hasta 2 semanas | Cliente sin prisa                                   |
 
 ### B.3 Estados de un Pedido
 
 Para la aplicación, cada pedido debería tener un estado claro:
 
-| Estado | Descripción |
-|--------|-------------|
-| Cotizado | Se hizo la cotización pero el cliente aún no confirma |
-| Confirmado | Cliente aceptó, se registraron datos y se recibió la pieza |
-| En proceso | El trabajo está siendo elaborado |
-| Listo | El cuadro está terminado, esperando que el cliente lo recoja |
-| Entregado | Cliente recogió el cuadro y pagó el saldo |
+| Estado       | Descripción                                                                |
+| ------------ | -------------------------------------------------------------------------- |
+| Cotizado     | Se hizo la cotización pero el cliente aún no confirma                      |
+| Confirmado   | Cliente aceptó, se registraron datos y se recibió la pieza                 |
+| En proceso   | El trabajo está siendo elaborado                                           |
+| Listo        | El cuadro está terminado, esperando que el cliente lo recoja               |
+| Entregado    | Cliente recogió el cuadro y pagó el saldo                                  |
 | Sin reclamar | Han pasado más de 15 días y el cliente no ha recogido (se activan alertas) |
 
 ### B.4 Pedidos Sin Reclamar y Alertas
@@ -272,6 +283,7 @@ Para la aplicación, cada pedido debería tener un estado claro:
 Existen casos donde clientes no regresan a recoger su cuadro. El dueño los llama por teléfono repetidamente. Algunos cuadros se quedan meses sin ser reclamados.
 
 **Alertas que debe manejar la app:**
+
 - **Pedido sin abono:** Notificación inmediata cuando se registra un pedido con $0 de abono.
 - **Pedido listo sin recoger:** Alerta cuando han pasado más de 2 días desde que el cuadro está listo.
 - **Pedido sin reclamar:** Alerta destacada cuando han pasado más de 15 días sin ser recogido.
@@ -285,16 +297,16 @@ Existen casos donde clientes no regresan a recoger su cuadro. El dueño los llam
 
 Datos que se registran actualmente y datos propuestos para la app:
 
-| Campo | Actual | Propuesto App |
-|-------|--------|---------------|
-| Nombre | Sí | Sí (obligatorio) |
-| Teléfono | Sí | Sí (obligatorio) |
-| Dirección | Sí | Sí |
-| Cédula | No | Sí (nuevo) |
-| Correo electrónico | No | Sí (nuevo, para enviar facturas) |
-| Historial de pedidos | No | Sí (automático) |
-| Frecuencia de visita | No | Sí (automático) |
-| Total gastado | No | Sí (automático) |
+| Campo                | Actual | Propuesto App                    |
+| -------------------- | ------ | -------------------------------- |
+| Nombre               | Sí     | Sí (obligatorio)                 |
+| Teléfono             | Sí     | Sí (obligatorio)                 |
+| Dirección            | Sí     | Sí                               |
+| Cédula               | No     | Sí (nuevo)                       |
+| Correo electrónico   | No     | Sí (nuevo, para enviar facturas) |
+| Historial de pedidos | No     | Sí (automático)                  |
+| Frecuencia de visita | No     | Sí (automático)                  |
+| Total gastado        | No     | Sí (automático)                  |
 
 Para estudiantes menores de edad en las clases de dibujo, se registran los datos del acudiente (nombre y teléfono del adulto responsable).
 
@@ -302,18 +314,19 @@ Para estudiantes menores de edad en las clases de dibujo, se registran los datos
 
 **Campos de la factura:**
 
-| Campo | Detalle |
-|-------|---------|
-| Número consecutivo | Secuencial, autogenerado |
-| Fecha | Fecha de creación del pedido |
-| Nombre del cliente | Nombre completo |
+| Campo                   | Detalle                                          |
+| ----------------------- | ------------------------------------------------ |
+| Número consecutivo      | Secuencial, autogenerado                         |
+| Fecha                   | Fecha de creación del pedido                     |
+| Nombre del cliente      | Nombre completo                                  |
 | Descripción del trabajo | Tipo de cuadro, qué toca hacer, especificaciones |
-| Total | Precio final de la cotización |
-| Abono | Lo que el cliente pagó al dejar el trabajo |
-| Saldo | Total menos abono (lo que falta por pagar) |
-| Fecha de entrega | Fecha estimada para recoger el trabajo |
+| Total                   | Precio final de la cotización                    |
+| Abono                   | Lo que el cliente pagó al dejar el trabajo       |
+| Saldo                   | Total menos abono (lo que falta por pagar)       |
+| Fecha de entrega        | Fecha estimada para recoger el trabajo           |
 
 **Sistema actual vs propuesto:**
+
 - **Actual:** Factura en papel. La original se entrega al cliente, la copia queda en el facturero del local.
 - **Propuesto:** Factura digital generada por la app. Se puede imprimir (original para el cliente, copia para el local) y/o enviar por correo electrónico al cliente. Búsqueda instantánea por número, nombre, fecha o estado.
 
@@ -329,17 +342,17 @@ Actualmente no se lleva registro de clientes frecuentes ni se ofrecen descuentos
 
 ## Bloque D — Clases de Dibujo y Pintura
 
-| Campo | Detalle |
-|-------|---------|
-| Precio mensual | $110.000 por estudiante |
-| Frecuencia | 2 clases por semana (8 clases al mes) |
-| Duración | 2 horas por clase |
-| Días disponibles | Lunes a viernes por la tarde, sábados por la mañana |
-| Estudiantes | Aprox. 4 actualmente |
-| Kit de dibujo | $15.000 (4 lápices, block base 28, borrador miga de pan) |
-| Venta de materiales | Solo el kit, se revende cuando se acaba |
-| Inscripción | Directa: llegan, pagan y arrancan |
-| Menores de edad | Se piden datos del acudiente (nombre y teléfono) |
+| Campo               | Detalle                                                  |
+| ------------------- | -------------------------------------------------------- |
+| Precio mensual      | $110.000 por estudiante                                  |
+| Frecuencia          | 2 clases por semana (8 clases al mes)                    |
+| Duración            | 2 horas por clase                                        |
+| Días disponibles    | Lunes a viernes por la tarde, sábados por la mañana      |
+| Estudiantes         | Aprox. 4 actualmente                                     |
+| Kit de dibujo       | $15.000 (4 lápices, block base 28, borrador miga de pan) |
+| Venta de materiales | Solo el kit, se revende cuando se acaba                  |
+| Inscripción         | Directa: llegan, pagan y arrancan                        |
+| Menores de edad     | Se piden datos del acudiente (nombre y teléfono)         |
 
 ---
 
@@ -349,24 +362,24 @@ Actualmente no se lleva registro de clientes frecuentes ni se ofrecen descuentos
 
 El directorio de proveedores se podrá gestionar en la app e importar/exportar desde Excel. Los datos mínimos por proveedor son:
 
-| Campo | Detalle |
-|-------|---------|
-| Nombre / Empresa | Nombre del proveedor o razón social |
-| Producto / Servicio | Qué suministra (marcos, vidrio, MDF, etc.) |
-| Teléfono | Número de contacto |
-| Días de pedido | Qué días se pueden hacer pedidos (ej: lunes y miércoles) |
-| Forma de pago | Contra entrega, de contado, crédito, etc. |
-| Forma de entrega | En el local, compra directa, domicilio |
-| Notas | Observaciones adicionales |
+| Campo               | Detalle                                                  |
+| ------------------- | -------------------------------------------------------- |
+| Nombre / Empresa    | Nombre del proveedor o razón social                      |
+| Producto / Servicio | Qué suministra (marcos, vidrio, MDF, etc.)               |
+| Teléfono            | Número de contacto                                       |
+| Días de pedido      | Qué días se pueden hacer pedidos (ej: lunes y miércoles) |
+| Forma de pago       | Contra entrega, de contado, crédito, etc.                |
+| Forma de entrega    | En el local, compra directa, domicilio                   |
+| Notas               | Observaciones adicionales                                |
 
 **Proveedores actuales conocidos:**
 
-| Proveedor | Producto | Días Pedido | Pago | Entrega |
-|-----------|----------|-------------|------|---------|
-| Alberto | Marcos a medida | Lun. y Miér. | Contra entrega | En el local |
-| Edimol | Marcos a medida | Lun. y Miér. | Contra entrega | En el local |
-| (Por confirmar) | Láminas de vidrio | Cuando se agota | Contra entrega | En el local |
-| Homecenter | MDF, cartón | Cuando se agota | De contado | Compra directa |
+| Proveedor       | Producto          | Días Pedido     | Pago           | Entrega        |
+| --------------- | ----------------- | --------------- | -------------- | -------------- |
+| Alberto         | Marcos a medida   | Lun. y Miér.    | Contra entrega | En el local    |
+| Edimol          | Marcos a medida   | Lun. y Miér.    | Contra entrega | En el local    |
+| (Por confirmar) | Láminas de vidrio | Cuando se agota | Contra entrega | En el local    |
+| Homecenter      | MDF, cartón       | Cuando se agota | De contado     | Compra directa |
 
 > ⚠ La app permitirá importar la lista completa de proveedores desde un archivo Excel (.xlsx) con sus datos y días de pedido. También se podrá exportar para respaldo.
 
@@ -387,15 +400,15 @@ Se compran en Homecenter cuando se agotan. El dueño fabrica los paspartús arte
 
 ### F.1 Situación Tributaria
 
-| Concepto | Estado |
-|----------|--------|
-| RUT | Sí, activo |
-| Cámara de Comercio | Sí, activa |
-| Cobra IVA | No cobra IVA en sus facturas |
-| Declara renta | No (no supera el monto mínimo) |
-| IVA en compras | Los materiales que compra incluyen IVA (es un costo) |
-| Retención en la fuente | Le aplican en contratos con conjuntos/entidades |
-| Contratos formales | 4-5 por mes con conjuntos residenciales |
+| Concepto               | Estado                                               |
+| ---------------------- | ---------------------------------------------------- |
+| RUT                    | Sí, activo                                           |
+| Cámara de Comercio     | Sí, activa                                           |
+| Cobra IVA              | No cobra IVA en sus facturas                         |
+| Declara renta          | No (no supera el monto mínimo)                       |
+| IVA en compras         | Los materiales que compra incluyen IVA (es un costo) |
+| Retención en la fuente | Le aplican en contratos con conjuntos/entidades      |
+| Contratos formales     | 4-5 por mes con conjuntos residenciales              |
 
 ### F.2 Registro Financiero Actual
 
@@ -427,4 +440,4 @@ Con la Fase 1 (Diagnóstico) y la Fase 2 (Mapeo del Negocio) completadas, el pro
 
 ---
 
-*Documento generado como parte del levantamiento de requerimientos para el proyecto de aplicación de escritorio de CasaAlberto - Arte - Diseño - Decoración. Fase 2 — Mapeo Completo del Negocio.*
+_Documento generado como parte del levantamiento de requerimientos para el proyecto de aplicación de escritorio de CasaAlberto - Arte - Diseño - Decoración. Fase 2 — Mapeo Completo del Negocio._

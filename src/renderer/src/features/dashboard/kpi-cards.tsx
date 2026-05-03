@@ -17,6 +17,10 @@ type KpiCardsProps = {
   pedidosActivos: number
 }
 
+// Delay entre cada KPI card en el stagger de entrada. 4 cards × 50ms = 200ms
+// total, bajo el budget de 500ms (regla 1/3 del motion design).
+const KPI_STAGGER_MS = 50
+
 export function KpiCards({ ingresos, gastos, balance, pedidosActivos }: KpiCardsProps) {
   const items: KpiItem[] = [
     {
@@ -43,10 +47,15 @@ export function KpiCards({ ingresos, gastos, balance, pedidosActivos }: KpiCards
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-      {items.map((item) => {
+      {items.map((item, index) => {
         const Icon = item.icon
         return (
-          <Card key={item.label} padding="md">
+          <Card
+            key={item.label}
+            padding="md"
+            className="animate-fade-in-up"
+            style={{ animationDelay: `${index * KPI_STAGGER_MS}ms` }}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="h-9 w-9 flex items-center justify-center rounded-md bg-accent/10">
                 <Icon size={18} className="text-accent" />

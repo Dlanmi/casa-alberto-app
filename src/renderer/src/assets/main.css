@@ -57,18 +57,15 @@
   /* --- Shadows — DESIGN.md multi-layer stacks (ambient occlusion) ---
      Max individual opacity <= 0.05. Cumulative depth feels embedded,
      not floating. Reference: Notion's 4-5 layer approach. */
-  --shadow-1:
-    0 0.175px 1.04px rgba(0, 0, 0, 0.01), 0 0.8px 2.925px rgba(0, 0, 0, 0.02);
+  --shadow-1: 0 0.175px 1.04px rgba(0, 0, 0, 0.01), 0 0.8px 2.925px rgba(0, 0, 0, 0.02);
   --shadow-2:
     0 0.175px 1.04px rgba(0, 0, 0, 0.01), 0 0.8px 2.925px rgba(0, 0, 0, 0.02),
     0 2.025px 7.85px rgba(0, 0, 0, 0.027), 0 4px 18px rgba(0, 0, 0, 0.04);
   --shadow-3:
-    0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 10px rgba(0, 0, 0, 0.04),
-    0 10px 24px rgba(0, 0, 0, 0.05);
+    0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 10px rgba(0, 0, 0, 0.04), 0 10px 24px rgba(0, 0, 0, 0.05);
   --shadow-4:
-    0 1px 3px rgba(0, 0, 0, 0.01), 0 3px 7px rgba(0, 0, 0, 0.02),
-    0 7px 15px rgba(0, 0, 0, 0.02), 0 14px 28px rgba(0, 0, 0, 0.04),
-    0 23px 52px rgba(0, 0, 0, 0.05);
+    0 1px 3px rgba(0, 0, 0, 0.01), 0 3px 7px rgba(0, 0, 0, 0.02), 0 7px 15px rgba(0, 0, 0, 0.02),
+    0 14px 28px rgba(0, 0, 0, 0.04), 0 23px 52px rgba(0, 0, 0, 0.05);
 
   /* Sombra interior sutil para inputs/selects — antes estaba hardcoded
      en cada primitive como shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]. */
@@ -80,6 +77,10 @@
   --radius-lg: 8px;
   --radius-xl: 12px;
   --radius-full: 9999px;
+
+  /* Backdrop blur del modal/dialog. Centralizado para que keyframes y el
+     estado en reposo del backdrop usen el mismo valor sin duplicación. */
+  --backdrop-blur: 4px;
 
   /* --- Font Family --- */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -127,11 +128,26 @@ dialog {
 
 dialog::backdrop {
   background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(var(--backdrop-blur));
 }
 
 dialog[open] {
   animation: modal-enter 0.2s ease-out;
+}
+
+dialog[open]::backdrop {
+  animation: backdrop-fade-in 0.2s ease-out;
+}
+
+/* Estado intermedio (Modal.tsx aplica .closing antes de cerrar para dejar
+   correr 150ms de animación). Curva acelerada — exits van más rápido que
+   entradas en el sistema Premium. */
+dialog.closing {
+  animation: modal-exit 150ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+dialog.closing::backdrop {
+  animation: backdrop-fade-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 @keyframes modal-enter {
@@ -142,6 +158,42 @@ dialog[open] {
   to {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes modal-exit {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+}
+
+/* El backdrop interpola opacidad y blur a la vez para que el contexto
+   detrás "se difumine" como capa cinematográfica al abrir. Al cerrar se
+   invierte para devolver foco al contenido. */
+@keyframes backdrop-fade-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(var(--backdrop-blur));
+  }
+}
+
+@keyframes backdrop-fade-out {
+  from {
+    opacity: 1;
+    backdrop-filter: blur(var(--backdrop-blur));
+  }
+  to {
+    opacity: 0;
+    backdrop-filter: blur(0px);
   }
 }
 
@@ -278,6 +330,25 @@ textarea {
   animation: slide-in-right 0.25s ease-out;
 }
 
+/* Slide-out simétrico al slide-in, con curva de salida acelerada y
+   forwards para que el panel quede invisible al final del keyframe (antes
+   de desmontar). El consumidor delaya su unmount con SLIDE_PANEL_EXIT_MS. */
+@keyframes slide-out-right {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-out-right {
+  animation: slide-out-right 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+}
+
 /* -- Fade in + slide up (for content appearing) -- */
 @keyframes fade-in-up {
   from {
@@ -291,7 +362,9 @@ textarea {
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.3s ease-out;
+  /* fill-mode: backwards mantiene el estado del 'from' durante animation-delay,
+     útil cuando se aplica con stagger via inline style. Sin delay no afecta. */
+  animation: fade-in-up 0.3s ease-out backwards;
 }
 
 /* -- Toast slide in from right -- */
@@ -308,6 +381,24 @@ textarea {
 
 .animate-toast-in {
   animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Toast exit: salida acelerada (curva ease-in) hacia la derecha. forwards
+   mantiene el último keyframe para que el toast quede oculto antes del unmount. */
+@keyframes toast-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-toast-out {
+  animation: toast-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
 }
 
 /* -- Pulse for badges/alerts -- */
@@ -359,10 +450,11 @@ textarea {
   border-radius: var(--radius-md);
 }
 
-/* -- Price flash (yellow highlight when price updates) -- */
+/* -- Price flash (highlight ámbar cuando el precio cambia) --
+   Usa var(--color-accent) con color-mix para no hardcodear el tinte. */
 @keyframes price-flash {
   0% {
-    background-color: rgba(217, 119, 6, 0.15);
+    background-color: color-mix(in srgb, var(--color-accent) 15%, transparent);
   }
   100% {
     background-color: transparent;
@@ -373,9 +465,116 @@ textarea {
   animation: price-flash 1s ease-out;
 }
 
+/* Price flash con énfasis (scale leve) para totales prominentes (size="lg").
+   Combina highlight de fondo + micro-elevación para confirmar el cambio en
+   números grandes. Sin overshoot — la personalidad es Premium, no Playful. */
+@keyframes price-flash-emphasis {
+  0% {
+    background-color: color-mix(in srgb, var(--color-accent) 15%, transparent);
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.02);
+  }
+  100% {
+    background-color: transparent;
+    transform: scale(1);
+  }
+}
+
+.animate-price-flash-emphasis {
+  animation: price-flash-emphasis 0.7s ease-out;
+}
+
 /* -- Smooth page transitions -- */
 main > * {
   animation: fade-in-up 0.2s ease-out;
+}
+
+/* -- Step transitions (wizard cotizador, onboarding) --
+   Distancia corta (12px) y curva premium para mantener calma.
+   La dirección depende de avanzar (right→) o retroceder (←left). */
+@keyframes step-enter-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes step-enter-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-step-enter-forward {
+  animation: step-enter-from-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-step-enter-backward {
+  animation: step-enter-from-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* -- Kanban: card recién aterrizada en columna destino --
+   Halo accent que decae 700ms, confirma el cambio de estado sin gritar.
+   Usa box-shadow para no afectar layout (a diferencia de border width).
+   Tokens: var(--color-accent) + var(--shadow-1) para el reposo. */
+@keyframes landed-flash {
+  0% {
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 4px 18px color-mix(in srgb, var(--color-accent) 18%, transparent);
+  }
+  100% {
+    box-shadow: var(--shadow-1);
+  }
+}
+
+.animate-landed-flash {
+  animation: landed-flash 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* -- Badge: entrada cuando aparece de cero --
+   Scale corto + fade. Curva premium, sin overshoot. */
+@keyframes badge-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-badge-enter {
+  animation: badge-enter 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* -- Scale pop: para hero/icon en empty states. backwards mantiene el
+   estado del 'from' durante delay (cuando se usa con stagger). */
+@keyframes scale-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-pop {
+  animation: scale-pop 350ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 /* -- Spinner: smoother rotation -- */
@@ -390,6 +589,205 @@ main > * {
 
 .animate-spin {
   animation: spin-smooth 0.8s linear infinite;
+}
+
+/* Spinner con "respiración" para tallas grandes (PageLoader). Combina la
+   rotación con un fade sutil de opacidad — un loop completo coincide con
+   un ciclo de fade, dando sensación de paciencia/trabajo en curso. */
+@keyframes spin-breath {
+  0% {
+    transform: rotate(0deg);
+    opacity: 0.7;
+  }
+  50% {
+    transform: rotate(180deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 0.7;
+  }
+}
+
+.animate-spin-breath {
+  animation: spin-breath 0.8s linear infinite;
+}
+
+/* Download bob: micro-elevación cíclica (translateY 0 → -2px → 0). Reemplaza
+   el animate-pulse de Tailwind (que es un fade 50% disonante con una marca
+   Premium). Comunica "estoy trabajando, paciencia" sin alarmar. */
+@keyframes download-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.animate-download-bob {
+  animation: download-bob 1.5s ease-in-out infinite;
+}
+
+/* Hint swap: cambio de contenido en GuidanceHint (al pasar de step en el
+   wizard, p. ej.). Más corto que fade-in-up porque acompaña a la
+   transición del paso, no debe sumarse al ruido visual. */
+@keyframes hint-swap {
+  from {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-hint-swap {
+  animation: hint-swap 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dropdown enter — popovers que crecen desde el borde superior del trigger
+   (cliente picker, search results, autocompletes). transform-origin: top
+   para que la apertura "salga" del input en vez de aparecer flotando. */
+@keyframes dropdown-enter {
+  from {
+    opacity: 0;
+    transform: scaleY(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+.animate-dropdown-enter {
+  animation: dropdown-enter 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top center;
+}
+
+/* Clear button enter — usado por el botón X que aparece cuando un input
+   tiene texto. Pop corto que comunica "ya puedes vaciar el campo". */
+@keyframes clear-btn-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-clear-btn-enter {
+  animation: clear-btn-enter 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Error shake: se dispara al intentar submit con errores. Movimiento horizontal
+   firme (sin overshoot) que comunica "falta algo aquí, no puedo seguir". 2-3
+   oscilaciones, ±6px, dentro del budget de Error Shake del motion design. */
+@keyframes error-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+.animate-error-shake {
+  animation: error-shake 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Submit success: micro-pulse al confirmar un guardado exitoso. Único caso
+   con un overshoot mínimo (1.02) — la celebración debe ser breve y firme,
+   no juguetona. Pareja con el cambio de icono ✓ que dispara el padre. */
+@keyframes submit-success {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-submit-success {
+  animation: submit-success 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Tooltip enter — variante por dirección de origen para preservar el
+   `translate(-50%)` de centrado que ya tienen los tooltips top/bottom y el
+   `translate(0,-50%)` de los left/right. Si solo animáramos opacity, la
+   regla "no opacity-only" del motion design quedaría incumplida. */
+@keyframes tooltip-enter-from-bottom {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes tooltip-enter-from-top {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes tooltip-enter-from-right {
+  from {
+    opacity: 0;
+    transform: translate(4px, -50%) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%) scale(1);
+  }
+}
+
+@keyframes tooltip-enter-from-left {
+  from {
+    opacity: 0;
+    transform: translate(-4px, -50%) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%) scale(1);
+  }
+}
+
+.animate-tooltip-from-bottom {
+  animation: tooltip-enter-from-bottom 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-tooltip-from-top {
+  animation: tooltip-enter-from-top 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-tooltip-from-right {
+  animation: tooltip-enter-from-right 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-tooltip-from-left {
+  animation: tooltip-enter-from-left 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* -- Progress bar: smooth width transitions -- */

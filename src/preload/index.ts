@@ -5,6 +5,8 @@ import type {
   Cliente,
   Configuracion,
   ConfiguracionSetPayload,
+  CrearPedidoConfirmadoData,
+  CrearPedidoConfirmadoResult,
   Factura,
   FacturaConPagos,
   FacturaListarFiltros,
@@ -166,6 +168,8 @@ const api = {
       invoke<IpcResult<PedidoConItems | null>>('pedidos:obtenerPorNumero', numero),
     crear: (datos: NuevoPedidoDatos, cotizacion: ResultadoCotizacion) =>
       invoke<IpcResult<Pedido>>('pedidos:crear', datos, cotizacion),
+    crearConfirmado: (data: CrearPedidoConfirmadoData) =>
+      invoke<IpcResult<CrearPedidoConfirmadoResult>>('pedidos:crearConfirmado', data),
     cambiarEstado: (id: number, estado: Pedido['estado']) =>
       invoke<IpcResult<Pedido>>('pedidos:cambiarEstado', id, estado),
     actualizarFechaEntrega: (id: number, fecha: string | null) =>

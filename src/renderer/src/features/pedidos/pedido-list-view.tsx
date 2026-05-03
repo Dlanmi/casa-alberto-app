@@ -54,7 +54,7 @@ export function PedidoListView({
         </Tr>
       </Thead>
       <Tbody>
-        {pedidos.map((p) => {
+        {pedidos.map((p, index) => {
           const TipoIcon = TIPO_TRABAJO_ICON[p.tipoTrabajo]
           const clienteNombre = clienteMap?.get(p.clienteId) ?? 'Sin cliente'
           return (
@@ -65,6 +65,7 @@ export function PedidoListView({
                 highlightedId === p.id && 'ring-2 ring-accent bg-accent/10 animate-pulse'
               )}
               onClick={() => onRowClick(p)}
+              staggerIndex={index}
             >
               <Td className="font-medium tabular-nums">{p.numero}</Td>
               <Td>

@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users,
@@ -18,14 +18,16 @@ import {
 } from 'lucide-react'
 import { DirectoryScreen } from '@renderer/components/layout/page-frame'
 import { useIpc } from '@renderer/hooks/use-ipc'
-import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
+import { useSlidePanel, SLIDE_PANEL_EXIT_MS } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
+import { useErrorShake } from '@renderer/hooks/use-error-shake'
 import { useToast } from '@renderer/contexts/toast-context'
 import { useEmojis } from '@renderer/contexts/emojis-context'
 import { EMOJI_TOAST } from '@renderer/lib/emojis'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
+import { SubmitButton, SUBMIT_SUCCESS_VISIBLE_MS } from '@renderer/components/ui/submit-button'
 import { Badge } from '@renderer/components/ui/badge'
 import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
@@ -419,7 +421,11 @@ function DetailPanel({
   const navigate = useNavigate()
   const { showToast } = useToast()
   const closeRef = useRef<HTMLButtonElement>(null)
-  useSlidePanel({ onClose, closeRef })
+  const { closing, requestClose } = useSlidePanel({
+    onClose,
+    closeRef,
+    exitDurationMs: SLIDE_PANEL_EXIT_MS
+  })
   const [showDeactivate, setShowDeactivate] = useState(false)
   const [deactivating, setDeactivating] = useState(false)
   const { data: stats, loading } = useIpc<ClienteEstadisticas>(
@@ -455,14 +461,17 @@ function DetailPanel({
     <div
       className="fixed inset-0 z-40 flex justify-end"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div className="absolute inset-0 bg-black/20" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Detalle de ${cliente.nombre}`}
-        className="relative h-full w-full max-w-md overflow-y-auto bg-surface shadow-4 animate-slide-in-right"
+        className={cn(
+          'relative h-full w-full max-w-md overflow-y-auto bg-surface shadow-4',
+          closing ? 'animate-slide-out-right' : 'animate-slide-in-right'
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 space-y-6">
@@ -491,7 +500,7 @@ function DetailPanel({
               </button>
               <button
                 ref={closeRef}
-                onClick={onClose}
+                onClick={requestClose}
                 className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
                 aria-label="Cerrar detalle"
               >
@@ -668,6 +677,9 @@ function CreateClienteModal({
     notas: ''
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [success, setSuccess] = useState(false)
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { ref: shakeRef, shake } = useErrorShake<HTMLFormElement>()
 
   const { execute, loading } = useIpcMutation(
     useCallback(
@@ -684,6 +696,12 @@ function CreateClienteModal({
     )
   )
 
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+    }
+  }, [])
+
   function handleChange(field: string, value: string): void {
     setForm((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }))
@@ -694,11 +712,16 @@ function CreateClienteModal({
     const newErrors = validarFormCliente(form)
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
+      shake()
       return
     }
     try {
       await execute(form)
-      onCreated()
+      setSuccess(true)
+      successTimerRef.current = setTimeout(() => {
+        setSuccess(false)
+        onCreated()
+      }, SUBMIT_SUCCESS_VISIBLE_MS)
     } catch {
       // error is handled by the mutation hook
     }
@@ -712,7 +735,7 @@ function CreateClienteModal({
         message="Nombre y teléfono suelen ser suficientes para empezar. El resto lo puedes completar después."
         className="mb-4"
       />
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form ref={shakeRef} onSubmit={handleSubmit} className="space-y-4">
         <Input
           label="Nombre *"
           value={form.nombre}
@@ -762,9 +785,14 @@ function CreateClienteModal({
           <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit" className="flex-1" disabled={loading}>
-            {loading ? 'Guardando...' : 'Crear cliente'}
-          </Button>
+          <SubmitButton
+            className="flex-1"
+            loading={loading}
+            success={success}
+            successLabel="¡Cliente creado!"
+          >
+            Crear cliente
+          </SubmitButton>
         </div>
       </form>
     </Modal>
@@ -794,7 +822,16 @@ function EditClienteModal({
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { showToast } = useToast()
+  const { ref: shakeRef, shake } = useErrorShake<HTMLFormElement>()
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+    }
+  }, [])
 
   function handleChange(field: string, value: string): void {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -806,6 +843,7 @@ function EditClienteModal({
     const newErrors = validarFormCliente(form)
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
+      shake()
       return
     }
     setLoading(true)
@@ -819,7 +857,11 @@ function EditClienteModal({
         notas: form.notas || null
       })) as IpcResult<Cliente>
       if (res.ok) {
-        onUpdated()
+        setSuccess(true)
+        successTimerRef.current = setTimeout(() => {
+          setSuccess(false)
+          onUpdated()
+        }, SUBMIT_SUCCESS_VISIBLE_MS)
       } else {
         showToast('error', res.error)
       }
@@ -838,7 +880,7 @@ function EditClienteModal({
         message="Aprovecha las notas para dejar referencias de gustos, horarios o pendientes del cliente."
         className="mb-4"
       />
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form ref={shakeRef} onSubmit={handleSubmit} className="space-y-4">
         <Input
           label="Nombre *"
           value={form.nombre}
@@ -888,9 +930,14 @@ function EditClienteModal({
           <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit" className="flex-1" disabled={loading}>
-            {loading ? 'Guardando...' : 'Guardar cambios'}
-          </Button>
+          <SubmitButton
+            className="flex-1"
+            loading={loading}
+            success={success}
+            successLabel="¡Cambios guardados!"
+          >
+            Guardar cambios
+          </SubmitButton>
         </div>
       </form>
     </Modal>

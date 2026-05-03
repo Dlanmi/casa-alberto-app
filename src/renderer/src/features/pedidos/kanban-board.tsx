@@ -40,6 +40,26 @@ export function KanbanBoard({
     pedidoId: number
     estadoOrigen: EstadoPedido
   } | null>(null)
+  // ID del pedido que acaba de aterrizar en una nueva columna. Se limpia
+  // 800ms después para retirar la animación de halo accent (landed-flash).
+  const [recentDropId, setRecentDropId] = useState<number | null>(null)
+  const recentDropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (recentDropTimerRef.current) clearTimeout(recentDropTimerRef.current)
+    }
+  }, [])
+
+  const handleChangeEstado = useCallback(
+    (pedidoId: number, nuevoEstado: EstadoPedido): void => {
+      setRecentDropId(pedidoId)
+      if (recentDropTimerRef.current) clearTimeout(recentDropTimerRef.current)
+      recentDropTimerRef.current = setTimeout(() => setRecentDropId(null), 800)
+      onChangeEstado(pedidoId, nuevoEstado)
+    },
+    [onChangeEstado]
+  )
 
   const updateScrollState = useCallback(() => {
     const el = scrollRef.current
@@ -117,12 +137,13 @@ export function KanbanBoard({
             clienteMap={clienteMap}
             saldosMap={saldosMap}
             onCardClick={onCardClick}
-            onDrop={(pedidoId) => onChangeEstado(pedidoId, estado)}
+            onDrop={(pedidoId) => handleChangeEstado(pedidoId, estado)}
             onDragStart={(pedidoId, estadoOrigen) => setDragState({ pedidoId, estadoOrigen })}
             onDragEnd={() => setDragState(null)}
             dragActivePedidoId={dragState?.pedidoId ?? null}
             dropKind={dropKind}
             highlightedId={highlightedId}
+            recentDropId={recentDropId}
           />
         )
       })}

@@ -428,6 +428,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       descripcion: 'Foto familiar 30x40',
       anchoCm: 30,
       altoCm: 40,
+      muestraMarcoId: 1,
       tipoVidrio: 'claro',
       fechaIngreso: '2026-04-01',
       fechaEntrega: '2026-04-09'
@@ -453,6 +454,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       descripcion: 'Acuarela 20x30 con paspartú',
       anchoCm: 20,
       altoCm: 30,
+      muestraMarcoId: 3,
       anchoPaspartuCm: 5,
       tipoPaspartu: 'pintado',
       tipoVidrio: 'antirreflectivo',
@@ -478,6 +480,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       descripcion: 'Poster 50x70',
       anchoCm: 50,
       altoCm: 70,
+      muestraMarcoId: 5,
       tipoVidrio: 'claro',
       fechaIngreso: '2026-03-25',
       fechaEntrega: '2026-04-05'
@@ -578,6 +581,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       descripcion: 'Foto 40x50',
       anchoCm: 40,
       altoCm: 50,
+      muestraMarcoId: 2,
       tipoVidrio: 'claro',
       fechaIngreso: '2026-02-15',
       fechaEntrega: '2026-02-25'
@@ -605,6 +609,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       descripcion: 'Diploma 20x25',
       anchoCm: 20,
       altoCm: 25,
+      muestraMarcoId: 4,
       tipoVidrio: 'claro',
       fechaIngreso: '2026-02-05',
       fechaEntrega: '2026-02-14'
@@ -632,6 +637,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       descripcion: 'Foto 30x30',
       anchoCm: 30,
       altoCm: 30,
+      muestraMarcoId: 6,
       tipoVidrio: 'claro',
       fechaIngreso: '2026-01-10',
       fechaEntrega: '2026-01-20'

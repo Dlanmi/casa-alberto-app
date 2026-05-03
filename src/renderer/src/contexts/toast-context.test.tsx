@@ -4,6 +4,10 @@ import { render, screen, act, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider, useToast } from './toast-context'
 
+// Espejo en test del TOAST_EXIT_MS interno: tras cerrar un toast aplicamos
+// animate-toast-out durante esta duración antes de desmontarlo del DOM.
+const TOAST_EXIT_MS = 200
+
 function ToastHarness({
   onAction,
   onUndo
@@ -79,6 +83,11 @@ describe('ToastProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: /ver detalle/i }))
 
     expect(onAction).toHaveBeenCalledTimes(1)
+    // Tras cerrar el toast queda con animate-toast-out por TOAST_EXIT_MS
+    // antes de salir del DOM. Avanzamos timers para esperar la animación.
+    act(() => {
+      vi.advanceTimersByTime(TOAST_EXIT_MS)
+    })
     expect(screen.queryByText('Saldo pendiente')).toBeNull()
   })
 
@@ -97,13 +106,18 @@ describe('ToastProvider', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /deshacer/i }))
     expect(onUndo).toHaveBeenCalledTimes(1)
+    act(() => {
+      vi.advanceTimersByTime(TOAST_EXIT_MS)
+    })
     expect(screen.queryByText('Guardado')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /mostrar toast temporal/i }))
     expect(screen.getByText('Este mensaje se cierra solo.')).toBeTruthy()
 
+    // Auto-cierre dispara removeToast a 1000ms; luego TOAST_EXIT_MS extra
+    // hasta que el toast sale del DOM.
     await act(async () => {
-      vi.advanceTimersByTime(1000)
+      vi.advanceTimersByTime(1000 + TOAST_EXIT_MS)
     })
 
     expect(screen.queryByText('Este mensaje se cierra solo.')).toBeNull()

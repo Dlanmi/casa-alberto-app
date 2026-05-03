@@ -32,7 +32,11 @@ export function StepDots({ steps, current, onJump, className }: StepDotsProps): 
             aria-current={active ? 'step' : undefined}
             aria-label={`Paso ${index + 1}: ${step.label}${done ? ' (completado)' : active ? ' (actual)' : ''}`}
             className={cn(
-              'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all',
+              // Transición explícita por propiedades para que el cambio del
+              // dot activo (scale + ring + colores) se sienta orquestado
+              // entre pasos en vez de un salto abrupto.
+              'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold',
+              'transition-[transform,background-color,border-color,color,box-shadow] duration-200 ease-out',
               done && 'border-accent bg-accent text-white shadow-1',
               active &&
                 'border-accent bg-surface text-accent-strong ring-4 ring-accent/20 scale-110',

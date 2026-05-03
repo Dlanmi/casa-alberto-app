@@ -119,6 +119,7 @@ sistema rechaza crear una segunda. UNIQUE partial index en el schema.
 ### SPEC-008 — Tres formatos de impresión
 
 El PDF de factura se genera en uno de tres formatos:
+
 - `carta` (LETTER 216×279 mm, default)
 - `a4` (210×297 mm)
 - `termico80` (tirilla 80 mm de alto flexible — para impresoras POS)

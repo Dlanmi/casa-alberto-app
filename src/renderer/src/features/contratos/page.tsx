@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import {
   FileSignature,
   AlertCircle,
@@ -10,13 +10,15 @@ import {
   Receipt
 } from 'lucide-react'
 import { useIpc } from '@renderer/hooks/use-ipc'
-import { useSlidePanel } from '@renderer/hooks/use-slide-panel'
+import { useSlidePanel, SLIDE_PANEL_EXIT_MS } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useDirtyGuard } from '@renderer/hooks/use-dirty-guard'
+import { useErrorShake } from '@renderer/hooks/use-error-shake'
 import { useToast } from '@renderer/contexts/toast-context'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
+import { SubmitButton, SUBMIT_SUCCESS_VISIBLE_MS } from '@renderer/components/ui/submit-button'
 import { Badge } from '@renderer/components/ui/badge'
 import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
@@ -312,7 +314,11 @@ function DetailPanel({
 }): React.JSX.Element {
   const { showToast } = useToast()
   const closeRef = useRef<HTMLButtonElement>(null)
-  useSlidePanel({ onClose, closeRef })
+  const { closing, requestClose } = useSlidePanel({
+    onClose,
+    closeRef,
+    exitDurationMs: SLIDE_PANEL_EXIT_MS
+  })
   const [changingEstado, setChangingEstado] = useState(false)
   const [creandoCuenta, setCreandoCuenta] = useState(false)
 
@@ -400,13 +406,16 @@ function DetailPanel({
     <div
       className="fixed inset-0 z-40 flex justify-end"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div className="absolute inset-0 bg-black/20" />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative h-full w-full max-w-md overflow-y-auto border-l border-border bg-surface shadow-4 animate-slide-in-right"
+        className={cn(
+          'relative h-full w-full max-w-md overflow-y-auto border-l border-border bg-surface shadow-4',
+          closing ? 'animate-slide-out-right' : 'animate-slide-in-right'
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="space-y-6 p-6">
@@ -418,7 +427,7 @@ function DetailPanel({
             </div>
             <button
               ref={closeRef}
-              onClick={onClose}
+              onClick={requestClose}
               className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text transition-colors"
               aria-label="Cerrar detalle"
             >
@@ -630,7 +639,16 @@ function CreateContratoModal({
   const [condiciones, setCondiciones] = useState('')
   const [fecha, setFecha] = useState(hoyISO())
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [success, setSuccess] = useState(false)
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { showToast } = useToast()
+  const { ref: shakeRef, shake } = useErrorShake<HTMLFormElement>()
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+    }
+  }, [])
 
   const { execute, loading } = useIpcMutation(
     useCallback(
@@ -694,6 +712,7 @@ function CreateContratoModal({
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
+      shake()
       return
     }
 
@@ -710,7 +729,11 @@ function CreateContratoModal({
           valorUnitario: it.valorUnitario
         }))
       })
-      onCreated()
+      setSuccess(true)
+      successTimerRef.current = setTimeout(() => {
+        setSuccess(false)
+        onCreated()
+      }, SUBMIT_SUCCESS_VISIBLE_MS)
     } catch {
       showToast('error', 'Error al crear el contrato')
     }
@@ -735,7 +758,7 @@ function CreateContratoModal({
         title="Nuevo contrato"
         size="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form ref={shakeRef} onSubmit={handleSubmit} className="space-y-4">
           <ClientePicker
             label="Cliente *"
             value={cliente}
@@ -884,9 +907,14 @@ function CreateContratoModal({
             <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" className="flex-1" disabled={loading}>
-              {loading ? 'Creando...' : 'Crear contrato'}
-            </Button>
+            <SubmitButton
+              className="flex-1"
+              loading={loading}
+              success={success}
+              successLabel="¡Contrato creado!"
+            >
+              Crear contrato
+            </SubmitButton>
           </div>
         </form>
       </Modal>

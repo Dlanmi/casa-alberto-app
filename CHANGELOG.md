@@ -10,6 +10,31 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [1.7.3] — Correcciones críticas de pedidos y facturación
+
+Release de **integridad operativa** para cerrar errores encontrados en la
+auditoría de pedidos, facturas y cotizador.
+
+### Pedidos y facturación
+
+- Crear pedido desde el wizard ahora es atómico: pedido confirmado,
+  factura y abono inicial se guardan en una sola operación.
+- El backend recalcula y valida la cotización contra las listas de precios
+  antes de persistir el pedido, evitando totales manipulados por IPC.
+- Las facturas ahora deben coincidir con el cliente y total real del pedido.
+- Los pagos rechazan valores no válidos antes de tocar SQLite.
+
+### Cotizador
+
+- Vidrio/espejo guarda el tipo de vidrio correcto al crear el pedido.
+- El paso de vidrio/espejo muestra todos los vidrios activos configurados
+  en la base de datos, no solo los tipos iniciales.
+
+### Tests
+
+- Regresiones nuevas para cotizaciones manipuladas, flujo atómico,
+  factura con cliente/total incorrecto y pagos inválidos.
+
 ## [1.7.1] — Hardening de integridad y estabilidad
 
 Release de **fixes críticos**. Sin features nuevas; varias correcciones
@@ -17,6 +42,7 @@ de datos que podían causar pérdidas silenciosas y cambios de UX que
 mejoran feedback ante errores.
 
 ### Integridad de datos
+
 - `parseMoneyInput` strippea separadores de miles colombianos.
   Antes "86.000" se interpretaba como 86, cobrando ~1000× menos sin aviso.
   Migrado a 13 inputs (cotizador, facturas, clases, contratos, finanzas).
@@ -31,12 +57,14 @@ mejoran feedback ante errores.
   vista de clases y resolvers del help-button.
 
 ### Estabilidad
+
 - Toast cuando el rollback de cambio de estado de pedido falla.
   Antes se silenciaba el error y papá quedaba con un estado intermedio.
 - Onboarding revierte el paso si la persistencia falla, evitando
   pérdida de progreso al cerrar la app a mitad.
 
 ### Defense in depth
+
 - `parseMoneyInput` y `useMoneyInput` con reformato al perder el foco
   para que el monto visible coincida con el guardado.
 - Whitelist runtime del formato de PDF (rechaza valores fuera de
@@ -49,6 +77,7 @@ mejoran feedback ante errores.
 - CSP meta tag verificado en el renderer.
 
 ### Tests
+
 44 tests nuevos cubriendo los fixes anteriores y casos límite
 (timezone Bogotá, sobrepago, separadores de miles, guards numéricos,
 path traversal). Total: **354 pass + 141 skipped**.
@@ -61,6 +90,7 @@ Mejoras grandes en `/agenda` para que sea herramienta de decisión y no
 solo calendario.
 
 ### Agenda semanal
+
 - Urgencia visual de entregas atrasadas (borde rojo + badge en mini-card,
   fila y popup).
 - Pill naranja "Urgente" para `tipoEntrega: urgente` no atrasado.
@@ -70,6 +100,7 @@ solo calendario.
 - Refetch automático al volver a la pestaña + polling cada 60 s.
 
 ### Popup de pedido
+
 - Saldo total del cliente cuando debe en otros pedidos aparte del actual.
 - Plantillas de WhatsApp dinámicas según estado (`listo`, `atrasada`,
   default).
@@ -77,21 +108,25 @@ solo calendario.
 - Bloque "Entrega" tintado de warning cuando es urgente.
 
 ### Popup de clase
+
 - Estado de pago del mes al lado de cada estudiante (Pagado / Parcial /
   Pendiente).
 - Para estudiantes menores: línea con nombre y teléfono del acudiente
-  + botón "Llamar"; CTA "Registrar acudiente" si no existe.
+  - botón "Llamar"; CTA "Registrar acudiente" si no existe.
 
 ### HelpButton
+
 - Tips contextuales para `/agenda`: entregas de hoy, próxima entrega,
   resumen de la semana.
 - Reaperture del popover corregida.
 
 ### Cotizador
+
 - Constantes `TIPO_ENTREGA_LABEL` / `TIPO_ENTREGA_COLOR` centralizadas.
 - Plantilla WhatsApp `mensajeListoParaRecoger` para pedidos terminados.
 
 ### Pedidos
+
 - Fix: el detalle no se reabría solo al cerrarse desde una URL con
   `:id`.
 

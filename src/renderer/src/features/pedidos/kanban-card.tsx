@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, Clock, Calendar, UserX, DollarSign } from 'lucide-react'
+import { AlertTriangle, Clock, Calendar, UserX, DollarSign, GripVertical } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
 import { EstadoPedidoBadge } from '@renderer/components/shared/estado-badge'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
@@ -25,6 +25,10 @@ type KanbanCardProps = {
   // Si true, renderiza un ring acento para destacar el pedido recién
   // creado tras auto-navegación desde el cotizador.
   highlighted?: boolean
+  // Si true, esta card acaba de aterrizar en una columna nueva por drag&drop.
+  // Aplica un halo accent que decae 700ms (animate-landed-flash). Lo dispara
+  // el KanbanBoard via setTimeout y lo limpia ~800ms después.
+  recentDrop?: boolean
 }
 
 // Días transcurridos desde una fecha ISO con o sin tiempo. Local a esta
@@ -42,7 +46,8 @@ export function KanbanCard({
   pagado,
   saldoPendiente,
   onClick,
-  highlighted = false
+  highlighted = false,
+  recentDrop = false
 }: KanbanCardProps) {
   const [dragging, setDragging] = useState(false)
   const dias = pedido.fechaEntrega ? diasRestantes(pedido.fechaEntrega) : null
@@ -77,18 +82,26 @@ export function KanbanCard({
       onDragStart={() => setDragging(true)}
       onDragEnd={() => setDragging(false)}
       className={cn(
-        'w-full text-left p-4 bg-surface rounded-lg shadow-1',
+        'relative group w-full text-left p-4 bg-surface rounded-lg shadow-1',
         'transition-all hover:shadow-2 cursor-pointer card-hover',
         'border-2 border-transparent',
         atrasado && 'border-error/40',
         urgente && !atrasado && 'border-warning/40',
         highlighted && 'ring-4 ring-accent ring-offset-2 animate-pulse',
+        recentDrop && !highlighted && 'animate-landed-flash',
         dragging && 'opacity-60 scale-95'
       )}
     >
+      {/* Drag handle hint: aparece al hover y comunica que la card es
+          arrastrable. Subtle: opacity 0 → 50% + translateX, sin distraer. */}
+      <GripVertical
+        size={14}
+        className="absolute right-2 top-2 -translate-x-1 text-text-soft opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-50"
+        aria-hidden="true"
+      />
       {/* Header: avatar + client + number */}
       <div className="mb-3 flex items-start gap-2.5">
-        <InitialsAvatar nombre={displayName} id={pedido.clienteId} size="sm" />
+        <InitialsAvatar nombre={displayName} id={pedido.clienteId} size="sm" interactive />
         <div className="min-w-0 flex-1">
           <p
             className={cn(

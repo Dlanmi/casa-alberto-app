@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import {
   Frame,
   Sofa,
@@ -13,6 +14,11 @@ import { EMOJI_TIPO_TRABAJO } from '@renderer/lib/emojis'
 import { useEmojis } from '@renderer/contexts/emojis-context'
 import type { TipoTrabajo } from '@shared/types'
 import type { LucideIcon } from 'lucide-react'
+
+// Tiempo de "confirmación visual" antes de saltar al wizard. La card
+// seleccionada hace scale-down + las otras se atenúan, dando sensación de
+// "te entendí, abramos el flujo" en vez de un salto abrupto.
+const SELECT_FEEDBACK_MS = 220
 
 type TipoTrabajoItem = {
   tipo: TipoTrabajo
@@ -101,8 +107,28 @@ const BLOQUES: {
 
 export function TipoTrabajoGrid({ onSelect, onManagePrecios }: Props): React.JSX.Element {
   const { enabled: emojisEnabled } = useEmojis()
+  // Memoria de la card que el papá acaba de elegir, para mostrar el feedback
+  // de selección breve antes de saltar al wizard. setTimeout en handleSelect
+  // dispara onSelect tras SELECT_FEEDBACK_MS.
+  const [selecting, setSelecting] = useState<TipoTrabajo | null>(null)
+  const selectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (selectTimerRef.current) clearTimeout(selectTimerRef.current)
+    }
+  }, [])
+
+  function handleSelect(tipo: TipoTrabajo): void {
+    if (selecting) return // evita doble click durante la transición
+    setSelecting(tipo)
+    selectTimerRef.current = setTimeout(() => {
+      onSelect(tipo)
+    }, SELECT_FEEDBACK_MS)
+  }
+
   return (
-    <div className="space-y-6">
+    <div className={cn('space-y-6', selecting && 'pointer-events-none')}>
       {BLOQUES.map((bloque) => (
         <section key={bloque.title} className="space-y-3">
           <div>
@@ -114,14 +140,19 @@ export function TipoTrabajoGrid({ onSelect, onManagePrecios }: Props): React.JSX
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {TIPOS.filter((item) => bloque.tipos.includes(item.tipo)).map((item) => {
               const Icon = item.icon
+              const isSelected = selecting === item.tipo
+              const isOther = selecting !== null && !isSelected
               return (
                 <button
                   key={item.tipo}
                   type="button"
-                  onClick={() => onSelect(item.tipo)}
+                  onClick={() => handleSelect(item.tipo)}
+                  disabled={selecting !== null}
                   className={cn(
                     'group flex min-h-40 cursor-pointer flex-col justify-between rounded-lg border border-border bg-surface p-5 text-left shadow-1',
-                    'transition-all hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-3'
+                    'transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-3',
+                    isSelected && 'scale-[0.97] border-accent shadow-3',
+                    isOther && 'opacity-40'
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">

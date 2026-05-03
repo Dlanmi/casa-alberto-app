@@ -44,6 +44,10 @@ type KanbanColumnProps = {
   dragActivePedidoId?: number | null
   dropKind?: 'none' | 'allowed' | 'disabled'
   highlightedId?: number | null
+  // ID del pedido recién aterrizado en alguna columna. La columna que lo
+  // contiene aplica un pulso al contador (badge-pulse) y la card destacada
+  // hereda animate-landed-flash.
+  recentDropId?: number | null
 }
 
 export function KanbanColumn({
@@ -57,11 +61,14 @@ export function KanbanColumn({
   onDragEnd,
   dragActivePedidoId = null,
   dropKind = 'none',
-  highlightedId = null
+  highlightedId = null,
+  recentDropId = null
 }: KanbanColumnProps) {
   const [dragOver, setDragOver] = useState(false)
   const color = ESTADO_PEDIDO_COLOR[estado]
   const { enabled: emojisEnabled } = useEmojis()
+  // Si esta columna contiene la card recién aterrizada, animamos el contador.
+  const justReceived = recentDropId !== null && pedidos.some((pedido) => pedido.id === recentDropId)
 
   // Cuenta pedidos estancados según el umbral del estado. Solo
   // aplica a confirmado/en_proceso/listo (UMBRAL_ESTANCADO devuelve undefined
@@ -134,7 +141,12 @@ export function KanbanColumn({
                 {estancadosCount}
               </span>
             )}
-            <span className="text-xs font-medium tabular-nums text-text-muted bg-surface/70 px-2 py-0.5 rounded-full">
+            <span
+              className={cn(
+                'text-xs font-medium tabular-nums text-text-muted bg-surface/70 px-2 py-0.5 rounded-full inline-block',
+                justReceived && 'animate-badge-pulse'
+              )}
+            >
               {pedidos.length}
             </span>
           </div>
@@ -170,6 +182,7 @@ export function KanbanColumn({
               saldoPendiente={saldosMap?.get(pedido.id)}
               onClick={() => onCardClick(pedido)}
               highlighted={highlightedId === pedido.id}
+              recentDrop={recentDropId === pedido.id}
             />
           </div>
         ))}

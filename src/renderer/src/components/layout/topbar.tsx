@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Search, ChevronRight, Sparkles } from 'lucide-react'
 import { SIDEBAR_ITEMS } from '@renderer/lib/constants'
@@ -8,16 +9,19 @@ type TopbarProps = {
   onOpenSearch: () => void
 }
 
-function getGreeting(): string {
-  const h = new Date().getHours()
+// Tick para refrescar greeting/fecha cuando la app queda abierta cruzando
+// mediodía o medianoche. 5 minutos basta — no necesitamos precisión al segundo.
+const CLOCK_TICK_MS = 5 * 60 * 1000
+
+function getGreeting(now: Date): string {
+  const h = now.getHours()
   if (h < 12) return 'Buenos días'
   if (h < 18) return 'Buenas tardes'
   return 'Buenas noches'
 }
 
-function getFormattedDate(): string {
+function getFormattedDate(now: Date): string {
   const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-  const now = new Date()
   const dia = dias[diaSemana(now)]
   const formatted = new Intl.DateTimeFormat('es-CO', {
     day: 'numeric',
@@ -43,6 +47,17 @@ function getRouteHint(pathname: string): string {
 export function Topbar({ onOpenSearch }: TopbarProps): React.JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
+  // `now` como state evita llamar `new Date()` durante render (React 19 lo
+  // marca como impuro). El interval refresca para que el saludo y la fecha
+  // se actualicen si la app queda abierta cruzando mediodía o medianoche.
+  const [now, setNow] = useState<Date>(() => new Date())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), CLOCK_TICK_MS)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const greeting = getGreeting(now)
+  const formattedDate = getFormattedDate(now)
 
   const segments = location.pathname.split('/').filter(Boolean)
   const crumbs: { label: string; path: string }[] = [{ label: 'Dashboard', path: '/' }]
@@ -95,8 +110,14 @@ export function Topbar({ onOpenSearch }: TopbarProps): React.JSX.Element {
         </div>
 
         <div className="text-right hidden md:block">
-          <p className="text-sm font-medium text-text">{getGreeting()}, Alberto</p>
-          <p className="text-xs text-text-muted">{getFormattedDate()}</p>
+          {/* key={greeting/formattedDate} fuerza re-mount cuando el texto
+              cambia, lo que reaplica animate-fade-in-up de forma sutil. */}
+          <p key={greeting} className="text-sm font-medium text-text animate-fade-in-up">
+            {greeting}, Alberto
+          </p>
+          <p key={formattedDate} className="text-xs text-text-muted animate-fade-in-up">
+            {formattedDate}
+          </p>
         </div>
 
         <div className="h-9 w-9 rounded-full bg-accent text-white flex items-center justify-center text-sm font-semibold shrink-0">

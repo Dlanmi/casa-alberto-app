@@ -49,7 +49,12 @@ import type {
   NuevaMuestraMarco,
   ResultadoCotizacion
 } from '../main/db/queries/cotizador'
-import type { MatrizUrgencia, NuevoPedidoDatos } from '../main/db/queries/pedidos'
+import type {
+  CrearPedidoConfirmadoData,
+  CrearPedidoConfirmadoResult,
+  MatrizUrgencia,
+  NuevoPedidoDatos
+} from '../main/db/queries/pedidos'
 import type { NuevaFactura, NuevoPago, NuevaDevolucion } from '../main/db/queries/facturas'
 
 // Re-exportamos los enums (son const arrays puras — válido en renderer).
@@ -216,6 +221,8 @@ export type {
   MatrizUrgencia,
   MuestraMarcoConProveedor,
   NuevaMuestraMarco,
+  CrearPedidoConfirmadoData,
+  CrearPedidoConfirmadoResult,
   NuevoPedidoDatos,
   NuevaFactura,
   NuevoPago,
