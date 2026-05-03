@@ -10,6 +10,32 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [1.7.4] — Agenda más clara y navegación rápida
+
+Release de experiencia operativa para hacer más fácil revisar entregas y
+moverse entre días sin depender del papel.
+
+### Agenda
+
+- La agenda abre en un estado limpio: el panel del día queda arriba y las
+  entregas solo se muestran cuando el usuario activa un filtro.
+- El chip `Todos` ahora vuelve a revelar la sección de entregas, incluso
+  cuando la vista todavía no tenía selección visual.
+- El botón `Limpiar` restaura la vista sin dejar un filtro marcado.
+- La navegación por día anterior/siguiente y el acceso desde el onboarding
+  quedaron sincronizados con el nuevo contexto semanal.
+
+### Onboarding
+
+- El paso final incluye el botón `Ver ahora` para ir directo a la agenda y
+  revisar lo de esta semana.
+
+### Ajustes técnicos
+
+- Se unificó la consulta de agenda para traer solo pedidos activos con fecha
+  de entrega.
+- Se corrigió una advertencia de lint en la tarjeta de entregas.
+
 ## [1.7.3] — Correcciones críticas de pedidos y facturación
 
 Release de **integridad operativa** para cerrar errores encontrados en la

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
@@ -33,7 +33,11 @@ import {
   formatCOP,
   toFechaISO
 } from '@renderer/lib/format'
-import { normalizePedidoAlertas, type PedidoAlertaRow } from '@renderer/lib/pedidos-alertas'
+import {
+  normalizePedidoAlertas,
+  type PedidoAlertaNormalizada,
+  type PedidoAlertaRow
+} from '@renderer/lib/pedidos-alertas'
 import {
   TIPO_TRABAJO_LABEL,
   TIPO_ENTREGA_LABEL,
@@ -133,6 +137,9 @@ function getEmptyMessage(args: {
     return 'No hay entregas atrasadas en este día. Buen trabajo.'
   }
   if (args.filtro === 'hoy') {
+    if (args.iso !== args.hoy) {
+      return 'El filtro de hoy mantiene el detalle en la fecha actual.'
+    }
     return 'Hoy no tienes eventos programados.'
   }
   if (args.iso === args.hoy) {
@@ -148,6 +155,18 @@ function getEmptyMessage(args: {
     return 'Aún no hay nada programado. Es día de proveedor: recuerda levantar el pedido si lo necesitas.'
   }
   return 'Aún no hay nada programado para este día.'
+}
+
+function getPedidosPorFechaEmptyMessage(filtro: AgendaFiltro): string {
+  if (filtro === 'atrasadas') return 'No hay pedidos atrasados.'
+  if (filtro === 'hoy') return 'No hay pedidos para hoy.'
+  return 'No hay pedidos activos con fecha de entrega.'
+}
+
+function getPedidosResumenLabel(filtro: AgendaFiltro, count: number): string {
+  if (filtro === 'atrasadas') return count === 1 ? 'pedido atrasado' : 'pedidos atrasados'
+  if (filtro === 'hoy') return count === 1 ? 'pedido para hoy' : 'pedidos para hoy'
+  return count === 1 ? 'pedido activo' : 'pedidos activos'
 }
 
 // ---------------------------------------------------------------------------
@@ -191,6 +210,7 @@ type DayPedido = {
   tipoEntrega: string
   isAtrasada: boolean
   saldoPedido: number
+  fechaEntrega: string
 }
 
 type DayEvent = DayClase | DayPedido
@@ -203,6 +223,11 @@ type DaySummary = {
   claseCount: number
   pedidoCount: number
   atrasadaCount: number
+}
+
+type PedidoFechaGroup = {
+  iso: string
+  pedidos: DayPedido[]
 }
 
 // ---------------------------------------------------------------------------
@@ -251,11 +276,13 @@ function WeekOverviewCell({
   day,
   isToday,
   isSelected,
+  disabled = false,
   onSelect
 }: {
   day: DaySummary
   isToday: boolean
   isSelected: boolean
+  disabled?: boolean
   onSelect: () => void
 }) {
   const dayNum = day.date.getDate()
@@ -268,9 +295,11 @@ function WeekOverviewCell({
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onSelect}
       aria-label={`${DIAS_LABEL_LARGO[day.diaKey]} ${dayNum}, ${total} ${total === 1 ? 'evento' : 'eventos'}${ariaAtrasadas}`}
       aria-pressed={isSelected}
+      aria-disabled={disabled}
       className={cn(
         'relative flex min-h-18 flex-col items-center justify-center gap-1.5 rounded-lg',
         'border px-2 py-3 transition-all duration-150 cursor-pointer',
@@ -279,7 +308,8 @@ function WeekOverviewCell({
           ? 'border-accent bg-accent/8 ring-2 ring-accent shadow-1'
           : 'border-border bg-surface hover:bg-surface-muted hover:border-border',
         isToday && !isSelected && 'border-accent bg-accent/10 shadow-1',
-        hasAtrasadas && !isSelected && 'border-error/60 bg-error-bg'
+        hasAtrasadas && !isSelected && 'border-error/60 bg-error-bg',
+        disabled && 'cursor-not-allowed opacity-45 hover:bg-surface'
       )}
     >
       {hasAtrasadas && (
@@ -862,17 +892,11 @@ export default function AgendaPage(): React.JSX.Element {
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))
   const [selectedISO, setSelectedISO] = useState<string>(hoy)
 
-  const desde = toFechaISO(weekStart)
-  const hasta = toFechaISO(addDays(weekStart, 6))
-
   const {
-    data: pedidosRaw,
+    data: pedidosAgendaRaw,
     loading: loadingPedidos,
     refetch: refetchPedidos
-  } = useIpc<PedidoAlertaRow[]>(
-    () => window.api.pedidos.porRangoFecha(desde, hasta),
-    [desde, hasta]
-  )
+  } = useIpc<PedidoAlertaRow[]>(() => window.api.pedidos.agenda(), [])
 
   const {
     data: clases,
@@ -905,7 +929,74 @@ export default function AgendaPage(): React.JSX.Element {
   // sola query; la tabla es pequeña (1 acudiente por cliente con menor).
   const { data: acudientesData } = useAcudientes()
 
-  const pedidos = useMemo(() => normalizePedidoAlertas(pedidosRaw), [pedidosRaw])
+  const pedidosGlobales = useMemo(
+    () => normalizePedidoAlertas(pedidosAgendaRaw),
+    [pedidosAgendaRaw]
+  )
+
+  const pedidosPorId = useMemo(() => {
+    const map = new Map<number, { total: number; pagado: number; saldo: number }>()
+    for (const saldo of saldosPorPedido ?? []) {
+      map.set(saldo.pedidoId, saldo)
+    }
+    return map
+  }, [saldosPorPedido])
+
+  const estadosAtrasoAgenda = useMemo(
+    () => new Set<EstadoPedido>([...ESTADOS_EN_SEGUIMIENTO, 'sin_reclamar']),
+    []
+  )
+
+  const mapPedidoToDayPedido = useCallback(
+    (row: PedidoAlertaNormalizada): DayPedido | null => {
+      const pedido = row.pedido as Record<string, unknown>
+      const cliente = row.cliente as Record<string, unknown> | null
+      const fechaEntrega = typeof pedido.fechaEntrega === 'string' ? pedido.fechaEntrega : null
+      if (!fechaEntrega) return null
+
+      const tipoKey = pedido.tipoTrabajo as TipoTrabajo | undefined
+      const tipoLabel = tipoKey ? (TIPO_TRABAJO_LABEL[tipoKey] ?? '') : ''
+      const anchoCm = typeof pedido.anchoCm === 'number' ? pedido.anchoCm : 0
+      const altoCm = typeof pedido.altoCm === 'number' ? pedido.altoCm : 0
+      const dims = anchoCm > 0 && altoCm > 0 ? `${anchoCm}x${altoCm}` : ''
+      const descripcionRaw = typeof pedido.descripcion === 'string' ? pedido.descripcion : ''
+      const descripcion = [tipoLabel, dims].filter(Boolean).join(' ') || descripcionRaw
+      const estado = ((typeof pedido.estado === 'string' ? pedido.estado : '') ||
+        '') as EstadoPedido
+      const pedidoId = typeof pedido.id === 'number' ? pedido.id : 0
+      const saldo = pedidosPorId.get(pedidoId)?.saldo ?? 0
+
+      return {
+        tipo: 'pedido' as const,
+        id: pedidoId,
+        numero: typeof pedido.numero === 'string' ? pedido.numero : '?',
+        clienteId: typeof pedido.clienteId === 'number' ? pedido.clienteId : 0,
+        cliente: (typeof cliente?.nombre === 'string' ? cliente.nombre : '') ?? '',
+        clienteTelefono: (typeof cliente?.telefono === 'string' ? cliente.telefono : '') ?? '',
+        estado,
+        tipoTrabajo: tipoLabel,
+        descripcion,
+        precioTotal: typeof pedido.precioTotal === 'number' ? pedido.precioTotal : 0,
+        anchoCm,
+        altoCm,
+        tipoEntrega: (typeof pedido.tipoEntrega === 'string'
+          ? pedido.tipoEntrega
+          : 'estandar') as string,
+        isAtrasada: fechaEntrega < hoy && estadosAtrasoAgenda.has(estado),
+        saldoPedido: saldo,
+        fechaEntrega
+      }
+    },
+    [estadosAtrasoAgenda, hoy, pedidosPorId]
+  )
+
+  const pedidosGlobalesDia = useMemo(() => {
+    return pedidosGlobales.flatMap((row) => {
+      const mapped = mapPedidoToDayPedido(row)
+      if (!mapped) return []
+      return [mapped]
+    })
+  }, [mapPedidoToDayPedido, pedidosGlobales])
 
   // Build lookup: clienteId → nombre
   const clienteMap = useMemo(() => {
@@ -986,33 +1077,9 @@ export default function AgendaPage(): React.JSX.Element {
       }
 
       // Add pedidos with fechaEntrega on this day
-      for (const { pedido, cliente } of pedidos) {
-        if (!pedido.fechaEntrega || pedido.fechaEntrega !== iso) continue
-        const tipoKey = pedido.tipoTrabajo as TipoTrabajo | undefined
-        const tipoLabel = tipoKey ? (TIPO_TRABAJO_LABEL[tipoKey] ?? '') : ''
-        const dims = pedido.anchoCm && pedido.altoCm ? `${pedido.anchoCm}x${pedido.altoCm}` : ''
-        const desc = [tipoLabel, dims].filter(Boolean).join(' ')
-        const estado = (pedido.estado ?? '') as EstadoPedido
-        const isAtrasada = iso < hoy && ESTADOS_EN_SEGUIMIENTO.includes(estado)
-        const saldo = saldosPorPedido?.find((s) => s.pedidoId === pedido.id)?.saldo ?? 0
-
-        events.push({
-          tipo: 'pedido',
-          id: pedido.id ?? 0,
-          numero: pedido.numero ?? '?',
-          clienteId: pedido.clienteId ?? 0,
-          cliente: cliente?.nombre ?? '',
-          clienteTelefono: cliente?.telefono ?? '',
-          estado,
-          tipoTrabajo: tipoLabel,
-          descripcion: desc || pedido.descripcion || '',
-          precioTotal: pedido.precioTotal ?? 0,
-          anchoCm: pedido.anchoCm ?? 0,
-          altoCm: pedido.altoCm ?? 0,
-          tipoEntrega: pedido.tipoEntrega ?? 'estandar',
-          isAtrasada,
-          saldoPedido: saldo
-        })
+      for (const pedido of pedidosGlobalesDia) {
+        if (pedido.fechaEntrega !== iso) continue
+        events.push(pedido)
       }
 
       return {
@@ -1026,23 +1093,42 @@ export default function AgendaPage(): React.JSX.Element {
           .length
       }
     })
-  }, [weekStart, clases, pedidos, estudiantesPorClase, hoy, saldosPorPedido])
+  }, [clases, estudiantesPorClase, pedidosGlobalesDia, weekStart])
 
   const [popupEvent, setPopupEvent] = useState<DayEvent | null>(null)
   const [filtro, setFiltro] = useState<AgendaFiltro>('todos')
+  const location = useLocation()
+  // showEntregas controla si el Card "Entregas por completar" se muestra.
+  // Por defecto está oculto (estado limpio). Se revela si el usuario activa
+  // un filtro distinto de 'todos' o si se navega con `?action=ver-semana`.
+  const [showEntregas, setShowEntregas] = useState<boolean>(() => {
+    try {
+      return new URLSearchParams(location.search).get('action') === 'ver-semana'
+    } catch {
+      return false
+    }
+  })
 
   // Derivación: aplica el filtro activo sobre cada día sin perder la
   // estructura semanal. Los contadores se recalculan para que la mini-card
   // refleje lo visible.
+  const pedidosFiltradosGlobales = useMemo(() => {
+    if (filtro === 'todos') return pedidosGlobalesDia
+    if (filtro === 'atrasadas') return pedidosGlobalesDia.filter((pedido) => pedido.isAtrasada)
+    return pedidosGlobalesDia.filter((pedido) => pedido.fechaEntrega === hoy)
+  }, [filtro, hoy, pedidosGlobalesDia])
+
   const filteredWeekDays = useMemo((): DaySummary[] => {
     if (filtro === 'todos') return weekDays
     return weekDays.map((day) => {
-      let events = day.events
+      const clasesDelDia = day.events.filter((e): e is DayClase => e.tipo === 'clase')
+      let pedidosDelDia = pedidosFiltradosGlobales.filter(
+        (pedido) => pedido.fechaEntrega === day.iso
+      )
       if (filtro === 'atrasadas') {
-        events = events.filter((e): e is DayPedido => e.tipo === 'pedido' && e.isAtrasada)
-      } else if (filtro === 'hoy' && day.iso !== hoy) {
-        events = []
+        pedidosDelDia = pedidosDelDia.filter((pedido) => pedido.isAtrasada)
       }
+      const events: DayEvent[] = [...clasesDelDia, ...pedidosDelDia]
       return {
         ...day,
         events,
@@ -1052,16 +1138,30 @@ export default function AgendaPage(): React.JSX.Element {
           .length
       }
     })
-  }, [weekDays, filtro, hoy])
+  }, [weekDays, filtro, pedidosFiltradosGlobales])
 
   const selectedDay = filteredWeekDays.find((d) => d.iso === selectedISO) ?? filteredWeekDays[0]
 
-  const totalPedidosSemana = pedidos.length
+  const totalPedidosResumen = pedidosFiltradosGlobales.length
   const totalClasesSemana = clases ? clases.filter((c) => DIA_INDEX[c.diaSemana] != null).length : 0
-  const totalAtrasadasSemana = useMemo(
-    () => weekDays.reduce((acc, d) => acc + d.atrasadaCount, 0),
-    [weekDays]
-  )
+  const totalAtrasadasSemana = useMemo(() => {
+    return pedidosGlobalesDia.filter((pedido) => pedido.isAtrasada).length
+  }, [pedidosGlobalesDia])
+
+  const pedidosPorFecha = useMemo((): PedidoFechaGroup[] => {
+    const map = new Map<string, DayPedido[]>()
+    for (const pedido of pedidosFiltradosGlobales) {
+      const list = map.get(pedido.fechaEntrega) ?? []
+      list.push(pedido)
+      map.set(pedido.fechaEntrega, list)
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([iso, pedidos]) => ({
+        iso,
+        pedidos: [...pedidos].sort((a, b) => a.numero.localeCompare(b.numero))
+      }))
+  }, [pedidosFiltradosGlobales])
 
   const loading = loadingPedidos || loadingClases
 
@@ -1070,6 +1170,52 @@ export default function AgendaPage(): React.JSX.Element {
     setWeekStart(mondayOfToday)
     setSelectedISO(hoyISO())
   }, [])
+
+  const handleFiltro = useCallback(
+    (key: AgendaFiltro) => {
+      setPopupEvent(null)
+      if (key === 'hoy') {
+        handleGoToday()
+      }
+      if (key === 'atrasadas') {
+        const primeraAtrasada = pedidosGlobalesDia
+          .filter((pedido) => pedido.isAtrasada)
+          .sort((a, b) => a.fechaEntrega.localeCompare(b.fechaEntrega))[0]
+        if (primeraAtrasada) {
+          const fecha = new Date(`${primeraAtrasada.fechaEntrega}T00:00:00`)
+          setWeekStart(getMonday(fecha))
+          setSelectedISO(primeraAtrasada.fechaEntrega)
+        }
+      }
+      setFiltro(key)
+      // Reveal entregas when the user explicitly clicks any filter chip
+      // (including 'todos'). This fixes the case where the initial state
+      // is 'limpio' and clicking 'Todos' did nothing because no state
+      // actually changed.
+      setShowEntregas(true)
+    },
+    [handleGoToday, pedidosGlobalesDia]
+  )
+
+  const handleSelectDay = useCallback(
+    (iso: string) => {
+      if (filtro === 'hoy' && iso !== hoy) return
+      setSelectedISO(iso)
+    },
+    [filtro, hoy]
+  )
+
+  const handlePrevDay = useCallback(() => {
+    const current = new Date(`${selectedISO}T12:00:00`)
+    const prev = addDays(current, -1)
+    setSelectedISO(toFechaISO(prev))
+  }, [selectedISO])
+
+  const handleNextDay = useCallback(() => {
+    const current = new Date(`${selectedISO}T12:00:00`)
+    const next = addDays(current, 1)
+    setSelectedISO(toFechaISO(next))
+  }, [selectedISO])
 
   const handlePrevWeek = useCallback(() => {
     setWeekStart((prev) => {
@@ -1088,6 +1234,21 @@ export default function AgendaPage(): React.JSX.Element {
       return newStart
     })
   }, [])
+
+  const handleClearFilters = useCallback(() => {
+    setFiltro('todos')
+    setSelectedISO(hoy)
+    setWeekStart(getMonday(new Date()))
+    setPopupEvent(null)
+    // Ensure the entregas section is hidden when clearing filters
+    setShowEntregas(false)
+    // Remove focus from any button so it doesn't look visually "selected".
+    try {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    } catch {
+      // noop in non-browser environments
+    }
+  }, [hoy])
 
   // Refetch automático: la agenda cambia durante el día (papá marca pedidos
   // como entregados desde otra vista, crea una clase, etc.). Refresca cuando
@@ -1114,9 +1275,9 @@ export default function AgendaPage(): React.JSX.Element {
 
   return (
     <OperationalBoard
-      eyebrow="Planificacion"
-      title="Agenda semanal"
-      subtitle="Entregas de pedidos y horarios de clases en la semana"
+      eyebrow="Entregas y Clases"
+      title="Agenda del día"
+      subtitle="Ve hoy y planifica la semana. Gestiona entregas y horarios en un solo lugar."
     >
       {/* Navigator + summary */}
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1129,7 +1290,7 @@ export default function AgendaPage(): React.JSX.Element {
         <div className="flex items-center gap-4 text-sm text-text-muted">
           <span className="flex items-center gap-1.5">
             <ClipboardList size={16} className="text-warning" />
-            {totalPedidosSemana} {totalPedidosSemana === 1 ? 'entrega' : 'entregas'}
+            {totalPedidosResumen} {getPedidosResumenLabel(filtro, totalPedidosResumen)}
           </span>
           <span className="flex items-center gap-1.5">
             <Palette size={16} className="text-info" />
@@ -1145,13 +1306,16 @@ export default function AgendaPage(): React.JSX.Element {
         className="flex flex-wrap items-center gap-2"
       >
         {(Object.keys(FILTRO_LABEL) as AgendaFiltro[]).map((key) => {
-          const isActive = filtro === key
+          // Visual active state: only show a chip as active when the
+          // entregas section is visible. Cuando la vista está "limpia"
+          // no queremos que "Todos" aparezca seleccionado.
+          const isActive = showEntregas && filtro === key
           const isAtrasadas = key === 'atrasadas'
           return (
             <button
               key={key}
               type="button"
-              onClick={() => setFiltro(key)}
+              onClick={() => handleFiltro(key)}
               aria-pressed={isActive}
               className={cn(
                 'inline-flex min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium',
@@ -1176,30 +1340,75 @@ export default function AgendaPage(): React.JSX.Element {
             </button>
           )
         })}
+        {filtro !== 'todos' && (
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            className={cn(
+              'inline-flex min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium',
+              'transition-colors duration-150 cursor-pointer',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+              'border-border bg-surface text-text-muted hover:bg-surface-muted hover:text-text'
+            )}
+            aria-label="Limpiar filtros"
+          >
+            ✕ Limpiar
+          </button>
+        )}
       </div>
 
       {loading ? (
         <PageLoader />
       ) : (
         <div className="space-y-6">
-          {/* Week overview row */}
-          <div
-            className="grid grid-cols-7 gap-1 sm:gap-2"
-            role="listbox"
-            aria-label="Dias de la semana"
-          >
-            {filteredWeekDays.map((day) => (
-              <WeekOverviewCell
-                key={day.diaKey}
-                day={day}
-                isToday={day.iso === hoy}
-                isSelected={day.iso === selectedISO}
-                onSelect={() => setSelectedISO(day.iso)}
-              />
-            ))}
+          {/* Day detail panel — PRIMERO, acción inmediata */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+            <h2 className="text-lg font-bold text-text">Hoy</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handlePrevDay}
+                aria-label="Día anterior"
+                title="Día anterior"
+              >
+                <ChevronLeft size={18} />
+              </Button>
+              <span className="min-w-32 text-center text-sm font-semibold text-text-muted">
+                {formatFechaCorta(selectedISO)}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleNextDay}
+                aria-label="Día siguiente"
+                title="Día siguiente"
+              >
+                <ChevronRight size={18} />
+              </Button>
+            </div>
           </div>
 
-          {/* Day detail panel */}
+          {/* Week overview — calendario interactivo */}
+          <div className="pt-2">
+            <div
+              className="grid grid-cols-7 gap-1 sm:gap-2"
+              role="listbox"
+              aria-label="Dias de la semana"
+            >
+              {filteredWeekDays.map((day) => (
+                <WeekOverviewCell
+                  key={day.diaKey}
+                  day={day}
+                  isToday={day.iso === hoy}
+                  isSelected={day.iso === selectedISO}
+                  disabled={filtro === 'hoy' && day.iso !== hoy}
+                  onSelect={() => handleSelectDay(day.iso)}
+                />
+              ))}
+            </div>
+          </div>
+
           <DayDetailPanel
             day={selectedDay}
             isToday={selectedDay.iso === hoy}
@@ -1211,6 +1420,132 @@ export default function AgendaPage(): React.JSX.Element {
             })}
             onEventClick={(event) => setPopupEvent(event)}
           />
+
+          {/* Entregas por fecha */}
+          {showEntregas && (
+            <Card className="animate-scale-pop space-y-4 border-accent/20 bg-linear-to-br from-surface via-surface to-accent/5 p-5 shadow-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
+                    <ClipboardList size={22} className="text-warning-strong" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-text">Entregas para completar</h2>
+                    <p className="mt-0.5 text-sm text-text-muted">
+                      {filtro === 'todos'
+                        ? 'Pedidos activos agrupados por fecha de entrega.'
+                        : filtro === 'atrasadas'
+                          ? 'Pedidos vencidos en seguimiento. ⚠️ Requieren acción inmediata.'
+                          : 'Entregas programadas para hoy.'}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    'inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-bold tabular-nums',
+                    filtro === 'atrasadas' && totalAtrasadasSemana > 0
+                      ? 'bg-error text-white'
+                      : 'bg-accent text-white'
+                  )}
+                >
+                  {pedidosFiltradosGlobales.length}
+                </span>
+              </div>
+              {pedidosPorFecha.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted/40 px-4 py-8 text-center">
+                  <ClipboardList size={32} className="mb-3 text-text-muted opacity-40" />
+                  <p className="text-sm font-medium text-text-muted">
+                    {getPedidosPorFechaEmptyMessage(filtro)}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pedidosPorFecha.map((grupo) => (
+                    <div key={grupo.iso} className="space-y-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedISO(grupo.iso)
+                          setWeekStart(getMonday(new Date(`${grupo.iso}T00:00:00`)))
+                        }}
+                        className={cn(
+                          'flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-left transition-colors',
+                          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+                          grupo.iso < hoy && grupo.pedidos.some((p) => p.isAtrasada)
+                            ? 'hover:bg-error/8 bg-error-bg/30'
+                            : 'hover:bg-accent/8 bg-accent/3'
+                        )}
+                      >
+                        <div>
+                          <span className="text-sm font-bold text-text">
+                            {formatFechaLarga(grupo.iso)}
+                          </span>
+                          {grupo.iso < hoy && grupo.pedidos.some((p) => p.isAtrasada) && (
+                            <span className="ml-2 inline-block text-xs font-semibold text-error">
+                              ⚠️ Atrasada
+                            </span>
+                          )}
+                        </div>
+                        <span className="rounded-full bg-accent/15 px-2.5 py-0.5 text-xs font-bold tabular-nums text-accent-strong">
+                          {grupo.pedidos.length}{' '}
+                          {grupo.pedidos.length === 1 ? 'entrega' : 'entregas'}
+                        </span>
+                      </button>
+                      <div className="space-y-2">
+                        {grupo.pedidos.map((pedido) => {
+                          const saldoDisplay =
+                            pedido.saldoPedido > 0
+                              ? `${formatCOP(pedido.saldoPedido)} pendiente`
+                              : 'Cobrado'
+                          return (
+                            <button
+                              key={`${grupo.iso}-${pedido.id}`}
+                              type="button"
+                              onClick={() => setPopupEvent(pedido)}
+                              className={cn(
+                                'group relative flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border px-4 py-3.5 text-left transition-all duration-150',
+                                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+                                pedido.isAtrasada
+                                  ? 'border-error/40 bg-error-bg hover:border-error/60 hover:bg-error-bg/80 shadow-1'
+                                  : 'border-border bg-surface hover:border-accent/30 hover:bg-surface-muted hover:shadow-1'
+                              )}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-bold text-text">
+                                  {pedido.numero} · {pedido.cliente}
+                                </p>
+                                <p className="mt-0.5 truncate text-xs text-text-muted">
+                                  {pedido.descripcion}
+                                </p>
+                                <p
+                                  className={cn(
+                                    'mt-1 text-xs font-semibold tabular-nums',
+                                    pedido.saldoPedido > 0 ? 'text-warning-strong' : 'text-success'
+                                  )}
+                                >
+                                  {saldoDisplay}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 flex-col items-end gap-2">
+                                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                  {pedido.isAtrasada && (
+                                    <Badge color="error" size="sm">
+                                      Atrasada
+                                    </Badge>
+                                  )}
+                                  <EstadoPedidoBadge estado={pedido.estado as EstadoPedido} />
+                                </div>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
         </div>
       )}
 

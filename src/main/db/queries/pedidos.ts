@@ -50,6 +50,7 @@ export { TRANSICIONES_VALIDAS }
 const ESTADOS_TERMINALES: EstadoPedido[] = ['listo', 'entregado', 'cancelado']
 const ESTADOS_NO_FACTURABLES: EstadoPedido[] = ['cotizado', 'cancelado']
 const ESTADOS_ACTIVOS_MATRIZ: EstadoPedido[] = ['confirmado', 'en_proceso', 'listo']
+const ESTADOS_ACTIVOS_AGENDA: EstadoPedido[] = ['confirmado', 'en_proceso', 'listo', 'sin_reclamar']
 const DAY_MS = 24 * 60 * 60 * 1000
 
 // Días tras los cuales un pedido entregado se considera archivado y
@@ -666,6 +667,21 @@ export function pedidosPorRangoFecha(db: DB, desde: string, hasta: string) {
       )
     )
     .orderBy(pedidos.fechaEntrega)
+    .all()
+}
+
+export function pedidosAgenda(db: DB) {
+  return db
+    .select()
+    .from(pedidos)
+    .innerJoin(clientes, eq(clientes.id, pedidos.clienteId))
+    .where(
+      and(
+        isNotNull(pedidos.fechaEntrega),
+        inArray(pedidos.estado, ESTADOS_ACTIVOS_AGENDA)
+      )
+    )
+    .orderBy(pedidos.fechaEntrega, pedidos.numero)
     .all()
 }
 

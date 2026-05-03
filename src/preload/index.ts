@@ -193,7 +193,8 @@ const api = {
       sinReclamar: (dias?: number) => invoke('pedidos:alertas:sinReclamar', dias),
       listosSinRecoger: (dias?: number) => invoke('pedidos:alertas:listosSinRecoger', dias)
     },
-    porRangoFecha: (desde: string, hasta: string) => invoke('pedidos:porRangoFecha', desde, hasta)
+    porRangoFecha: (desde: string, hasta: string) => invoke('pedidos:porRangoFecha', desde, hasta),
+    agenda: () => invoke('pedidos:agenda')
   },
   facturas: {
     crear: (data: NuevaFactura) => invoke<IpcResult<Factura>>('facturas:crear', data),

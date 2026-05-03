@@ -95,6 +95,7 @@ import {
   obtenerPedidoPorNumero,
   obtenerSaldosPorPedido,
   pedidosAtrasados,
+  pedidosAgenda,
   pedidosEntregaProxima,
   pedidosPorRangoFecha,
   pedidosListosSinRecoger,
@@ -409,6 +410,7 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('pedidos:porRangoFecha', (_e, desde: string, hasta: string) =>
     wrap(pedidosPorRangoFecha)(db, desde, hasta)
   )
+  ipcMain.handle('pedidos:agenda', () => wrap(pedidosAgenda)(db))
   // Saldos por pedido (LEFT JOIN facturas+pagos en una sola query)
   ipcMain.handle('pedidos:saldos', () => wrap(obtenerSaldosPorPedido)(db))
 

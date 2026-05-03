@@ -14,10 +14,67 @@ import {
   crearPedidoConfirmadoConFactura,
   crearPedidoDesdeCotizacion,
   obtenerSaldosPorPedido,
+  pedidosAgenda,
   pedidosSinAbonoConSaldo,
   pedidosSinReclamar,
   reclasificarPedidos
 } from './pedidos'
+
+describe.runIf(nativeAbiAvailable)(
+  'pedidosAgenda (agenda global de pedidos activos)',
+  () => {
+    let db: DB
+    let clienteId: number
+
+    beforeEach(() => {
+      db = createTestDb().db
+      const cliente = db.insert(clientes).values({ nombre: 'Cliente Agenda' }).returning().get()
+      clienteId = cliente.id
+    })
+
+    function insertPedido(args: {
+      numero: string
+      estado: (typeof pedidos.$inferInsert)['estado']
+      fechaEntrega: string | null
+    }): void {
+      db.insert(pedidos)
+        .values({
+          numero: args.numero,
+          clienteId,
+          tipoTrabajo: 'enmarcacion_estandar',
+          precioTotal: 60000,
+          estado: args.estado,
+          fechaIngreso: '2026-04-01',
+          fechaEntrega: args.fechaEntrega
+        })
+        .run()
+    }
+
+    it('incluye solo estados activos de agenda y excluye terminales/cotizado', () => {
+      insertPedido({ numero: 'P-0001', estado: 'confirmado', fechaEntrega: '2026-04-10' })
+      insertPedido({ numero: 'P-0002', estado: 'en_proceso', fechaEntrega: '2026-04-11' })
+      insertPedido({ numero: 'P-0003', estado: 'listo', fechaEntrega: '2026-04-12' })
+      insertPedido({ numero: 'P-0004', estado: 'sin_reclamar', fechaEntrega: '2026-04-13' })
+      insertPedido({ numero: 'P-0005', estado: 'cotizado', fechaEntrega: '2026-04-14' })
+      insertPedido({ numero: 'P-0006', estado: 'entregado', fechaEntrega: '2026-04-15' })
+      insertPedido({ numero: 'P-0007', estado: 'cancelado', fechaEntrega: '2026-04-16' })
+      insertPedido({ numero: 'P-0008', estado: 'confirmado', fechaEntrega: null })
+
+      const rows = pedidosAgenda(db)
+      expect(rows).toHaveLength(4)
+      expect(rows.map((r) => r.pedidos.numero)).toEqual(['P-0001', 'P-0002', 'P-0003', 'P-0004'])
+    })
+
+    it('ordena por fechaEntrega asc y numero asc como desempate', () => {
+      insertPedido({ numero: 'P-0009', estado: 'confirmado', fechaEntrega: '2026-04-20' })
+      insertPedido({ numero: 'P-0002', estado: 'confirmado', fechaEntrega: '2026-04-19' })
+      insertPedido({ numero: 'P-0001', estado: 'confirmado', fechaEntrega: '2026-04-19' })
+
+      const rows = pedidosAgenda(db)
+      expect(rows.map((r) => r.pedidos.numero)).toEqual(['P-0001', 'P-0002', 'P-0009'])
+    })
+  }
+)
 
 describe.runIf(nativeAbiAvailable)(
   'pedidosSinReclamar (Fase 2 §B — reclasificación automática)',

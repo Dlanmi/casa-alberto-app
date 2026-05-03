@@ -468,6 +468,15 @@ export default function OnboardingPage(): React.JSX.Element {
               <p className="text-sm text-text-muted mb-3 max-w-sm mx-auto">
                 Ya tienes la base mínima para trabajar. Estos son los siguientes pasos más útiles:
               </p>
+              <div className="mb-4">
+                <GuidanceHint
+                  tone="accent"
+                  title="Esta semana"
+                  message="Revisa el calendario y las entregas programadas de esta semana."
+                  actionLabel="Ver ahora"
+                  onAction={() => navigate('/agenda?action=ver-semana')}
+                />
+              </div>
               <div className="text-left space-y-2 mb-8 max-w-sm mx-auto">
                 {[
                   'Crear tu primera cotización con ayuda paso a paso.',
