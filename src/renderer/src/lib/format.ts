@@ -20,6 +20,44 @@ export function formatNumber(value: number | null | undefined): string {
   return new Intl.NumberFormat('es-CO').format(value)
 }
 
+/**
+ * Formato compacto de pesos colombianos para charts: $120k, $2,4M, $1,2B.
+ * El símbolo `$` siempre va adelante. Usa coma como separador decimal
+ * (convención es-CO). Negativos llevan signo: -$50k.
+ *
+ * Reglas:
+ *   - |value| < 1_000        → `$1.234` (3 dígitos exactos, sin sufijo)
+ *   - 1_000 ≤ |value| < 1M   → `$120k` o `$1,2k` (1 decimal si no es múltiplo de 100)
+ *   - 1M ≤ |value| < 1B      → `$2,4M`
+ *   - |value| ≥ 1B           → `$1,2B`
+ *
+ * Diseñado para el eje Y de los charts donde el espacio es limitado y el
+ * dueño solo necesita la magnitud, no la precisión exacta.
+ */
+export function formatCOPCorto(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '$0'
+  const abs = Math.abs(value)
+  // `-0 < 0` es false en JS — un valor que termine como -0 (ej. 0 * -1)
+  // mostraría "$0" sin signo. Eso es deseado para no mostrar "-$0".
+  const signo = value < 0 && abs > 0 ? '-' : ''
+  if (abs < 1000) {
+    // Sin sufijo — usamos NumberFormat para puntos como separador de miles.
+    return `${signo}$${new Intl.NumberFormat('es-CO').format(Math.round(abs))}`
+  }
+  const formatear = (n: number, sufijo: string): string => {
+    // 1 decimal solo si no es múltiplo redondo de 100 en el valor "abreviado".
+    const redondeado = Math.round(n * 10) / 10
+    const str =
+      redondeado === Math.trunc(redondeado)
+        ? String(Math.trunc(redondeado))
+        : redondeado.toFixed(1).replace('.', ',')
+    return `${signo}$${str}${sufijo}`
+  }
+  if (abs < 1_000_000) return formatear(abs / 1000, 'k')
+  if (abs < 1_000_000_000) return formatear(abs / 1_000_000, 'M')
+  return formatear(abs / 1_000_000_000, 'B')
+}
+
 // ---- Dates (Colombian format) ----
 
 const dateLong = new Intl.DateTimeFormat('es-CO', {
@@ -83,6 +121,53 @@ export function hoyISO(): string {
 export function mesActualISO(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+// Etiqueta corta del mes para charts: 'Ene', 'Feb', 'Mar'…
+// Acepta 'YYYY-MM' o 'YYYY-MM-DD'.
+const MESES_CORTOS = [
+  'Ene',
+  'Feb',
+  'Mar',
+  'Abr',
+  'May',
+  'Jun',
+  'Jul',
+  'Ago',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dic'
+]
+
+/**
+ * Devuelve la etiqueta corta del mes en es-CO. Si `incluirAnio` es true o
+ * el mes es enero (cambio de año), agrega el año en formato corto: "Ene 26".
+ *
+ * Pensado para etiquetas del eje X en charts mes-vs-mes. La consistencia
+ * "Ene" muestra el año porque cruzamos calendarios; "Feb"…"Dic" no, para
+ * evitar saturar visual.
+ *
+ * Con input mal formado (ej. `'2026-1'` sin pad o `'2026-13'` mes inválido)
+ * devuelve `'—'` y loguea warning. Antes retornaba el string crudo, lo que
+ * mostraba basura en el chart cuando el upstream pasaba algo malformado.
+ */
+export function mesCorto(iso: string, incluirAnio = false): string {
+  // Mes obligatorio en 2 dígitos y dentro de 01..12. Día opcional.
+  const match = iso.match(/^(\d{4})-(0[1-9]|1[0-2])(?:-\d{2})?$/)
+  if (!match) {
+    if (typeof console !== 'undefined') {
+      console.warn(`mesCorto: formato inválido "${iso}" — esperaba YYYY-MM[-DD]`)
+    }
+    return '—'
+  }
+  const anio = Number(match[1])
+  const mes = Number(match[2])
+  const label = MESES_CORTOS[mes - 1]!
+  if (incluirAnio || mes === 1) {
+    return `${label} ${String(anio).slice(2)}`
+  }
+  return label
 }
 
 // Convierte una fecha a ISO "YYYY-MM-DD" tomando la fecha LOCAL (no UTC)

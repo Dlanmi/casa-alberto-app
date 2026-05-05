@@ -139,11 +139,16 @@ import {
   venderKit
 } from '../db/queries/clases'
 import {
+  ingresosPorTipoTrabajo,
   listarMovimientos,
   registrarMovimientoManual,
   reporteMargenPorTipo,
   resumenComercialMensual,
-  resumenMensual
+  resumenMensual,
+  serieDiariaMensual,
+  serieMensual,
+  topClientes,
+  topMarcosVendidos
 } from '../db/queries/finanzas'
 import {
   alertasStockBajo,
@@ -531,6 +536,26 @@ export function registerIpcHandlers(db: DB): void {
   )
   ipcMain.handle('finanzas:reporteMargenPorTipo', (_e, mes: string) =>
     wrap(reporteMargenPorTipo)(db, mes)
+  )
+  // Charts: series temporales y top-N
+  ipcMain.handle('finanzas:serieMensual', (_e, mesesAtras?: number) =>
+    wrap(serieMensual)(db, mesesAtras)
+  )
+  ipcMain.handle('finanzas:serieDiariaMensual', (_e, mes: string) =>
+    wrap(serieDiariaMensual)(db, mes)
+  )
+  ipcMain.handle(
+    'finanzas:topClientes',
+    (_e, opts: { desde: string; hasta: string; limit?: number }) => wrap(topClientes)(db, opts)
+  )
+  ipcMain.handle(
+    'finanzas:topMarcosVendidos',
+    (_e, opts: { desde: string; hasta: string; limit?: number }) =>
+      wrap(topMarcosVendidos)(db, opts)
+  )
+  ipcMain.handle(
+    'finanzas:ingresosPorTipoTrabajo',
+    (_e, opts: { desde: string; hasta: string }) => wrap(ingresosPorTipoTrabajo)(db, opts)
   )
 
   // inventario

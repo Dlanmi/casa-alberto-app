@@ -2,9 +2,26 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
-import { clientes, facturas, pedidos } from '../schema'
+import {
+  clientes,
+  contratos,
+  cuentasCobro,
+  facturas,
+  pedidoItems,
+  pedidos,
+  ventasKits
+} from '../schema'
 import { registrarPago } from './facturas'
-import { registrarMovimientoManual, reporteMargenPorTipo, resumenComercialMensual } from './finanzas'
+import {
+  ingresosPorTipoTrabajo,
+  registrarMovimientoManual,
+  reporteMargenPorTipo,
+  resumenComercialMensual,
+  serieDiariaMensual,
+  serieMensual,
+  topClientes,
+  topMarcosVendidos
+} from './finanzas'
 
 describe.runIf(nativeAbiAvailable)('reporteMargenPorTipo', () => {
   let db: DB
@@ -122,5 +139,358 @@ describe.runIf(nativeAbiAvailable)('reporteMargenPorTipo', () => {
     expect(resumen.descuentos).toBe(0)
     expect(resumen.ventasNetasPedidos).toBe(180000)
     expect(resumen.pedidosTotal).toBeGreaterThan(0)
+  })
+})
+
+// ===========================================================================
+// CHARTS — series temporales y top-N
+// ===========================================================================
+
+describe.runIf(nativeAbiAvailable)('serieMensual — chart Mes vs Mes', () => {
+  let db: DB
+
+  beforeEach(() => {
+    db = createTestDb().db
+    // Sembramos movimientos en distintos meses para cubrir el rango de
+    // los últimos 6 meses contando desde "hoy" en tests. Como la función
+    // usa `new Date()` internamente, este test es time-dependent — pero
+    // verificamos relaciones (sums, balance) en lugar de meses absolutos.
+    const hoy = new Date()
+    const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
+    registrarMovimientoManual(db, {
+      tipo: 'ingreso',
+      categoria: 'enmarcacion',
+      monto: 100000,
+      fecha: `${mesActual}-15`
+    })
+    registrarMovimientoManual(db, {
+      tipo: 'gasto',
+      categoria: 'materiales',
+      monto: 30000,
+      fecha: `${mesActual}-15`
+    })
+  })
+
+  it('devuelve N meses completos incluso sin movimientos en algunos', () => {
+    const serie = serieMensual(db, 6)
+    expect(serie).toHaveLength(6)
+    // Cada fila tiene el shape esperado
+    for (const fila of serie) {
+      expect(fila).toHaveProperty('mes')
+      expect(fila).toHaveProperty('ingresos')
+      expect(fila).toHaveProperty('gastos')
+      expect(fila.balance).toBe(fila.ingresos - fila.gastos)
+    }
+    // El último mes (actual) tiene los datos sembrados
+    const ultimo = serie[serie.length - 1]!
+    expect(ultimo.ingresos).toBe(100000)
+    expect(ultimo.gastos).toBe(30000)
+    expect(ultimo.balance).toBe(70000)
+  })
+
+  it('respeta el límite mínimo de 1 mes', () => {
+    const serie = serieMensual(db, 0)
+    expect(serie).toHaveLength(1)
+  })
+
+  it('orden ascendente por mes', () => {
+    const serie = serieMensual(db, 6)
+    for (let i = 1; i < serie.length; i++) {
+      expect(serie[i]!.mes >= serie[i - 1]!.mes).toBe(true)
+    }
+  })
+})
+
+describe.runIf(nativeAbiAvailable)('serieDiariaMensual — heatmap calendario', () => {
+  let db: DB
+
+  beforeEach(() => {
+    db = createTestDb().db
+    registrarMovimientoManual(db, {
+      tipo: 'ingreso',
+      categoria: 'enmarcacion',
+      monto: 50000,
+      fecha: '2026-04-15'
+    })
+    registrarMovimientoManual(db, {
+      tipo: 'ingreso',
+      categoria: 'enmarcacion',
+      monto: 25000,
+      fecha: '2026-04-15'
+    })
+    registrarMovimientoManual(db, {
+      tipo: 'gasto',
+      categoria: 'materiales',
+      monto: 10000,
+      fecha: '2026-04-20'
+    })
+  })
+
+  it('devuelve los 30 días completos de abril', () => {
+    const serie = serieDiariaMensual(db, '2026-04')
+    expect(serie).toHaveLength(30)
+    expect(serie[0]!.fecha).toBe('2026-04-01')
+    expect(serie[29]!.fecha).toBe('2026-04-30')
+  })
+
+  it('agrega ingresos del mismo día y cuenta transacciones', () => {
+    const serie = serieDiariaMensual(db, '2026-04')
+    const dia15 = serie.find((f) => f.fecha === '2026-04-15')!
+    expect(dia15.ingresos).toBe(75000)
+    expect(dia15.transacciones).toBe(2)
+    const dia20 = serie.find((f) => f.fecha === '2026-04-20')!
+    expect(dia20.gastos).toBe(10000)
+    expect(dia20.transacciones).toBe(1)
+  })
+
+  it('respeta meses con menos de 31 días — febrero', () => {
+    const serie2024 = serieDiariaMensual(db, '2026-02')
+    expect(serie2024).toHaveLength(28)
+  })
+})
+
+describe.runIf(nativeAbiAvailable)('topClientes', () => {
+  let db: DB
+
+  beforeEach(() => {
+    db = createTestDb().db
+    const ana = db.insert(clientes).values({ nombre: 'Ana Pérez' }).returning().get()
+    const juan = db.insert(clientes).values({ nombre: 'Juan Gómez' }).returning().get()
+    const pedro = db.insert(clientes).values({ nombre: 'Pedro Ruiz' }).returning().get()
+    function crearFactura(
+      numero: string,
+      clienteId: number,
+      total: number,
+      fecha: string,
+      estado: 'pendiente' | 'anulada' = 'pendiente'
+    ): void {
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: `P-${numero}`,
+          clienteId,
+          tipoTrabajo: 'enmarcacion_estandar',
+          precioTotal: total,
+          estado: 'confirmado',
+          fechaIngreso: fecha
+        })
+        .returning()
+        .get()
+      db.insert(facturas)
+        .values({
+          numero: `F-${numero}`,
+          pedidoId: pedido.id,
+          clienteId,
+          fecha,
+          total,
+          estado
+        })
+        .run()
+    }
+    crearFactura('0001', ana.id, 200000, '2026-04-05')
+    crearFactura('0002', ana.id, 100000, '2026-04-15')
+    crearFactura('0003', juan.id, 150000, '2026-04-10')
+    crearFactura('0004', pedro.id, 50000, '2026-04-20')
+    crearFactura('0005', pedro.id, 999999, '2026-04-25', 'anulada') // anulada se excluye
+  })
+
+  it('ordena por total facturado desc y respeta el limit', () => {
+    const top = topClientes(db, { desde: '2026-04-01', hasta: '2026-04-30', limit: 2 })
+    expect(top).toHaveLength(2)
+    expect(top[0]!.nombre).toBe('Ana Pérez')
+    expect(top[0]!.total).toBe(300000)
+    expect(top[0]!.facturas).toBe(2)
+    expect(top[1]!.nombre).toBe('Juan Gómez')
+  })
+
+  it('excluye facturas anuladas', () => {
+    const top = topClientes(db, { desde: '2026-04-01', hasta: '2026-04-30', limit: 5 })
+    const pedro = top.find((t) => t.nombre === 'Pedro Ruiz')!
+    expect(pedro.total).toBe(50000)
+  })
+
+  it('devuelve [] cuando no hay facturas en el rango', () => {
+    const top = topClientes(db, { desde: '2025-01-01', hasta: '2025-01-31', limit: 5 })
+    expect(top).toEqual([])
+  })
+})
+
+describe.runIf(nativeAbiAvailable)('topMarcosVendidos', () => {
+  let db: DB
+
+  beforeEach(() => {
+    db = createTestDb().db
+    const cliente = db.insert(clientes).values({ nombre: 'Test' }).returning().get()
+    function crearPedidoConMarco(
+      numero: string,
+      referencia: string | null,
+      precio: number,
+      fecha: string,
+      estado: 'confirmado' | 'cancelado' = 'confirmado'
+    ): void {
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: `P-${numero}`,
+          clienteId: cliente.id,
+          tipoTrabajo: 'enmarcacion_estandar',
+          precioTotal: precio,
+          estado,
+          fechaIngreso: fecha
+        })
+        .returning()
+        .get()
+      db.insert(pedidoItems)
+        .values({
+          pedidoId: pedido.id,
+          tipoItem: 'marco',
+          referencia,
+          cantidad: 1,
+          subtotal: precio
+        })
+        .run()
+    }
+    crearPedidoConMarco('0001', 'M-2003', 100000, '2026-04-01')
+    crearPedidoConMarco('0002', 'M-2003', 100000, '2026-04-05')
+    crearPedidoConMarco('0003', 'M-2003', 100000, '2026-04-10')
+    crearPedidoConMarco('0004', 'M-1500', 150000, '2026-04-12')
+    crearPedidoConMarco('0005', null, 80000, '2026-04-20') // sin referencia
+    crearPedidoConMarco('0006', 'M-2003', 999999, '2026-04-25', 'cancelado') // excluido
+  })
+
+  it('agrupa por referencia y ordena por cantidad desc', () => {
+    const top = topMarcosVendidos(db, { desde: '2026-04-01', hasta: '2026-04-30', limit: 5 })
+    expect(top[0]!.referencia).toBe('M-2003')
+    expect(top[0]!.cantidad).toBe(3)
+    expect(top[0]!.total).toBe(300000)
+  })
+
+  it('agrupa NULL/empty bajo "Sin referencia"', () => {
+    const top = topMarcosVendidos(db, { desde: '2026-04-01', hasta: '2026-04-30', limit: 5 })
+    const sinRef = top.find((t) => t.referencia === 'Sin referencia')!
+    expect(sinRef).toBeDefined()
+    expect(sinRef.cantidad).toBe(1)
+  })
+
+  it('excluye pedidos cancelados', () => {
+    const top = topMarcosVendidos(db, { desde: '2026-04-01', hasta: '2026-04-30', limit: 5 })
+    const m2003 = top.find((t) => t.referencia === 'M-2003')!
+    expect(m2003.cantidad).toBe(3) // no 4
+  })
+
+  it('respeta el limit', () => {
+    const top = topMarcosVendidos(db, { desde: '2026-04-01', hasta: '2026-04-30', limit: 1 })
+    expect(top).toHaveLength(1)
+  })
+})
+
+describe.runIf(nativeAbiAvailable)('ingresosPorTipoTrabajo — donut', () => {
+  let db: DB
+
+  beforeEach(() => {
+    db = createTestDb().db
+    const cliente = db.insert(clientes).values({ nombre: 'Test' }).returning().get()
+    // 2 pedidos enmarcación + 1 restauración
+    function crearPedidoFactura(
+      tipo: 'enmarcacion_estandar' | 'restauracion',
+      numero: string,
+      total: number
+    ): void {
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: `P-${numero}`,
+          clienteId: cliente.id,
+          tipoTrabajo: tipo,
+          precioTotal: total,
+          estado: 'confirmado',
+          fechaIngreso: '2026-04-10'
+        })
+        .returning()
+        .get()
+      db.insert(facturas)
+        .values({
+          numero: `F-${numero}`,
+          pedidoId: pedido.id,
+          clienteId: cliente.id,
+          fecha: '2026-04-10',
+          total,
+          estado: 'pendiente'
+        })
+        .run()
+    }
+    crearPedidoFactura('enmarcacion_estandar', '0001', 200000)
+    crearPedidoFactura('enmarcacion_estandar', '0002', 100000)
+    crearPedidoFactura('restauracion', '0003', 80000)
+  })
+
+  it('agrupa pedidos por tipo de trabajo', () => {
+    const filas = ingresosPorTipoTrabajo(db, { desde: '2026-04-01', hasta: '2026-04-30' })
+    const enm = filas.find((f) => f.categoria === 'enmarcacion_estandar')!
+    expect(enm.total).toBe(300000)
+    expect(enm.cantidad).toBe(2)
+    const rest = filas.find((f) => f.categoria === 'restauracion')!
+    expect(rest.total).toBe(80000)
+  })
+
+  it('ordena por total desc', () => {
+    const filas = ingresosPorTipoTrabajo(db, { desde: '2026-04-01', hasta: '2026-04-30' })
+    for (let i = 1; i < filas.length; i++) {
+      expect(filas[i - 1]!.total >= filas[i]!.total).toBe(true)
+    }
+  })
+
+  it('NO incluye categorías sintéticas con total 0', () => {
+    const dbVacio = createTestDb().db
+    const filas = ingresosPorTipoTrabajo(dbVacio, {
+      desde: '2026-04-01',
+      hasta: '2026-04-30'
+    })
+    expect(filas.every((f) => f.total > 0)).toBe(true)
+  })
+
+  it('incluye contratos cuando hay cuentas de cobro pagadas en el rango', () => {
+    const cliente = db.insert(clientes).values({ nombre: 'Empresa' }).returning().get()
+    const contrato = db
+      .insert(contratos)
+      .values({
+        numero: 'C-0001',
+        clienteId: cliente.id,
+        total: 500000,
+        fecha: '2026-04-01',
+        estado: 'aprobada'
+      })
+      .returning()
+      .get()
+    db.insert(cuentasCobro)
+      .values({
+        numero: 'CC-0001',
+        contratoId: contrato.id,
+        total: 500000,
+        retencion: 0,
+        totalNeto: 500000,
+        estado: 'pagada',
+        fecha: '2026-04-05'
+      })
+      .run()
+    const filas = ingresosPorTipoTrabajo(db, { desde: '2026-04-01', hasta: '2026-04-30' })
+    const contratosFila = filas.find((f) => f.categoria === 'contratos')!
+    expect(contratosFila).toBeDefined()
+    expect(contratosFila.total).toBe(500000)
+  })
+
+  it('incluye kits cuando hay ventas en el rango', () => {
+    const cliente = db.insert(clientes).values({ nombre: 'Visitante' }).returning().get()
+    db.insert(ventasKits)
+      .values({
+        clienteId: cliente.id,
+        precio: 15000,
+        fecha: '2026-04-08'
+      })
+      .run()
+    const filas = ingresosPorTipoTrabajo(db, { desde: '2026-04-01', hasta: '2026-04-30' })
+    const kitsFila = filas.find((f) => f.categoria === 'kits')!
+    expect(kitsFila).toBeDefined()
+    expect(kitsFila.total).toBe(15000)
   })
 })

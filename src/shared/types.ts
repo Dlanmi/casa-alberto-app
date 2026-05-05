@@ -180,6 +180,54 @@ export type ConfiguracionSetPayload = {
   descripcion?: string
 }
 
+// ---------------------------------------------------------------------------
+// Charts de finanzas — shapes compartidos entre main y renderer.
+// Mantener sincronizado con `src/main/db/queries/finanzas.ts`.
+// ---------------------------------------------------------------------------
+
+export type SerieMensualFila = {
+  /** 'YYYY-MM' */
+  mes: string
+  ingresos: number
+  gastos: number
+  balance: number
+}
+
+export type SerieDiariaFila = {
+  /** 'YYYY-MM-DD' */
+  fecha: string
+  ingresos: number
+  gastos: number
+  transacciones: number
+}
+
+export type TopClienteFila = {
+  clienteId: number
+  nombre: string
+  total: number
+  facturas: number
+}
+
+export type TopMarcoFila = {
+  /** Referencia tal como la registró el cotizador. 'Sin referencia' agrupa
+   *  los items con referencia null o vacía. */
+  referencia: string
+  cantidad: number
+  total: number
+}
+
+export type IngresoPorTipoFila = {
+  /** TipoTrabajo del esquema o categoría sintética: 'clases', 'kits', 'contratos'. */
+  categoria: TipoTrabajo | 'clases' | 'kits' | 'contratos'
+  total: number
+  cantidad: number
+}
+
+export type RangoFechas = {
+  desde: string
+  hasta: string
+}
+
 export type CotizadorInputArea = {
   anchoCm: number
   altoCm: number

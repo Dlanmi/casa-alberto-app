@@ -32,7 +32,12 @@ import type {
   PedidoSinAbonoConSaldo,
   PrecioVidrio,
   ResultadoCotizacion,
-  StatsGenerales
+  SerieDiariaFila,
+  SerieMensualFila,
+  StatsGenerales,
+  TopClienteFila,
+  TopMarcoFila,
+  IngresoPorTipoFila
 } from '@shared/types'
 
 const invoke = <T>(channel: string, ...args: unknown[]): Promise<T> =>
@@ -266,7 +271,19 @@ const api = {
     registrarManual: (data: unknown) => invoke('finanzas:registrarManual', data),
     resumenMensual: (mes: string) => invoke('finanzas:resumenMensual', mes),
     resumenComercialMensual: (mes: string) => invoke('finanzas:resumenComercialMensual', mes),
-    reporteMargenPorTipo: (mes: string) => invoke('finanzas:reporteMargenPorTipo', mes)
+    reporteMargenPorTipo: (mes: string) => invoke('finanzas:reporteMargenPorTipo', mes),
+    // Charts: tipos explícitos para que el renderer obtenga inferencia
+    // sin cast manual `as IpcResult<T>` en cada llamada.
+    serieMensual: (mesesAtras?: number) =>
+      invoke<IpcResult<SerieMensualFila[]>>('finanzas:serieMensual', mesesAtras),
+    serieDiariaMensual: (mes: string) =>
+      invoke<IpcResult<SerieDiariaFila[]>>('finanzas:serieDiariaMensual', mes),
+    topClientes: (opts: { desde: string; hasta: string; limit?: number }) =>
+      invoke<IpcResult<TopClienteFila[]>>('finanzas:topClientes', opts),
+    topMarcosVendidos: (opts: { desde: string; hasta: string; limit?: number }) =>
+      invoke<IpcResult<TopMarcoFila[]>>('finanzas:topMarcosVendidos', opts),
+    ingresosPorTipoTrabajo: (opts: { desde: string; hasta: string }) =>
+      invoke<IpcResult<IngresoPorTipoFila[]>>('finanzas:ingresosPorTipoTrabajo', opts)
   },
   inventario: {
     listar: (soloActivos?: boolean) => invoke('inventario:listar', soloActivos),

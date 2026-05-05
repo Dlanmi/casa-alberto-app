@@ -28,6 +28,11 @@ import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { MetricCard, OperationalBoard, PageSection } from '@renderer/components/layout/page-frame'
 import { CategoryBreakdown } from './category-breakdown'
+import { MesVsMesChart } from '@renderer/components/charts/mes-vs-mes-chart'
+import { TopClientesChart } from '@renderer/components/charts/top-clientes-chart'
+import { TopMarcosChart } from '@renderer/components/charts/top-marcos-chart'
+import { TipoTrabajoDonut } from '@renderer/components/charts/tipo-trabajo-donut'
+import { HeatmapMensual } from '@renderer/components/charts/heatmap-mensual'
 import { CATEGORIA_FIN_ICON, TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
 import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { EMOJI_CATEGORIA_FINANZAS } from '@renderer/lib/emojis'
@@ -353,6 +358,27 @@ export default function FinanzasPage(): React.JSX.Element {
           </div>
         </PageSection>
       )}
+
+      <PageSection
+        title="Comportamiento del negocio"
+        description="Tendencia de ingresos, distribución por tipo y referencias más vendidas."
+      >
+        <div className="space-y-4">
+          {/* Chart Mes vs Mes — full width, fila propia. Es el más informativo
+              para el dueño y necesita el ancho completo para legibilidad. */}
+          <MesVsMesChart />
+          {/* Top clientes + Top marcos — comparten fila en desktop. */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <TopClientesChart />
+            <TopMarcosChart />
+          </div>
+          {/* Donut + Heatmap — comparten fila. */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <TipoTrabajoDonut />
+            <HeatmapMensual mes={mes} />
+          </div>
+        </div>
+      </PageSection>
 
       {resumen && resumen.porCategoria.length > 0 && (
         <PageSection title="Desglose por categoría">

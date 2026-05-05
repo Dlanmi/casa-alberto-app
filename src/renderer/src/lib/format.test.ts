@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest'
 import {
   diaSemana,
   formatCOP,
+  formatCOPCorto,
   formatTelefono,
   iniciales,
   formatNumber,
   formatFechaLarga,
-  formatFechaCorta
+  formatFechaCorta,
+  mesCorto
 } from './format'
 
 describe('diaSemana', () => {
@@ -128,5 +130,68 @@ describe('iniciales', () => {
     expect(iniciales('   ')).toBe('?')
     expect(iniciales(null)).toBe('?')
     expect(iniciales(undefined)).toBe('?')
+  })
+})
+
+describe('formatCOPCorto', () => {
+  it('valores < 1k usan formato directo con $', () => {
+    expect(formatCOPCorto(0)).toBe('$0')
+    expect(formatCOPCorto(500)).toBe('$500')
+    expect(formatCOPCorto(999)).toBe('$999')
+  })
+
+  it('miles abrevian con sufijo k', () => {
+    expect(formatCOPCorto(1000)).toBe('$1k')
+    expect(formatCOPCorto(120000)).toBe('$120k')
+    expect(formatCOPCorto(1500)).toBe('$1,5k')
+  })
+
+  it('millones con sufijo M', () => {
+    expect(formatCOPCorto(1000000)).toBe('$1M')
+    expect(formatCOPCorto(2400000)).toBe('$2,4M')
+    expect(formatCOPCorto(15500000)).toBe('$15,5M')
+  })
+
+  it('billones con sufijo B', () => {
+    expect(formatCOPCorto(1_000_000_000)).toBe('$1B')
+    expect(formatCOPCorto(2_500_000_000)).toBe('$2,5B')
+  })
+
+  it('valores negativos preservan el signo', () => {
+    expect(formatCOPCorto(-50000)).toBe('-$50k')
+    expect(formatCOPCorto(-1500000)).toBe('-$1,5M')
+  })
+
+  it('defensivo: null/undefined/NaN → $0', () => {
+    expect(formatCOPCorto(null)).toBe('$0')
+    expect(formatCOPCorto(undefined)).toBe('$0')
+    expect(formatCOPCorto(NaN)).toBe('$0')
+    expect(formatCOPCorto(Infinity)).toBe('$0')
+  })
+})
+
+describe('mesCorto', () => {
+  it('devuelve la abreviatura en español', () => {
+    expect(mesCorto('2026-02')).toBe('Feb')
+    expect(mesCorto('2026-03-15')).toBe('Mar')
+    expect(mesCorto('2026-12')).toBe('Dic')
+  })
+
+  it('enero incluye el año automáticamente', () => {
+    expect(mesCorto('2026-01')).toBe('Ene 26')
+    expect(mesCorto('2027-01')).toBe('Ene 27')
+  })
+
+  it('forzar incluirAnio agrega año en cualquier mes', () => {
+    expect(mesCorto('2026-06', true)).toBe('Jun 26')
+    expect(mesCorto('2026-12', true)).toBe('Dic 26')
+  })
+
+  it('input inválido devuelve placeholder "—" y loguea warning', () => {
+    expect(mesCorto('algo')).toBe('—')
+    expect(mesCorto('2026-13')).toBe('—')
+    expect(mesCorto('2026-00')).toBe('—')
+    // Mes sin pad también es inválido — antes devolvía '2026-1' literal.
+    expect(mesCorto('2026-1')).toBe('—')
   })
 })
