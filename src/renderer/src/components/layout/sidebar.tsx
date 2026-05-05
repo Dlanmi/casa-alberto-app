@@ -148,7 +148,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps): React.JSX.Elemen
   return (
     <aside
       className={cn(
-        'flex flex-col h-full bg-surface border-r border-border transition-all duration-200 select-none shrink-0',
+        'flex flex-col h-full bg-surface border-r border-border transition-all duration-base select-none shrink-0',
         collapsed ? 'w-15' : 'w-60'
       )}
     >

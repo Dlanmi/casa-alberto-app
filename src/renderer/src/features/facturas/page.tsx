@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Receipt, CreditCard, FileText, Plus, Ban } from 'lucide-react'
 import { OperationalBoard } from '@renderer/components/layout/page-frame'
 import { useIpc } from '@renderer/hooks/use-ipc'
+import { useQueryFlag } from '@renderer/hooks/use-query-flag'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useDirtyGuard } from '@renderer/hooks/use-dirty-guard'
 import { useToast } from '@renderer/contexts/toast-context'
@@ -25,6 +26,7 @@ import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
 import { formatCOP, hoyISO } from '@renderer/lib/format'
+import { formatPrimaryShortcut } from '@renderer/lib/shortcuts'
 import { parseMoneyInput } from '@renderer/lib/parse-input'
 import { saldoStatus } from '@renderer/lib/saldo-display'
 import { cn } from '@renderer/lib/cn'
@@ -52,6 +54,9 @@ export default function FacturasPage(): React.JSX.Element {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const { emoji } = useEmojis()
+
+  // Acción rápida del CommandPalette / atajo Ctrl+Shift+F: abre modal nueva factura.
+  useQueryFlag('nueva', () => setShowNuevaFactura(true))
 
   const {
     data: facturas,
@@ -122,7 +127,8 @@ export default function FacturasPage(): React.JSX.Element {
       primaryAction={{
         label: 'Nueva factura',
         onClick: () => setShowNuevaFactura(true),
-        icon: Plus
+        icon: Plus,
+        tooltip: `Nueva factura (${formatPrimaryShortcut('Shift+F')})`
       }}
       filters={
         <div className="space-y-4">

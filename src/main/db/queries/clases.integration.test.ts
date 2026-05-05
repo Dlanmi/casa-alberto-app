@@ -6,8 +6,11 @@ import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
 import { acudientes, clientes, configuracion, estudiantes } from '../schema'
 import {
+  crearClase,
   crearEstudiante,
   generarPagosDelMes,
+  listarClases,
+  listarEstudiantes,
   listarPagosMes,
   registrarPagoClase,
   venderKit
@@ -284,3 +287,66 @@ describe.runIf(nativeAbiAvailable)('clases guards (Fase 2 §C, §D)', () => {
     })
   })
 })
+
+describe.runIf(nativeAbiAvailable)('listarClases / listarEstudiantes — búsqueda', () => {
+  let db: DB
+  let clienteAnaId: number
+  let clienteJuanId: number
+
+  beforeEach(() => {
+    db = createTestDb().db
+    crearClase(db, {
+      nombre: 'Pintura para principiantes',
+      diaSemana: 'lunes',
+      horaInicio: '09:00',
+      horaFin: '11:00'
+    })
+    crearClase(db, {
+      nombre: 'Acuarela avanzada',
+      diaSemana: 'miercoles',
+      horaInicio: '14:00',
+      horaFin: '16:00'
+    })
+    clienteAnaId = db
+      .insert(clientes)
+      .values({ nombre: 'Ana Pérez', telefono: '3001234567' })
+      .returning()
+      .get().id
+    clienteJuanId = db
+      .insert(clientes)
+      .values({ nombre: 'Juan Gómez', telefono: '3007654321' })
+      .returning()
+      .get().id
+    db.insert(estudiantes)
+      .values([
+        { clienteId: clienteAnaId, fechaIngreso: '2026-04-01' },
+        { clienteId: clienteJuanId, fechaIngreso: '2026-04-02' }
+      ])
+      .run()
+  })
+
+  it('listarClases filtra por nombre case-insensitive', () => {
+    const rows = listarClases(db, { busqueda: 'PINTURA' })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.nombre).toContain('Pintura')
+  })
+
+  it('listarClases respeta soloActivas con búsqueda', () => {
+    const rows = listarClases(db, { busqueda: 'a', soloActivas: true })
+    expect(rows.length).toBeGreaterThanOrEqual(1)
+    expect(rows.every((c) => c.activo)).toBe(true)
+  })
+
+  it('listarEstudiantes encuentra por nombre del cliente vinculado', () => {
+    const rows = listarEstudiantes(db, { busqueda: 'Ana' })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.clienteId).toBe(clienteAnaId)
+  })
+
+  it('listarEstudiantes encuentra por teléfono del cliente', () => {
+    const rows = listarEstudiantes(db, { busqueda: '3007654321' })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.clienteId).toBe(clienteJuanId)
+  })
+})
+

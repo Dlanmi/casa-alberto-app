@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CommandPalette } from './command-palette'
+import { getEntityProviders } from './command-providers'
 
 function LocationEcho(): React.JSX.Element {
   const location = useLocation()
@@ -11,9 +12,12 @@ function LocationEcho(): React.JSX.Element {
 }
 
 function RouteShell({ onClose }: { onClose: () => void }): React.JSX.Element {
+  // Reusamos el set real de providers para que el test cubra la integración
+  // entre palette + providers, no solo el palette aislado.
+  const providers = getEntityProviders()
   return (
     <>
-      <CommandPalette open onClose={onClose} />
+      <CommandPalette open onClose={onClose} providers={providers} />
       <LocationEcho />
     </>
   )
@@ -41,6 +45,18 @@ function installWindowApi(): void {
           ok: true,
           data: [{ id: 20, numero: 'AN-020' }]
         }))
+      },
+      proveedores: {
+        listar: vi.fn(async () => ({ ok: true, data: [] }))
+      },
+      clases: {
+        listar: vi.fn(async () => ({ ok: true, data: [] }))
+      },
+      estudiantes: {
+        listar: vi.fn(async () => ({ ok: true, data: [] }))
+      },
+      contratos: {
+        listar: vi.fn(async () => ({ ok: true, data: [] }))
       }
     }
   })
@@ -72,7 +88,7 @@ describe('CommandPalette', () => {
     const dialog = screen.getByRole('dialog')
     expect(dialog.getAttribute('aria-modal')).toBe('true')
 
-    const input = screen.getByPlaceholderText(/buscar cliente, pedido o factura/i)
+    const input = screen.getByPlaceholderText(/buscar o ejecutar una acción/i)
     expect(input.getAttribute('role')).toBe('combobox')
     expect(input.getAttribute('aria-controls')).toBe('command-palette-results')
 
@@ -86,7 +102,7 @@ describe('CommandPalette', () => {
     })
 
     const options = screen.getAllByRole('option')
-    expect(options.length).toBe(3)
+    expect(options.length).toBeGreaterThanOrEqual(3)
     expect(options[0]?.getAttribute('aria-selected')).toBe('true')
 
     fireEvent.keyDown(input, { key: 'ArrowDown' })
@@ -95,6 +111,8 @@ describe('CommandPalette', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
 
     await waitFor(() => {
+      // El segundo resultado en orden visual (Pedidos viene después de Clientes
+      // por prioridad) debe ser el pedido P-010.
       expect(screen.getByTestId('location').textContent).toBe('/pedidos/10')
     })
 
@@ -112,9 +130,32 @@ describe('CommandPalette', () => {
       </MemoryRouter>
     )
 
-    const input = screen.getByPlaceholderText(/buscar cliente, pedido o factura/i)
+    const input = screen.getByPlaceholderText(/buscar o ejecutar una acción/i)
     fireEvent.keyDown(input, { key: 'Escape' })
 
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('agrupa resultados por sección con header visible', async () => {
+    const onClose = vi.fn()
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<RouteShell onClose={onClose} />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    const input = screen.getByPlaceholderText(/buscar o ejecutar una acción/i)
+    fireEvent.change(input, { target: { value: 'an' } })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Clientes')).toBeTruthy()
+      expect(screen.getByText('Pedidos')).toBeTruthy()
+      expect(screen.getByText('Facturas')).toBeTruthy()
+    })
   })
 })

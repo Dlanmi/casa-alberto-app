@@ -1,4 +1,5 @@
 import { and, desc, eq, not, sql, type SQL } from 'drizzle-orm'
+import { buildContainsPattern } from '../sql-helpers'
 import type { DB } from '../index'
 import { generarConsecutivo } from '../consecutivos'
 import {
@@ -91,11 +92,22 @@ export function obtenerFactura(db: DB, id: number) {
 
 export function listarFacturas(
   db: DB,
-  opts: { clienteId?: number; estado?: EstadoFactura; limit?: number } = {}
+  opts: {
+    clienteId?: number
+    estado?: EstadoFactura
+    limit?: number
+    // Búsqueda LIKE sobre el número de factura. Habilita el provider del
+    // CommandPalette para escalar sin filtrar miles de filas en cliente.
+    busqueda?: string
+  } = {}
 ) {
   const conds: SQL[] = []
   if (opts.clienteId) conds.push(eq(facturas.clienteId, opts.clienteId))
   if (opts.estado) conds.push(eq(facturas.estado, opts.estado))
+  if (opts.busqueda) {
+    const q = buildContainsPattern(opts.busqueda)
+    conds.push(sql`${facturas.numero} LIKE ${q} ESCAPE '\\'`)
+  }
   const where = conds.length > 0 ? and(...conds) : undefined
   const q = db
     .select()

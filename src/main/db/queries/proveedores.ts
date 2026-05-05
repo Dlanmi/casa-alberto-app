@@ -1,6 +1,7 @@
-import { and, eq, like, or, sql, type SQL } from 'drizzle-orm'
+import { and, eq, or, sql, type SQL } from 'drizzle-orm'
 import type { DB } from '../index'
 import { proveedores, type TipoProveedor } from '../schema'
+import { buildContainsPattern } from '../sql-helpers'
 
 export type NuevoProveedor = {
   nombre: string
@@ -23,8 +24,13 @@ export function listarProveedores(
   if (opts.soloActivos !== false) conditions.push(eq(proveedores.activo, true))
   if (opts.tipo) conditions.push(eq(proveedores.tipo, opts.tipo))
   if (opts.busqueda) {
-    const q = `%${opts.busqueda}%`
-    conditions.push(or(like(proveedores.nombre, q), like(proveedores.producto, q))!)
+    const q = buildContainsPattern(opts.busqueda)
+    conditions.push(
+      or(
+        sql`${proveedores.nombre} LIKE ${q} ESCAPE '\\'`,
+        sql`${proveedores.producto} LIKE ${q} ESCAPE '\\'`
+      )!
+    )
   }
   const where = conditions.length > 0 ? and(...conditions) : undefined
   return db.select().from(proveedores).where(where).orderBy(proveedores.nombre).all()

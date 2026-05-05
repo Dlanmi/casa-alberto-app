@@ -14,6 +14,10 @@ export type PageAction = {
   variant?: ActionVariant
   disabled?: boolean
   buttonType?: ButtonHTMLAttributes<HTMLButtonElement>['type']
+  // Tooltip nativo del botón (atributo `title`). Útil para mostrar el atajo
+  // de teclado asociado a una acción primaria — el navegador lo despliega
+  // sin overhead de tooltip custom.
+  tooltip?: string
 }
 
 type GuidanceContent =
@@ -59,6 +63,7 @@ function renderAction(action: PageAction, index: number): React.JSX.Element {
       variant={action.variant ?? 'outline'}
       onClick={action.onClick}
       disabled={action.disabled}
+      title={action.tooltip}
     >
       {Icon && <Icon size={16} />}
       {action.label}

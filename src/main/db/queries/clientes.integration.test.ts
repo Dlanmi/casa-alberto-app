@@ -6,7 +6,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
-import { actualizarCliente, crearCliente, normalizarCedula, normalizarTelefono } from './clientes'
+import {
+  actualizarCliente,
+  crearCliente,
+  listarClientes,
+  normalizarCedula,
+  normalizarTelefono
+} from './clientes'
 
 describe.runIf(nativeAbiAvailable)('clientes · A1 validar teléfono (7–15 dígitos)', () => {
   let db: DB
@@ -164,3 +170,33 @@ describe.runIf(nativeAbiAvailable)('clientes · A4 validar nombre (2–200 chars
     expect(c.nombre).toBe('Alberto')
   })
 })
+
+describe.runIf(nativeAbiAvailable)('listarClientes · busqueda con wildcards literales', () => {
+  let db: DB
+  beforeEach(() => {
+    db = createTestDb().db
+    crearCliente(db, { nombre: 'Cliente 50% descuento' })
+    crearCliente(db, { nombre: 'Cliente normal' })
+    crearCliente(db, { nombre: 'foo_bar literal' })
+    crearCliente(db, { nombre: 'foo X bar' })
+  })
+
+  it('"50%" busca el caracter % literal, no como wildcard', () => {
+    const rows = listarClientes(db, { busqueda: '50%' })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.nombre).toContain('50% descuento')
+  })
+
+  it('"foo_bar" busca el underscore literal, no como any-char', () => {
+    const rows = listarClientes(db, { busqueda: 'foo_bar' })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.nombre).toContain('foo_bar literal')
+  })
+
+  it('"%" solo NO devuelve todos los registros', () => {
+    const rows = listarClientes(db, { busqueda: '%' })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.nombre).toContain('50%')
+  })
+})
+

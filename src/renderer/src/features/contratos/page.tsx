@@ -10,6 +10,7 @@ import {
   Receipt
 } from 'lucide-react'
 import { useIpc } from '@renderer/hooks/use-ipc'
+import { useQueryFlag } from '@renderer/hooks/use-query-flag'
 import { useSlidePanel, SLIDE_PANEL_EXIT_MS } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useDirtyGuard } from '@renderer/hooks/use-dirty-guard'
@@ -95,6 +96,9 @@ export default function ContratosPage(): React.JSX.Element {
   const [showCreate, setShowCreate] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const { showToast } = useToast()
+
+  // Acción rápida del CommandPalette: ?nuevo=1 abre el wizard de contrato.
+  useQueryFlag('nuevo', () => setShowCreate(true))
 
   const {
     data: contratos,

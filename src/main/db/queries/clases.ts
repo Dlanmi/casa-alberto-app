@@ -1,9 +1,10 @@
-import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm'
+import { and, desc, eq, gte, lte, or, sql, type SQL } from 'drizzle-orm'
 import type { DB } from '../index'
 import {
   acudientes,
   asistencias,
   clases,
+  clientes,
   estudiantes,
   METODOS_PAGO,
   movimientosFinancieros,
@@ -14,6 +15,7 @@ import {
   type EstadoPagoClase,
   type MetodoPago
 } from '../schema'
+import { buildContainsPattern } from '../sql-helpers'
 import { getConfigNumber } from './configuracion'
 import { validarFechaISO } from '../../lib/validar-fecha'
 import { validarEnum } from '../../lib/validar-enum'
@@ -29,9 +31,26 @@ export type NuevaClase = {
   horaFin: string
 }
 
-export function listarClases(db: DB, soloActivas = true) {
-  const q = db.select().from(clases)
-  if (soloActivas) return q.where(eq(clases.activo, true)).all()
+export type OpcionesListarClases = {
+  soloActivas?: boolean
+  busqueda?: string
+  limit?: number
+}
+
+// Acepta el booleano legado (todos los call-sites previos) o un objeto de
+// opciones — habilita búsqueda para el CommandPalette sin refactorizar nada.
+export function listarClases(db: DB, optsOrFlag: boolean | OpcionesListarClases = true) {
+  const opts: OpcionesListarClases =
+    typeof optsOrFlag === 'boolean' ? { soloActivas: optsOrFlag } : optsOrFlag
+  const conds: SQL[] = []
+  if (opts.soloActivas !== false) conds.push(eq(clases.activo, true))
+  if (opts.busqueda) {
+    const q = buildContainsPattern(opts.busqueda)
+    conds.push(sql`${clases.nombre} LIKE ${q} ESCAPE '\\'`)
+  }
+  const where = conds.length > 0 ? and(...conds) : undefined
+  const q = db.select().from(clases).where(where).orderBy(clases.nombre)
+  if (opts.limit) return q.limit(opts.limit).all()
   return q.all()
 }
 
@@ -50,10 +69,60 @@ export type NuevoEstudiante = {
   esMenor?: boolean
 }
 
-export function listarEstudiantes(db: DB, soloActivos = true) {
-  const q = db.select().from(estudiantes)
-  if (soloActivos) return q.where(eq(estudiantes.activo, true)).all()
-  return q.all()
+export type OpcionesListarEstudiantes = {
+  soloActivos?: boolean
+  busqueda?: string
+  limit?: number
+}
+
+// Igual patrón que listarClases: acepta booleano legado u objeto.
+// Para búsqueda hace JOIN con clientes (los estudiantes no tienen nombre
+// propio, lo heredan del cliente vinculado).
+export function listarEstudiantes(
+  db: DB,
+  optsOrFlag: boolean | OpcionesListarEstudiantes = true
+) {
+  const opts: OpcionesListarEstudiantes =
+    typeof optsOrFlag === 'boolean' ? { soloActivos: optsOrFlag } : optsOrFlag
+  const conds: SQL[] = []
+  if (opts.soloActivos !== false) {
+    conds.push(eq(estudiantes.activo, true))
+  }
+  if (!opts.busqueda) {
+    const where = conds.length > 0 ? and(...conds) : undefined
+    const q = db.select().from(estudiantes).where(where)
+    if (opts.limit) return q.limit(opts.limit).all()
+    return q.all()
+  }
+  // Búsqueda activa: join con clientes para matchear por nombre/cédula/teléfono.
+  // Devolvemos solo las columnas de estudiantes para no romper el shape de retorno
+  // que ya consumen los call-sites existentes.
+  const qFilter = buildContainsPattern(opts.busqueda)
+  conds.push(
+    or(
+      sql`${clientes.nombre} LIKE ${qFilter} ESCAPE '\\'`,
+      sql`${clientes.cedula} LIKE ${qFilter} ESCAPE '\\'`,
+      sql`${clientes.telefono} LIKE ${qFilter} ESCAPE '\\'`
+    )!
+  )
+  const where = and(...conds)
+  const sel = db
+    .select({
+      id: estudiantes.id,
+      clienteId: estudiantes.clienteId,
+      claseId: estudiantes.claseId,
+      fechaIngreso: estudiantes.fechaIngreso,
+      esMenor: estudiantes.esMenor,
+      activo: estudiantes.activo,
+      createdAt: estudiantes.createdAt,
+      updatedAt: estudiantes.updatedAt
+    })
+    .from(estudiantes)
+    .innerJoin(clientes, eq(estudiantes.clienteId, clientes.id))
+    .where(where)
+    .orderBy(clientes.nombre)
+  if (opts.limit) return sel.limit(opts.limit).all()
+  return sel.all()
 }
 
 export function obtenerEstudiante(db: DB, id: number) {

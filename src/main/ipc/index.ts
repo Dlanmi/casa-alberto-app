@@ -468,12 +468,18 @@ export function registerIpcHandlers(db: DB): void {
   )
 
   // clases
-  ipcMain.handle('clases:listar', (_e, soloActivas?: boolean) =>
-    wrap(listarClases)(db, soloActivas)
+  ipcMain.handle(
+    'clases:listar',
+    // El argumento puede ser boolean (legado) o un objeto con `busqueda`/`limit`
+    // (nueva forma para el CommandPalette). El query lo soporta nativamente.
+    (_e, optsOrFlag?: boolean | { soloActivas?: boolean; busqueda?: string; limit?: number }) =>
+      wrap(listarClases)(db, optsOrFlag)
   )
   ipcMain.handle('clases:crear', (_e, data) => wrap(crearClase)(db, data))
-  ipcMain.handle('estudiantes:listar', (_e, soloActivos?: boolean) =>
-    wrap(listarEstudiantes)(db, soloActivos)
+  ipcMain.handle(
+    'estudiantes:listar',
+    (_e, optsOrFlag?: boolean | { soloActivos?: boolean; busqueda?: string; limit?: number }) =>
+      wrap(listarEstudiantes)(db, optsOrFlag)
   )
   ipcMain.handle('estudiantes:obtener', (_e, id: number) =>
     wrap(obtenerEstudiante)(db, validarId(id, 'estudianteId'))

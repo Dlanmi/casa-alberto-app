@@ -4,6 +4,14 @@ import { AppTitleBar } from './app-titlebar'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { CommandPalette } from './command-palette'
+import { getEntityProviders } from './command-providers'
+import { createAccionesProvider } from './command-actions-provider'
+import { createRecientesProvider } from './command-recent-provider'
+import { ShortcutsHelp } from './shortcuts-help'
+import {
+  getRecentEntitiesSnapshot,
+  useTrackRouteAsRecent
+} from '@renderer/hooks/use-recent-entities'
 import { HelpButton } from './help-button'
 import { WelcomeTour } from './welcome-tour'
 import { UpdateNotification } from './update-notification'
@@ -16,6 +24,7 @@ import { getPrimaryShortcutCombo } from '@renderer/lib/shortcuts'
 export function AppShell(): React.JSX.Element {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 768)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const navigate = useNavigate()
 
@@ -45,21 +54,69 @@ export function AppShell(): React.JSX.Element {
   const openSearch = useCallback(() => setSearchOpen(true), [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
 
+  // Track navegación a páginas detalle para alimentar el provider de recientes.
+  useTrackRouteAsRecent()
+
+  // Conjunto de providers que alimenta el CommandPalette. Orden visual:
+  //   1. Recientes (cuando palette se abre vacío) — lee del store sin React
+  //   2. Acciones rápidas (siempre)
+  //   3. Entidades (clientes, pedidos, facturas, …)
+  // El array es estable (deps vacías) — el provider de recientes lee la
+  // snapshot al ejecutar, no al construirse, así que el palette no pierde
+  // su query de búsqueda cuando el usuario navega a una página detalle.
+  const commandProviders = useMemo(
+    () => [
+      createRecientesProvider(getRecentEntitiesSnapshot),
+      createAccionesProvider({ verAtajos: () => setShortcutsOpen(true) }),
+      ...getEntityProviders()
+    ],
+    []
+  )
+
+  // Helper que combina el modificador primario (Ctrl en Win, ⌘ en Mac) con
+  // Shift+letra. Mantiene la guía Mac/Windows centralizada en `shortcuts.ts`.
+  const shiftPrimaryCombo = useCallback((key: string) => {
+    const base = getPrimaryShortcutCombo(key)
+    return { ...base, shift: true }
+  }, [])
+
   const shortcuts = useMemo(
     () => [
-      // Primary+K — Global search
+      // Primary+K — Búsqueda global
       { combo: getPrimaryShortcutCombo('k'), handler: () => setSearchOpen((o) => !o) },
-      // Primary+N — New quote
+      // Primary+N — Nueva cotización
       { combo: getPrimaryShortcutCombo('n'), handler: () => navigate('/cotizador') },
-      // Escape — Close search
-      { combo: { key: 'Escape' }, handler: () => setSearchOpen(false) },
-      // Alt+1 to Alt+9 — Module shortcuts
+      // Primary+/ — Help overlay de atajos. Usamos `ignoreShift=true` porque
+      // en teclados es-LA `/` se obtiene con Shift+7: el `e.key` resulta `/`
+      // pero `e.shiftKey` es true. Sin `ignoreShift`, el match fallaría en
+      // ese layout. En US-QWERTY donde `/` es directo, ignorar shift no
+      // afecta porque no hay chance de un Shift+/ legítimo distinto.
+      {
+        combo: { ...getPrimaryShortcutCombo('/'), ignoreShift: true },
+        handler: () => setShortcutsOpen((o) => !o)
+      },
+      // Escape — Cierra search/help
+      {
+        combo: { key: 'Escape' },
+        handler: () => {
+          setSearchOpen(false)
+          setShortcutsOpen(false)
+        }
+      },
+      // Atajos directos de creación. Cada uno navega a la página destino con
+      // el flag `?nuevo=1` (o variante) — la página lee el flag con
+      // `useQueryFlag` y abre el modal correspondiente. Single source of truth.
+      { combo: shiftPrimaryCombo('c'), handler: () => navigate('/clientes?nuevo=1') },
+      { combo: shiftPrimaryCombo('f'), handler: () => navigate('/facturas?nueva=1') },
+      { combo: shiftPrimaryCombo('v'), handler: () => navigate('/proveedores?nuevo=1') },
+      { combo: shiftPrimaryCombo('p'), handler: () => navigate('/cotizador') },
+      // Alt+1 to Alt+9 — Atajos a módulos de la sidebar
       ...SIDEBAR_ITEMS.slice(0, 9).map((item, i) => ({
         combo: { key: String(i + 1), alt: true },
         handler: () => navigate(item.path)
       }))
     ],
-    [navigate]
+    [navigate, shiftPrimaryCombo]
   )
 
   useKeyboard(shortcuts)
@@ -77,13 +134,14 @@ export function AppShell(): React.JSX.Element {
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((c) => !c)} />
         <div className="flex flex-col flex-1 min-w-0">
-          <Topbar onOpenSearch={openSearch} />
+          <Topbar onOpenSearch={openSearch} onOpenShortcuts={() => setShortcutsOpen(true)} />
           <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 scroll-smooth">
             <Outlet />
           </main>
         </div>
       </div>
-      <CommandPalette open={searchOpen} onClose={closeSearch} />
+      <CommandPalette open={searchOpen} onClose={closeSearch} providers={commandProviders} />
+      <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <HelpButton />
       <WelcomeTour />
       <UpdateNotification />

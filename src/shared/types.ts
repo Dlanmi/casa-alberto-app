@@ -159,12 +159,16 @@ export type PedidoListarFiltros = {
   // Cuando true incluye pedidos entregados hace más de 30 días.
   // Por defecto se esconden para no inflar el kanban con histórico.
   incluirArchivados?: boolean
+  // Búsqueda LIKE case-insensitive sobre número y descripción.
+  busqueda?: string
 }
 
 export type FacturaListarFiltros = {
   clienteId?: number
   estado?: EstadoFactura
   limit?: number
+  // Búsqueda LIKE sobre el número de factura.
+  busqueda?: string
 }
 
 export type ConfiguracionSetPayload = {

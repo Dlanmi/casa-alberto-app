@@ -12,6 +12,7 @@ import {
   sql,
   type SQL
 } from 'drizzle-orm'
+import { buildContainsPattern } from '../sql-helpers'
 import type { DB } from '../index'
 import type { EntregaDelDia, PedidoSinAbonoConSaldo } from '@shared/types'
 import { generarConsecutivo } from '../consecutivos'
@@ -561,6 +562,10 @@ export function listarPedidos(
     // días para no inflar el Kanban con histórico. El toggle "Ver archivados"
     // de la UI pone esto en true cuando papá quiere ver el histórico completo.
     incluirArchivados?: boolean
+    // Búsqueda case-insensitive (LIKE %q%) sobre número y descripción.
+    // Usada por la búsqueda global del CommandPalette para escalar sin
+    // traer toda la tabla al cliente.
+    busqueda?: string
   } = {}
 ) {
   // Asegura que la reclasificación automática (listo → sin_reclamar tras +15 días)
@@ -570,6 +575,16 @@ export function listarPedidos(
   const conds: SQL[] = []
   if (opts.estado) conds.push(eq(pedidos.estado, opts.estado))
   if (opts.clienteId) conds.push(eq(pedidos.clienteId, opts.clienteId))
+  if (opts.busqueda) {
+    // Escape de wildcards LIKE — ver helper buildContainsPattern.
+    const q = buildContainsPattern(opts.busqueda)
+    conds.push(
+      or(
+        sql`${pedidos.numero} LIKE ${q} ESCAPE '\\'`,
+        sql`${pedidos.descripcion} LIKE ${q} ESCAPE '\\'`
+      )!
+    )
+  }
   if (!opts.incluirArchivados) {
     // Esconde entregados con updatedAt de hace más de 30 días. No afecta a
     // cancelados ni a ningún estado activo — solo al "cementerio" de entregados.

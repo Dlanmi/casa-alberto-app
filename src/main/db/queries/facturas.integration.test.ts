@@ -4,7 +4,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
 import { clientes, facturas, pedidos } from '../schema'
-import { anularFactura, crearFactura, registrarDevolucion, registrarPago } from './facturas'
+import {
+  anularFactura,
+  crearFactura,
+  listarFacturas,
+  registrarDevolucion,
+  registrarPago
+} from './facturas'
 
 describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
   let db: DB
@@ -381,3 +387,39 @@ describe.runIf(nativeAbiAvailable)('facturas UNIQUE partial index (SPEC-007)', (
     expect(segunda.pedidoId).toBe(pedidoId)
   })
 })
+
+describe.runIf(nativeAbiAvailable)('listarFacturas — búsqueda por número', () => {
+  let db: DB
+  let clienteId: number
+  let pedidoId: number
+
+  beforeEach(() => {
+    db = createTestDb().db
+    clienteId = db.insert(clientes).values({ nombre: 'Cliente F' }).returning().get().id
+    pedidoId = db
+      .insert(pedidos)
+      .values({
+        numero: 'P-0001',
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        precioTotal: 100000,
+        estado: 'en_proceso',
+        fechaIngreso: '2026-04-01'
+      })
+      .returning()
+      .get().id
+    crearFactura(db, { pedidoId, clienteId, fecha: '2026-04-01', total: 50000 })
+    crearFactura(db, { pedidoId, clienteId, fecha: '2026-04-02', total: 25000 })
+    crearFactura(db, { pedidoId, clienteId, fecha: '2026-04-03', total: 25000 })
+  })
+
+  it('encuentra factura por sufijo del número', () => {
+    const todas = listarFacturas(db)
+    expect(todas.length).toBeGreaterThan(0)
+    const ultima = todas[0]!
+    const filtradas = listarFacturas(db, { busqueda: ultima.numero.slice(-4) })
+    expect(filtradas.length).toBeGreaterThan(0)
+    expect(filtradas[0]!.numero).toBe(ultima.numero)
+  })
+})
+

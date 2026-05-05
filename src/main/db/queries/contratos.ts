@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, or, sql, type SQL } from 'drizzle-orm'
 import type { DB } from '../index'
 import { generarConsecutivo } from '../consecutivos'
 import {
@@ -8,6 +8,7 @@ import {
   movimientosFinancieros,
   type EstadoContrato
 } from '../schema'
+import { buildContainsPattern } from '../sql-helpers'
 
 export type ItemContrato = {
   descripcion: string
@@ -73,11 +74,26 @@ export function crearContrato(db: DB, data: NuevoContrato) {
   })
 }
 
-export function listarContratos(db: DB, opts: { estado?: EstadoContrato } = {}) {
-  const q = db.select().from(contratos)
-  if (opts.estado)
-    return q.where(eq(contratos.estado, opts.estado)).orderBy(desc(contratos.fecha)).all()
-  return q.orderBy(desc(contratos.fecha)).all()
+export function listarContratos(
+  db: DB,
+  opts: { estado?: EstadoContrato; busqueda?: string; limit?: number } = {}
+) {
+  const conds: SQL[] = []
+  if (opts.estado) conds.push(eq(contratos.estado, opts.estado))
+  if (opts.busqueda) {
+    // Escape de wildcards LIKE — ver helper buildContainsPattern.
+    const q = buildContainsPattern(opts.busqueda)
+    conds.push(
+      or(
+        sql`${contratos.numero} LIKE ${q} ESCAPE '\\'`,
+        sql`${contratos.descripcion} LIKE ${q} ESCAPE '\\'`
+      )!
+    )
+  }
+  const where = conds.length > 0 ? and(...conds) : undefined
+  const query = db.select().from(contratos).where(where).orderBy(desc(contratos.fecha))
+  if (opts.limit) return query.limit(opts.limit).all()
+  return query.all()
 }
 
 export function obtenerContrato(db: DB, id: number) {

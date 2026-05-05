@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
+import { useQueryFlag } from '@renderer/hooks/use-query-flag'
 import { useToast } from '@renderer/contexts/toast-context'
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
@@ -83,6 +84,11 @@ export default function ClasesPage(): React.JSX.Element {
   const [asistenciaFecha, setAsistenciaFecha] = useState(hoyISO())
   const [attendance, setAttendance] = useState<Record<number, boolean>>({})
   const { showToast } = useToast()
+
+  // Acciones rápidas del CommandPalette: ?nueva=1 abre modal de nueva clase,
+  // ?estudiante=1 abre modal de nuevo estudiante.
+  useQueryFlag('nueva', () => setActiveModal('clase'))
+  useQueryFlag('estudiante', () => setActiveModal('estudiante'))
 
   const mesActual = mesActualISO()
 

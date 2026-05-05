@@ -1,6 +1,7 @@
-import { and, desc, eq, inArray, like, not, or, sql, type SQL } from 'drizzle-orm'
+import { and, desc, eq, inArray, not, or, sql, type SQL } from 'drizzle-orm'
 import type { DB } from '../index'
 import { acudientes, clientes, facturas, pagos, pedidos } from '../schema'
+import { buildContainsPattern } from '../sql-helpers'
 
 export type NuevoCliente = {
   nombre: string
@@ -24,9 +25,16 @@ export function listarClientes(db: DB, opts: OpcionesListarClientes = {}) {
   const conditions: SQL[] = []
   if (opts.soloActivos !== false) conditions.push(eq(clientes.activo, true))
   if (opts.busqueda) {
-    const q = `%${opts.busqueda}%`
+    // Escape de wildcards LIKE: si el usuario busca "50%" tratamos el `%`
+    // como literal, no como "cualquier secuencia". `ESCAPE '\\'` indica a
+    // SQLite que `\\%` y `\\_` son literales.
+    const q = buildContainsPattern(opts.busqueda)
     conditions.push(
-      or(like(clientes.nombre, q), like(clientes.cedula, q), like(clientes.telefono, q))!
+      or(
+        sql`${clientes.nombre} LIKE ${q} ESCAPE '\\'`,
+        sql`${clientes.cedula} LIKE ${q} ESCAPE '\\'`,
+        sql`${clientes.telefono} LIKE ${q} ESCAPE '\\'`
+      )!
     )
   }
   const where = conditions.length > 0 ? and(...conditions) : undefined

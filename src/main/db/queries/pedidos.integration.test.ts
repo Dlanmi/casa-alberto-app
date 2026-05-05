@@ -14,6 +14,7 @@ import {
   crearPedidoConfirmadoConFactura,
   crearPedidoDesdeCotizacion,
   editarPedidoComercial,
+  listarPedidos,
   obtenerSaldosPorPedido,
   pedidosAgenda,
   pedidosSinAbonoConSaldo,
@@ -1047,3 +1048,73 @@ describe.runIf(nativeAbiAvailable)('Modelo comercial · edge cases', () => {
     ).toThrow(/no se puede editar/i)
   })
 })
+
+describe.runIf(nativeAbiAvailable)(
+  'listarPedidos — búsqueda case-insensitive (CommandPalette)',
+  () => {
+    let db: DB
+    let clienteId: number
+
+    beforeEach(() => {
+      db = createTestDb().db
+      clienteId = db.insert(clientes).values({ nombre: 'Cliente Búsqueda' }).returning().get().id
+      db.insert(pedidos)
+        .values([
+          {
+            numero: 'P-0001',
+            clienteId,
+            tipoTrabajo: 'enmarcacion_estandar',
+            descripcion: 'Marco para foto familiar',
+            precioTotal: 50000,
+            estado: 'confirmado',
+            fechaIngreso: '2026-04-01'
+          },
+          {
+            numero: 'P-0042',
+            clienteId,
+            tipoTrabajo: 'enmarcacion_estandar',
+            descripcion: 'Cuadro decorativo grande',
+            precioTotal: 150000,
+            estado: 'en_proceso',
+            fechaIngreso: '2026-04-02'
+          },
+          {
+            numero: 'P-0099',
+            clienteId,
+            tipoTrabajo: 'restauracion',
+            descripcion: 'Restauración óleo',
+            precioTotal: 200000,
+            estado: 'listo',
+            fechaIngreso: '2026-04-03'
+          }
+        ])
+        .run()
+    })
+
+    it('filtra por número (LIKE parcial)', () => {
+      const rows = listarPedidos(db, { busqueda: '0042' })
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.numero).toBe('P-0042')
+    })
+
+    it('filtra por descripción (case-insensitive)', () => {
+      const rows = listarPedidos(db, { busqueda: 'CUADRO' })
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.descripcion).toContain('Cuadro')
+    })
+
+    it('combina búsqueda con estado', () => {
+      const rows = listarPedidos(db, { busqueda: 'P-', estado: 'listo' })
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.numero).toBe('P-0099')
+    })
+
+    it('respeta limit con búsqueda activa', () => {
+      const rows = listarPedidos(db, { busqueda: 'P-', limit: 2 })
+      expect(rows).toHaveLength(2)
+    })
+  }
+)
+
+
+

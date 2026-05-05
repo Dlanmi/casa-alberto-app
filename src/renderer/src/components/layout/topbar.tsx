@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Search, ChevronRight, Sparkles } from 'lucide-react'
+import { Keyboard, Search, ChevronRight, Sparkles } from 'lucide-react'
 import { SIDEBAR_ITEMS } from '@renderer/lib/constants'
 import { diaSemana } from '@renderer/lib/format'
 import { formatPrimaryShortcut } from '@renderer/lib/shortcuts'
 
 type TopbarProps = {
   onOpenSearch: () => void
+  onOpenShortcuts: () => void
 }
 
 // Tick para refrescar greeting/fecha cuando la app queda abierta cruzando
@@ -44,7 +45,7 @@ function getRouteHint(pathname: string): string {
   return 'Revisa alertas, pendientes y próximas entregas del día.'
 }
 
-export function Topbar({ onOpenSearch }: TopbarProps): React.JSX.Element {
+export function Topbar({ onOpenSearch, onOpenShortcuts }: TopbarProps): React.JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
   // `now` como state evita llamar `new Date()` durante render (React 19 lo
@@ -101,6 +102,15 @@ export function Topbar({ onOpenSearch }: TopbarProps): React.JSX.Element {
         <kbd className="hidden sm:inline-block text-xs bg-surface-muted px-1.5 py-0.5 rounded text-text-muted">
           {formatPrimaryShortcut('k')}
         </kbd>
+      </button>
+
+      <button
+        onClick={onOpenShortcuts}
+        className="flex items-center justify-center h-10 w-10 rounded-md border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text transition-colors cursor-pointer shrink-0"
+        aria-label="Ver atajos de teclado"
+        title={`Atajos de teclado (${formatPrimaryShortcut('/')})`}
+      >
+        <Keyboard size={16} />
       </button>
 
       <div className="flex items-center gap-4 shrink-0">

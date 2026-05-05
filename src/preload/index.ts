@@ -217,11 +217,17 @@ const api = {
     anular: (id: number) => invoke<IpcResult<Factura | null>>('facturas:anular', id)
   },
   clases: {
-    listar: (soloActivas?: boolean) => invoke('clases:listar', soloActivas),
+    // Acepta el booleano legado o un objeto { soloActivas, busqueda, limit }.
+    // El backend lo resuelve internamente.
+    listar: (
+      optsOrFlag?: boolean | { soloActivas?: boolean; busqueda?: string; limit?: number }
+    ) => invoke('clases:listar', optsOrFlag),
     crear: (data: unknown) => invoke('clases:crear', data)
   },
   estudiantes: {
-    listar: (soloActivos?: boolean) => invoke('estudiantes:listar', soloActivos),
+    listar: (
+      optsOrFlag?: boolean | { soloActivos?: boolean; busqueda?: string; limit?: number }
+    ) => invoke('estudiantes:listar', optsOrFlag),
     obtener: (id: number) => invoke('estudiantes:obtener', id),
     crear: (data: unknown) => invoke('estudiantes:crear', data),
     actualizar: (id: number, data: unknown) => invoke('estudiantes:actualizar', id, data),
