@@ -25,6 +25,21 @@ const DESCRIPCIONES: Record<TipoConsecutivo, string> = {
   cuenta_cobro: 'Siguiente número de cuenta de cobro'
 }
 
+/**
+ * Devuelve el siguiente número formateado para el tipo dado y avanza el
+ * contador en `configuracion`. Atomicidad:
+ *
+ *   - Si se llama fuera de una transacción, abre una propia (top-level).
+ *   - Si se llama DENTRO de otra transacción (caller pasó `txDb`),
+ *     better-sqlite3 lo convierte en SAVEPOINT automáticamente. El
+ *     contador queda consistente con el outer commit/rollback — si el
+ *     caller hace throw después de obtener el número, el contador NO se
+ *     gasta.
+ *
+ * Esto último importa para `crearPedidoDirecto`: si la inserción del pedido
+ * o sus items falla después de `generarConsecutivo`, el rollback del
+ * outer revierte también el incremento. No hay huecos en numeración.
+ */
 export function generarConsecutivo(db: DB, tipo: TipoConsecutivo): string {
   return db.transaction((tx) => {
     const clave = CLAVES[tipo]

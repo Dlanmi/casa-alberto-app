@@ -20,7 +20,7 @@
 // Si el dueño rechaza el reset, la app cierra (cualquier intento de
 // `CREATE TABLE` va a fallar igual).
 import { dialog } from 'electron'
-import { copyFileSync, readFileSync } from 'fs'
+import { copyFileSync, readFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { createHash } from 'crypto'
 import type Database from 'better-sqlite3'
@@ -80,7 +80,10 @@ function leerHashesRegistrados(sqlite: Database.Database): string[] | null {
     const stmt = sqlite.prepare<unknown[], { hash: string }>(
       'SELECT hash FROM __drizzle_migrations ORDER BY id'
     )
-    return stmt.all().map((r) => r.hash).filter((h) => typeof h === 'string' && h.length > 0)
+    return stmt
+      .all()
+      .map((r) => (typeof r.hash === 'string' ? r.hash.trim() : ''))
+      .filter((h) => h.length > 0)
   } catch {
     // Tabla no existe = DB nueva, no hay nada que reparar
     return null
@@ -103,9 +106,35 @@ function detectarDbLegacy(sqlite: Database.Database, migrationsFolder: string): 
   return registrados.some((h) => !esperados.has(h))
 }
 
+// Whitelist de identifiers SQLite seguros para interpolación. Nuestras tablas
+// reales siguen este patrón (snake_case alfanumérico). Cualquier nombre que
+// no matchee se considera sospechoso y se rechaza — defensa primaria contra
+// inyección vía nombres de tabla maliciosos en un sqlite_master tampered.
+const IDENTIFIER_SQLITE_SEGURO = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+/**
+ * Valida un identifier SQLite contra el whitelist y, si pasa, lo devuelve
+ * con doble-comillas escapadas (segunda capa de defensa por si el regex
+ * llega a alguna vez relajarse). Si no pasa, devuelve null para que el
+ * caller decida (típicamente: log warning y skip la operación).
+ *
+ * Nunca interpolar nombres de tabla/columna dinámicos sin pasar por aquí.
+ */
+function quoteIdentifierSeguro(name: string): string | null {
+  if (!IDENTIFIER_SQLITE_SEGURO.test(name)) return null
+  // Escape estándar SQLite: `"` se duplica dentro del identifier quoteado.
+  // Con el whitelist arriba esto es redundante, pero es defense in depth
+  // para no depender de un solo control.
+  return `"${name.replace(/"/g, '""')}"`
+}
+
 /**
  * Cuenta cuántas filas de tablas de negocio existen, para informarle al
  * dueño cuántos datos se van a perder si acepta el reset.
+ *
+ * Las tablas son literales hardcoded (no input externo), pero igual pasan
+ * por `quoteIdentifierSeguro` para mantener la disciplina: en este archivo
+ * NUNCA se interpola un identifier sin pasar por el helper.
  */
 function contarDatosNegocio(sqlite: Database.Database): {
   pedidos: number
@@ -113,9 +142,11 @@ function contarDatosNegocio(sqlite: Database.Database): {
   clientes: number
 } {
   const safeCount = (table: string): number => {
+    const ident = quoteIdentifierSeguro(table)
+    if (!ident) return 0
     try {
       const r = sqlite
-        .prepare<unknown[], { n: number }>(`SELECT COUNT(*) as n FROM "${table}"`)
+        .prepare<unknown[], { n: number }>(`SELECT COUNT(*) as n FROM ${ident}`)
         .get()
       return r?.n ?? 0
     } catch {
@@ -134,26 +165,68 @@ function contarDatosNegocio(sqlite: Database.Database): {
  * dejándola lista para que el migrator de Drizzle aplique la migración
  * consolidada desde cero.
  *
+ * Seguridad: los nombres vienen de `sqlite_master`, que es parte del archivo
+ * .db en disco. Una DB tampered podría incluir nombres con comillas dobles
+ * que rompan el identifier quoteado y conviertan `sqlite.exec()` en un sink
+ * de SQL injection (acepta multi-statement). Para protegernos:
+ *   1. Whitelist alfanumérico — rechaza cualquier name que no se vea
+ *      "normal" antes de interpolarlo. Las tablas reales del esquema lo
+ *      cumplen (`acudientes`, `clientes`, `pedidos`, etc.).
+ *   2. Escape estándar de comillas dobles — segunda capa.
+ *   3. Tablas que no pasan el filtro se loguean y se saltan, no se ignoran
+ *      silenciosamente — así si alguien legítimamente agrega una tabla con
+ *      caracteres no-ASCII queda visible en logs.
+ *
  * Atomicidad: todo va en una transacción. Si algo falla en medio, la DB
  * queda como estaba y el caller puede restaurar desde el backup.
  */
 function dropAllTables(sqlite: Database.Database): void {
-  // Bajamos foreign_keys para evitar errores al hacer DROP en orden arbitrario.
-  sqlite.pragma('foreign_keys = OFF')
+  // try/finally garantiza que `foreign_keys` se restauren incluso si el
+  // OFF mismo o la transacción tiran. Antes el OFF estaba fuera del try,
+  // por lo que un fallo entre OFF y el inicio de la tx dejaba el pragma
+  // desactivado en la conexión.
+  let pragmaCambiado = false
   try {
+    sqlite.pragma('foreign_keys = OFF')
+    pragmaCambiado = true
     const tx = sqlite.transaction(() => {
+      // Filtro doble: sólo `type='table'` (excluye triggers/views/indexes)
+      // y `UPPER(sql) LIKE 'CREATE TABLE%'` para descartar entradas que no
+      // son tablas reales aunque el campo `type` esté tampered. Defensa
+      // contra sqlite_master con rows manualmente alteradas. Usamos UPPER
+      // para no depender del default ASCII-case-insensitive de SQLite (que
+      // podría desactivarse vía PRAGMA case_sensitive_like) y matchear SQL
+      // generado con sintaxis en minúsculas (`create table foo ...`).
       const tablas = sqlite
         .prepare<unknown[], { name: string }>(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`
+          `SELECT name FROM sqlite_master
+           WHERE type='table'
+             AND name NOT LIKE 'sqlite_%'
+             AND UPPER(sql) LIKE 'CREATE TABLE%'`
         )
         .all()
       for (const t of tablas) {
-        sqlite.exec(`DROP TABLE IF EXISTS "${t.name}"`)
+        const ident = quoteIdentifierSeguro(t.name)
+        if (!ident) {
+          console.warn(
+            `[legacy-guard] tabla con nombre no válido para drop: ${JSON.stringify(t.name)}`
+          )
+          continue
+        }
+        sqlite.exec(`DROP TABLE IF EXISTS ${ident}`)
       }
     })
     tx()
   } finally {
-    sqlite.pragma('foreign_keys = ON')
+    if (pragmaCambiado) {
+      try {
+        sqlite.pragma('foreign_keys = ON')
+      } catch (err) {
+        // Si la restauración del pragma falla, no podemos hacer mucho —
+        // logueamos y dejamos que el caller decida.
+        console.error('[legacy-guard] no se pudo restaurar foreign_keys=ON:', err)
+      }
+    }
   }
 }
 
@@ -204,6 +277,16 @@ export function verificarYRepararLegacy(
   // 3. Preguntar al dueño
   const decision = dialogShow({ ...conteo, backupPath })
   if (decision === 'cancelar') {
+    // Limpiar el backup huérfano — sin reset, no tiene utilidad y se
+    // acumularían si el usuario cancela varias veces. Antes quedaban
+    // orphan en el dir userData sin ser listados por `listarBackups()`.
+    try {
+      unlinkSync(backupPath)
+    } catch (err) {
+      console.warn(
+        `[legacy-guard] no se pudo limpiar backup orphan ${backupPath}: ${err instanceof Error ? err.message : err}`
+      )
+    }
     return { accion: 'cancelado_por_usuario' }
   }
 
@@ -252,5 +335,6 @@ export const __testing__ = {
   leerHashesEsperados,
   leerHashesRegistrados,
   contarDatosNegocio,
-  dropAllTables
+  dropAllTables,
+  quoteIdentifierSeguro
 }

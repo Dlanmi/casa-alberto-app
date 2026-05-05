@@ -6,7 +6,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { restaurarDesdeBackup, restaurarDesdeBackupPorId } from './backup'
+import { __testing__, restaurarDesdeBackup, restaurarDesdeBackupPorId } from './backup'
+import { nativeAbiAvailable } from './test-utils'
+
+// Helper: crea un archivo SQLite válido (con tabla mínima) en `path`.
+// Necesario porque desde FIX-PEND1 `restaurarDesdeBackup` valida integridad
+// del backup ANTES de copiarlo — un dummy con texto plano falla la
+// validación. Los tests que verifican el FLUJO completo de restore
+// requieren un backup real, no solo un archivo presente.
+function crearBackupSqliteValido(path: string): void {
+  // Importación local diferida — solo si el ABI nativo está disponible.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Database = require('better-sqlite3') as typeof import('better-sqlite3')
+  const db = new Database(path)
+  db.exec('CREATE TABLE __test (id INTEGER); INSERT INTO __test VALUES (1);')
+  db.close()
+}
 
 let tmpRoot = ''
 let backupsDir = ''
@@ -51,11 +66,18 @@ describe('restaurarDesdeBackup — path traversal guard (A1)', () => {
     expect(() => restaurarDesdeBackup(otroTmp)).toThrow(/Ruta de backup inválida/i)
   })
 
-  it('acepta un backup válido dentro del directorio permitido', () => {
+  it.runIf(nativeAbiAvailable)('acepta un backup válido dentro del directorio permitido', () => {
     const validBackup = join(backupsDir, 'casa-alberto-2026-04-16T12-00.db')
-    writeFileSync(validBackup, 'valid-backup-contents')
+    crearBackupSqliteValido(validBackup)
     // No debe tirar error; la copia ocurre (testeamos que el guard no bloquee).
     expect(() => restaurarDesdeBackup(validBackup)).not.toThrow()
+  })
+
+  it.runIf(nativeAbiAvailable)('rechaza un backup con archivo SQLite corrupto', () => {
+    const invalidBackup = join(backupsDir, 'corrupto.db')
+    // Escribimos texto plano simulando un archivo dañado o de otra extensión.
+    writeFileSync(invalidBackup, 'not-a-sqlite-database')
+    expect(() => restaurarDesdeBackup(invalidBackup)).toThrow(/integridad/i)
   })
 
   it('reporta "no encontrado" si el path es válido pero el archivo no existe', () => {
@@ -134,13 +156,55 @@ describe('restaurarDesdeBackupPorId — guard sintáctico del identificador', ()
     )
   })
 
-  it('acepta un nombre válido y delega al guard de path', () => {
+  it.runIf(nativeAbiAvailable)('acepta un nombre válido y delega al guard de path', () => {
     const validBackup = join(backupsDir, 'casa-alberto-2026-04-25.db')
-    writeFileSync(validBackup, 'valid')
+    crearBackupSqliteValido(validBackup)
     expect(() => restaurarDesdeBackupPorId('casa-alberto-2026-04-25.db')).not.toThrow()
   })
 
   it('un nombre que no existe en el directorio retorna "no encontrado"', () => {
     expect(() => restaurarDesdeBackupPorId('no-existe.db')).toThrow(/no encontrado/i)
+  })
+})
+
+describe('vacuumIntoLiteral — defensa contra inyección y handling de specials', () => {
+  const { vacuumIntoLiteral } = __testing__
+
+  it('paths normales se envuelven en comillas simples', () => {
+    expect(vacuumIntoLiteral('/Users/alberto/backups/casa-alberto.db')).toBe(
+      "'/Users/alberto/backups/casa-alberto.db'"
+    )
+  })
+
+  it('apóstrofo en el path se escapa (estándar SQLite)', () => {
+    expect(vacuumIntoLiteral("/Users/John's/file.db")).toBe("'/Users/John''s/file.db'")
+  })
+
+  it('múltiples apóstrofos se escapan todos', () => {
+    expect(vacuumIntoLiteral("/a'b'c.db")).toBe("'/a''b''c.db'")
+  })
+
+  it('caracteres de control son rechazados', () => {
+    expect(() => vacuumIntoLiteral('/path/with\x00null.db')).toThrow(/control/)
+    expect(() => vacuumIntoLiteral('/path/with\nnewline.db')).toThrow(/control/)
+    expect(() => vacuumIntoLiteral('/path/with\ttab.db')).toThrow(/control/)
+    expect(() => vacuumIntoLiteral('/path/with\x7fdel.db')).toThrow(/control/)
+  })
+
+  it('semicolons y backticks son rechazados', () => {
+    expect(() => vacuumIntoLiteral('/path/foo;rm.db')).toThrow(/reservados/)
+    expect(() => vacuumIntoLiteral('/path/`foo`.db')).toThrow(/reservados/)
+  })
+
+  it('payload de inyección clásico se rechaza', () => {
+    expect(() =>
+      vacuumIntoLiteral("/path/foo'; ATTACH DATABASE '/tmp/p' AS p; --")
+    ).toThrow(/reservados/)
+  })
+
+  it('paths con espacios válidos pasan sin cambios', () => {
+    expect(vacuumIntoLiteral('/Users/Mi Nombre/backup.db')).toBe(
+      "'/Users/Mi Nombre/backup.db'"
+    )
   })
 })

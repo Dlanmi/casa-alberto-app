@@ -9,6 +9,7 @@ import {
   realpathSync
 } from 'fs'
 import { basename, join, resolve, sep } from 'path'
+import Database from 'better-sqlite3'
 import { getBackupsDir, getSqlite, getDbPath, closeDb, initDb } from './index'
 
 /**
@@ -39,6 +40,40 @@ function sanitizeFilenamePart(date: Date): string {
   return date.toISOString().slice(0, 16).replace(':', '-')
 }
 
+/**
+ * Convierte un path absoluto a un literal SQL seguro para `VACUUM INTO 'path'`.
+ *
+ * `VACUUM INTO` no acepta bind parameters (es DDL en SQLite). Construimos el
+ * literal con tres capas de defensa:
+ *
+ *   1. Rechaza caracteres de control (NUL, newline, TAB, etc.) — pueden
+ *      partir la sentencia o engañar al parser.
+ *   2. Rechaza caracteres no-imprimibles fuera del rango imprimible básico
+ *      (excepto whitespace válido en paths como espacio).
+ *   3. Escapa comilla simple duplicándola — estándar SQLite. El literal
+ *      resultante es interpretado por SQLite hacia el filesystem con la
+ *      comilla "real" intacta. Esto NO crea un path distinto; SQLite parsea
+ *      `'foo''bar'` como path literal `foo'bar`.
+ *
+ * Si necesitas modelar otros caracteres rechazados, agrégalos a la regex —
+ * mejor sobre-rechazar que dejar inyección abierta.
+ */
+function vacuumIntoLiteral(absPath: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f\x7f]/.test(absPath)) {
+    throw new Error('Ruta de backup contiene caracteres de control no permitidos')
+  }
+  // Rechazo extra: backticks y semicolons literales — no deberían existir
+  // en paths del filesystem normales y agregan defensa contra payloads.
+  if (/[`;]/.test(absPath)) {
+    throw new Error('Ruta de backup contiene caracteres reservados (`;`)')
+  }
+  return `'${absPath.replace(/'/g, "''")}'`
+}
+
+// Exportado solo para tests — no usar desde código de producción.
+export const __testing__ = { vacuumIntoLiteral }
+
 function ensureBackupsDir(): string {
   const dir = getBackupsDir()
   if (!existsSync(dir)) {
@@ -66,9 +101,7 @@ export function crearBackupAhora(): BackupInfo {
   }
 
   const sqlite = getSqlite()
-  // Escape de comillas simples para SQL literal seguro
-  const sqlSafePath = destino.replace(/'/g, "''")
-  sqlite.exec(`VACUUM INTO '${sqlSafePath}'`)
+  sqlite.exec(`VACUUM INTO ${vacuumIntoLiteral(destino)}`)
 
   const stats = statSync(destino)
   limpiarBackupsAntiguos()
@@ -119,16 +152,103 @@ export function listarBackups(): BackupInfo[] {
  * que el renderer envíe paths del filesystem. Esta función sigue
  * disponible por compatibilidad y mantiene la validación de path.
  */
+/**
+ * Valida un archivo SQLite ANTES de usarlo como source de restore.
+ *
+ * Estrategia: abrimos el archivo en read-only y corremos `PRAGMA integrity_check`.
+ * SQLite devuelve `'ok'` cuando el archivo está sano; cualquier otra cosa
+ * indica páginas corruptas, índices inconsistentes, etc. Cerramos la
+ * conexión inmediatamente — el caller decide qué hacer con el resultado.
+ *
+ * Lo hacemos antes del `copyFileSync` para no tocar la DB destino con
+ * un archivo enfermo. Si el backup pasa este check, la copia es segura
+ * (asumiendo disco OK).
+ */
+function validarIntegridadDb(filePath: string): { ok: true } | { ok: false; razon: string } {
+  let db: Database.Database | null = null
+  try {
+    db = new Database(filePath, { readonly: true, fileMustExist: true })
+    const row = db.prepare('PRAGMA integrity_check').get() as { integrity_check: string } | undefined
+    const result = row?.integrity_check ?? 'sin respuesta'
+    if (result === 'ok') return { ok: true }
+    return { ok: false, razon: result }
+  } catch (err) {
+    return { ok: false, razon: err instanceof Error ? err.message : String(err) }
+  } finally {
+    db?.close()
+  }
+}
+
 export function restaurarDesdeBackup(backupPath: string): void {
   const realPath = validarPathSeguro(backupPath, getBackupsDir(), 'backup')
-  const dbPath = getDbPath()
-  if (existsSync(dbPath)) {
-    copyFileSync(dbPath, `${dbPath}.pre-restore`)
+
+  // 1. Validar el backup ANTES de tocar la DB destino. Si está corrupto,
+  //    fallamos rápido sin afectar el archivo activo. Antes este check
+  //    sucedía DESPUÉS del copy (vía `initDb` interno), forzando un ciclo
+  //    copy→fail→rollback innecesario.
+  const integridad = validarIntegridadDb(realPath)
+  if (!integridad.ok) {
+    throw new Error(
+      `El archivo de respaldo no pasó la verificación de integridad: ${integridad.razon}`
+    )
   }
+
+  const dbPath = getDbPath()
+  const preRestorePath = `${dbPath}.pre-restore`
+  // 2. Snapshot del estado actual — defensa adicional contra fallos del
+  //    filesystem (disco lleno mid-copy, permisos perdidos).
+  if (existsSync(dbPath)) {
+    copyFileSync(dbPath, preRestorePath)
+  }
+  // 3. Cerrar la conexión activa antes de sobrescribir el archivo. En
+  //    Windows los handles son exclusivos — sin esto, `copyFileSync`
+  //    falla con EBUSY/EPERM.
   closeDb()
-  copyFileSync(realPath, dbPath)
-  initDb()
-  console.log(`[backup] restaurado desde ${realPath}`)
+  try {
+    copyFileSync(realPath, dbPath)
+    initDb()
+    console.log(`[backup] restaurado desde ${realPath}`)
+    // 4. Limpiar pre-restore tras éxito — sin esto se acumulaba en disco.
+    //    El backup original (`realPath`) sigue intacto; solo borramos el
+    //    snapshot temporal que hicimos antes del copy.
+    try {
+      if (existsSync(preRestorePath)) unlinkSync(preRestorePath)
+    } catch (cleanupErr) {
+      console.warn('[backup] no se pudo limpiar pre-restore:', cleanupErr)
+    }
+  } catch (err) {
+    // Rollback: si tenemos pre-restore válido, lo copiamos de vuelta y
+    // re-inicializamos con la DB anterior. Como ya validamos integridad
+    // arriba, llegar aquí indica un problema del filesystem, no del backup.
+    console.error('[backup] restore falló, intentando rollback:', err)
+    let rollbackOk = false
+    try {
+      if (existsSync(preRestorePath)) {
+        copyFileSync(preRestorePath, dbPath)
+        initDb()
+        rollbackOk = true
+        console.log('[backup] rollback OK — DB restaurada al estado pre-restore')
+        // El pre-restore queda en disco como red de seguridad adicional;
+        // el siguiente restore exitoso lo limpia. Evita perderlo si el
+        // dueño quiere copiarlo manualmente.
+      }
+    } catch (rollbackErr) {
+      console.error('[backup] rollback también falló:', rollbackErr)
+    }
+    if (!rollbackOk) {
+      // Caso peor: original corrupto + rollback fallido. Anotamos paths
+      // explícitos para que el dueño pueda recuperar manualmente. NO
+      // tiramos el rollbackErr — el caller necesita el `err` original
+      // que explica qué pasó primero.
+      const original = err instanceof Error ? err.message : String(err)
+      throw new Error(
+        `Restauración falló y rollback automático no pudo completarse. ` +
+          `Backup original: "${realPath}". Snapshot anterior: "${preRestorePath}". ` +
+          `Error: ${original}`
+      )
+    }
+    throw err
+  }
 }
 
 /**

@@ -230,4 +230,186 @@ describe.runIf(ABI_AVAILABLE)('legacy-guard', () => {
     expect(tablas).toHaveLength(0)
     sqlite.close()
   })
+
+  // -------------------------------------------------------------------------
+  // SEC-1 — Hardening contra SQL injection vía nombres de tabla maliciosos.
+  // -------------------------------------------------------------------------
+
+  describe('quoteIdentifierSeguro (whitelist + escape)', () => {
+    it('acepta identifiers alfanuméricos típicos', () => {
+      expect(__testing__.quoteIdentifierSeguro('clientes')).toBe('"clientes"')
+      expect(__testing__.quoteIdentifierSeguro('pedido_items')).toBe('"pedido_items"')
+      expect(__testing__.quoteIdentifierSeguro('__drizzle_migrations')).toBe(
+        '"__drizzle_migrations"'
+      )
+    })
+
+    it('rechaza identifiers con caracteres no permitidos', () => {
+      // Comilla doble — el caso canónico del SQL injection
+      expect(__testing__.quoteIdentifierSeguro('foo"bar')).toBeNull()
+      // Punto y coma + payload de inyección
+      expect(
+        __testing__.quoteIdentifierSeguro(`foo"; ATTACH DATABASE '/tmp/p' AS p; --`)
+      ).toBeNull()
+      // Espacios
+      expect(__testing__.quoteIdentifierSeguro('foo bar')).toBeNull()
+      // Punto (cross-schema)
+      expect(__testing__.quoteIdentifierSeguro('attached.tabla')).toBeNull()
+      // Vacío
+      expect(__testing__.quoteIdentifierSeguro('')).toBeNull()
+      // Empieza con número
+      expect(__testing__.quoteIdentifierSeguro('1clientes')).toBeNull()
+    })
+  })
+
+  describe('dropAllTables — defensa contra SQL injection', () => {
+    it('rechaza una tabla con nombre malicioso sin ejecutar el payload', () => {
+      if (!BetterSqlite3) return
+      const sqlite = new BetterSqlite3(':memory:')
+      // Creamos una tabla legítima y luego inyectamos un row falso en
+      // sqlite_master para simular una DB tampered. Como sqlite_master es
+      // read-only desde SQL normal, usamos el writable schema para forzar.
+      sqlite.exec(`CREATE TABLE legit (id INTEGER)`)
+      sqlite.pragma('writable_schema = ON')
+      // Construimos un name con payload de inyección. Si el guard no escapara
+      // ni filtrara, el `exec` saldría del identifier y ejecutaría DROP de
+      // `legit` y la creación de `pwned`.
+      const malName = `safe"; DROP TABLE legit; CREATE TABLE pwned (x); --`
+      sqlite
+        .prepare<unknown[]>(
+          `INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES ('table', ?, ?, 0, ?)`
+        )
+        .run(malName, malName, `CREATE TABLE "${malName.replace(/"/g, '""')}" (id INTEGER)`)
+      sqlite.pragma('writable_schema = OFF')
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+      __testing__.dropAllTables(sqlite)
+
+      // La tabla legítima sigue ahí (solo `legit` tenía rootpage real, no se dropeó)
+      // — el payload no se ejecutó porque el name fue rechazado por whitelist.
+      expect(warnSpy).toHaveBeenCalled()
+      const argRegistrado = warnSpy.mock.calls[0]?.[0] as string | undefined
+      expect(argRegistrado).toContain('nombre no válido')
+
+      // `pwned` NO debe existir (eso probaría que el payload corrió).
+      const pwned = sqlite
+        .prepare<unknown[], { name: string }>(
+          `SELECT name FROM sqlite_master WHERE type='table' AND name='pwned'`
+        )
+        .get()
+      expect(pwned).toBeUndefined()
+
+      warnSpy.mockRestore()
+      sqlite.close()
+    })
+
+    it('procesa tablas válidas aunque otra tabla tenga nombre malicioso', () => {
+      if (!BetterSqlite3) return
+      const sqlite = new BetterSqlite3(':memory:')
+      sqlite.exec(`CREATE TABLE clientes (id INTEGER)`)
+      sqlite.exec(`CREATE TABLE pedidos (id INTEGER)`)
+      // Insertamos un row malicioso en sqlite_master además de las tablas reales.
+      sqlite.pragma('writable_schema = ON')
+      sqlite
+        .prepare<unknown[]>(
+          `INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES ('table', ?, ?, 0, ?)`
+        )
+        .run('foo"bar', 'foo"bar', 'CREATE TABLE "foo""bar" (id INTEGER)')
+      sqlite.pragma('writable_schema = OFF')
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+      __testing__.dropAllTables(sqlite)
+
+      // Las tablas reales deben haberse dropeado correctamente
+      const tablas = sqlite
+        .prepare<unknown[], { name: string }>(
+          `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'foo%'`
+        )
+        .all()
+      expect(tablas).toHaveLength(0)
+
+      warnSpy.mockRestore()
+      sqlite.close()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // SEC-2 — Tests integración end-to-end del flujo completo del guard.
+  // -------------------------------------------------------------------------
+
+  describe('flujo completo de reset + recuperabilidad', () => {
+    it('el backup creado es un archivo SQLite válido con los datos originales', () => {
+      if (!BetterSqlite3) return
+      setupMigrations([{ tag: '0000_consolidado', sql: 'CREATE TABLE clientes (id INTEGER)' }])
+      const { sqlite, dbPath } = setupDb(['hashViejo'], true)
+      sqlite.prepare(`INSERT INTO clientes (nombre) VALUES (?)`).run('Cliente Recuperable')
+
+      const result = verificarYRepararLegacy(
+        sqlite,
+        dbPath,
+        migrationsFolder,
+        () => 'reset' as const
+      )
+      sqlite.close()
+
+      expect(result.accion).toBe('reseteo')
+      if (result.accion !== 'reseteo') return
+
+      // Abrimos el backup como SQLite y verificamos que conserva los datos
+      // pre-reset. Esto cierra el ciclo: si algo sale mal, el dueño puede
+      // restaurar este archivo y volver al estado anterior.
+      const backupDb = new BetterSqlite3(result.backupPath, { readonly: true })
+      const filas = backupDb
+        .prepare<unknown[], { nombre: string }>(`SELECT nombre FROM clientes`)
+        .all()
+      expect(filas.some((r) => r.nombre === 'Cliente Recuperable' || r.nombre === 'Test')).toBe(
+        true
+      )
+      backupDb.close()
+    })
+
+    it('después del reset la DB queda apta para una migración limpia', () => {
+      if (!BetterSqlite3) return
+      setupMigrations([{ tag: '0000_consolidado', sql: 'CREATE TABLE clientes (id INTEGER)' }])
+      const { sqlite, dbPath } = setupDb(['hashViejo'], true)
+
+      verificarYRepararLegacy(sqlite, dbPath, migrationsFolder, () => 'reset' as const)
+
+      // Tras el reset NO debe quedar `__drizzle_migrations` ni tablas de
+      // negocio. Drizzle re-creará todo desde el journal actual sin colisión.
+      const tablas = sqlite
+        .prepare<unknown[], { name: string }>(
+          `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`
+        )
+        .all()
+      expect(tablas).toHaveLength(0)
+
+      // Ejecutar el "CREATE TABLE clientes" de la migración consolidada
+      // debe funcionar sin error (no hay tabla pre-existente).
+      expect(() => sqlite.exec(`CREATE TABLE clientes (id INTEGER)`)).not.toThrow()
+
+      sqlite.close()
+    })
+
+    it('si se llama dos veces seguidas (idempotente), la segunda no hace nada', () => {
+      if (!BetterSqlite3) return
+      setupMigrations([{ tag: '0000_consolidado', sql: 'CREATE TABLE clientes (id INTEGER)' }])
+      const { sqlite, dbPath } = setupDb(['hashViejo'], true)
+
+      const dialogSpy = vi.fn(() => 'reset' as const)
+      const r1 = verificarYRepararLegacy(sqlite, dbPath, migrationsFolder, dialogSpy)
+      expect(r1.accion).toBe('reseteo')
+
+      // Segunda llamada — la DB ya no tiene `__drizzle_migrations` ni hashes
+      // viejos. El guard debe devolver `sin_cambios` SIN volver a mostrar el
+      // dialog (no hay falsos positivos en arranques posteriores).
+      const r2 = verificarYRepararLegacy(sqlite, dbPath, migrationsFolder, dialogSpy)
+      expect(r2.accion).toBe('sin_cambios')
+      expect(dialogSpy).toHaveBeenCalledOnce() // solo la primera vez
+
+      sqlite.close()
+    })
+  })
 })
