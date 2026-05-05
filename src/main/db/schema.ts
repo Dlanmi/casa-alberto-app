@@ -52,6 +52,7 @@ export const TIPOS_ITEM_PEDIDO = [
   'bastidor',
   'tapa',
   'materiales_adicionales',
+  'descuento',
   'restauracion',
   'instalacion',
   'otro'
@@ -61,13 +62,13 @@ export type TipoItemPedido = (typeof TIPOS_ITEM_PEDIDO)[number]
 export const TIPOS_PASPARTU = ['pintado', 'acrilico'] as const
 export type TipoPaspartu = (typeof TIPOS_PASPARTU)[number]
 
-// TIPOS_VIDRIO se mantiene como lista de referencia del seed; el pedido acepta
-// cualquier string (para soportar tipos creados por el usuario) + 'ninguno'.
-export const TIPOS_VIDRIO = ['claro', 'antirreflectivo', 'ninguno'] as const
-export type TipoVidrio = string
-
-// Tipos de vidrio precargados en el seed. El tipo es texto libre en la DB
-// — el usuario puede agregar más tipos desde la UI de Listas de precios.
+// El tipo de vidrio en la DB es texto libre — no usamos enum porque el dueño
+// puede crear tipos nuevos desde la UI de Listas de precios. El cotizador
+// resuelve el `tipo` con buildTipoVidrio (cotizador.ts) que normaliza a
+// formato `<nombre>_<espesor>mm` (ej. 'claro_2mm', 'antirreflectivo_3mm').
+//
+// `TIPOS_VIDRIO_LISTA` queda como hint para el seed inicial; en runtime no se
+// valida contra esta lista.
 export const TIPOS_VIDRIO_LISTA = ['claro', 'antirreflectivo'] as const
 export type TipoVidrioLista = string
 
@@ -76,6 +77,9 @@ export type EstadoFactura = (typeof ESTADOS_FACTURA)[number]
 
 export const METODOS_PAGO = ['efectivo', 'transferencia', 'tarjeta', 'cheque'] as const
 export type MetodoPago = (typeof METODOS_PAGO)[number]
+
+export const ESTADOS_RENTABILIDAD = ['saludable', 'baja', 'critica', 'incompleta'] as const
+export type EstadoRentabilidad = (typeof ESTADOS_RENTABILIDAD)[number]
 
 export const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'] as const
 export type DiaSemana = (typeof DIAS_SEMANA)[number]
@@ -185,6 +189,7 @@ export const muestrasMarcos = sqliteTable(
     referencia: text('referencia').notNull().unique(),
     colillaCm: real('colilla_cm').notNull(),
     precioMetro: real('precio_metro').notNull(),
+    costoMetroEstimado: real('costo_metro_estimado'),
     descripcion: text('descripcion'),
     // Cada muestra viene de un proveedor fijo (Alberto o Edimol). Nullable para
     // que el usuario pueda crear marcos sin proveedor y no romper al borrar uno.
@@ -199,7 +204,11 @@ export const muestrasMarcos = sqliteTable(
     index('idx_marcos_referencia').on(t.referencia),
     index('idx_marcos_proveedor').on(t.proveedorId),
     check('muestras_marcos_precio_positivo', sql`${t.precioMetro} >= 0`),
-    check('muestras_marcos_colilla_positiva', sql`${t.colillaCm} >= 0`)
+    check('muestras_marcos_colilla_positiva', sql`${t.colillaCm} >= 0`),
+    check(
+      'muestras_marcos_costo_estimado_no_negativo',
+      sql`${t.costoMetroEstimado} is null or ${t.costoMetroEstimado} >= 0`
+    )
   ]
 )
 
@@ -210,12 +219,19 @@ export const preciosPaspartuPintado = sqliteTable(
     anchoCm: real('ancho_cm').notNull(),
     altoCm: real('alto_cm').notNull(),
     precio: real('precio').notNull(),
+    costoEstimado: real('costo_estimado'),
     descripcion: text('descripcion'),
     activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull().default(now),
     updatedAt: text('updated_at').notNull().default(now)
   },
-  (t) => [check('precios_paspartu_pintado_precio_positivo', sql`${t.precio} >= 0`)]
+  (t) => [
+    check('precios_paspartu_pintado_precio_positivo', sql`${t.precio} >= 0`),
+    check(
+      'precios_paspartu_pintado_costo_estimado_no_negativo',
+      sql`${t.costoEstimado} is null or ${t.costoEstimado} >= 0`
+    )
+  ]
 )
 
 export const preciosPaspartuAcrilico = sqliteTable(
@@ -225,12 +241,19 @@ export const preciosPaspartuAcrilico = sqliteTable(
     anchoCm: real('ancho_cm').notNull(),
     altoCm: real('alto_cm').notNull(),
     precio: real('precio').notNull(),
+    costoEstimado: real('costo_estimado'),
     descripcion: text('descripcion'),
     activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull().default(now),
     updatedAt: text('updated_at').notNull().default(now)
   },
-  (t) => [check('precios_paspartu_acrilico_precio_positivo', sql`${t.precio} >= 0`)]
+  (t) => [
+    check('precios_paspartu_acrilico_precio_positivo', sql`${t.precio} >= 0`),
+    check(
+      'precios_paspartu_acrilico_costo_estimado_no_negativo',
+      sql`${t.costoEstimado} is null or ${t.costoEstimado} >= 0`
+    )
+  ]
 )
 
 export const preciosRetablos = sqliteTable(
@@ -240,11 +263,18 @@ export const preciosRetablos = sqliteTable(
     anchoCm: real('ancho_cm').notNull(),
     altoCm: real('alto_cm').notNull(),
     precio: real('precio').notNull(),
+    costoEstimado: real('costo_estimado'),
     activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull().default(now),
     updatedAt: text('updated_at').notNull().default(now)
   },
-  (t) => [check('precios_retablos_precio_positivo', sql`${t.precio} >= 0`)]
+  (t) => [
+    check('precios_retablos_precio_positivo', sql`${t.precio} >= 0`),
+    check(
+      'precios_retablos_costo_estimado_no_negativo',
+      sql`${t.costoEstimado} is null or ${t.costoEstimado} >= 0`
+    )
+  ]
 )
 
 export const preciosVidrios = sqliteTable(
@@ -252,12 +282,25 @@ export const preciosVidrios = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     tipo: text('tipo').notNull(),
+    nombre: text('nombre').notNull(),
+    espesorMm: real('espesor_mm').notNull().default(2),
     precioM2: real('precio_m2').notNull(),
+    costoM2Estimado: real('costo_m2_estimado'),
     activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull().default(now),
     updatedAt: text('updated_at').notNull().default(now)
   },
-  (t) => [check('precios_vidrios_precio_positivo', sql`${t.precioM2} >= 0`)]
+  (t) => [
+    uniqueIndex('idx_precios_vidrios_tipo_activo')
+      .on(t.tipo)
+      .where(sql`activo = 1`),
+    check('precios_vidrios_precio_positivo', sql`${t.precioM2} >= 0`),
+    check('precios_vidrios_espesor_positivo', sql`${t.espesorMm} > 0`),
+    check(
+      'precios_vidrios_costo_estimado_no_negativo',
+      sql`${t.costoM2Estimado} is null or ${t.costoM2Estimado} >= 0`
+    )
+  ]
 )
 
 export const preciosBastidores = sqliteTable(
@@ -267,11 +310,18 @@ export const preciosBastidores = sqliteTable(
     anchoCm: real('ancho_cm').notNull(),
     altoCm: real('alto_cm').notNull(),
     precio: real('precio').notNull(),
+    costoEstimado: real('costo_estimado'),
     activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull().default(now),
     updatedAt: text('updated_at').notNull().default(now)
   },
-  (t) => [check('precios_bastidores_precio_positivo', sql`${t.precio} >= 0`)]
+  (t) => [
+    check('precios_bastidores_precio_positivo', sql`${t.precio} >= 0`),
+    check(
+      'precios_bastidores_costo_estimado_no_negativo',
+      sql`${t.costoEstimado} is null or ${t.costoEstimado} >= 0`
+    )
+  ]
 )
 
 export const preciosTapas = sqliteTable(
@@ -281,11 +331,18 @@ export const preciosTapas = sqliteTable(
     anchoCm: real('ancho_cm').notNull(),
     altoCm: real('alto_cm').notNull(),
     precio: real('precio').notNull(),
+    costoEstimado: real('costo_estimado'),
     activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull().default(now),
     updatedAt: text('updated_at').notNull().default(now)
   },
-  (t) => [check('precios_tapas_precio_positivo', sql`${t.precio} >= 0`)]
+  (t) => [
+    check('precios_tapas_precio_positivo', sql`${t.precio} >= 0`),
+    check(
+      'precios_tapas_costo_estimado_no_negativo',
+      sql`${t.costoEstimado} is null or ${t.costoEstimado} >= 0`
+    )
+  ]
 )
 
 // ============================================================================
@@ -310,6 +367,16 @@ export const pedidos = sqliteTable(
     porcentajeMateriales: real('porcentaje_materiales').notNull().default(10),
     subtotal: real('subtotal').notNull().default(0),
     totalMateriales: real('total_materiales').notNull().default(0),
+    brutoCotizado: real('bruto_cotizado').notNull().default(0),
+    precioLista: real('precio_lista').notNull().default(0),
+    descuentoMonto: real('descuento_monto').notNull().default(0),
+    descuentoMotivo: text('descuento_motivo'),
+    costoEstimadoTotal: real('costo_estimado_total'),
+    margenEstimado: real('margen_estimado'),
+    margenEstimadoPct: real('margen_estimado_pct'),
+    estadoRentabilidad: text('estado_rentabilidad', { enum: ESTADOS_RENTABILIDAD })
+      .notNull()
+      .default('incompleta'),
     precioTotal: real('precio_total').notNull(),
     estado: text('estado', { enum: ESTADOS_PEDIDO }).notNull().default('cotizado'),
     tipoEntrega: text('tipo_entrega', { enum: TIPOS_ENTREGA }).notNull().default('estandar'),
@@ -328,6 +395,13 @@ export const pedidos = sqliteTable(
     check('pedidos_porcentaje_materiales_rango', sql`${t.porcentajeMateriales} BETWEEN 5 AND 10`),
     check('pedidos_subtotal_no_negativo', sql`${t.subtotal} >= 0`),
     check('pedidos_materiales_no_negativo', sql`${t.totalMateriales} >= 0`),
+    check('pedidos_bruto_no_negativo', sql`${t.brutoCotizado} >= 0`),
+    check('pedidos_precio_lista_no_negativo', sql`${t.precioLista} >= 0`),
+    check('pedidos_descuento_no_negativo', sql`${t.descuentoMonto} >= 0`),
+    check(
+      'pedidos_costo_estimado_total_no_negativo',
+      sql`${t.costoEstimadoTotal} is null or ${t.costoEstimadoTotal} >= 0`
+    ),
     check('pedidos_total_no_negativo', sql`${t.precioTotal} >= 0`)
   ]
 )
@@ -356,13 +430,23 @@ export const pedidoItems = sqliteTable(
     referencia: text('referencia'),
     cantidad: real('cantidad').notNull().default(1),
     precioUnitario: real('precio_unitario'),
+    costoUnitarioEstimado: real('costo_unitario_estimado'),
     subtotal: real('subtotal').notNull(),
+    subtotalCostoEstimado: real('subtotal_costo_estimado'),
     metadata: text('metadata', { mode: 'json' }).$type<PedidoItemMetadata>(),
     createdAt: text('created_at').notNull().default(now)
   },
   (t) => [
     index('idx_pedido_items_pedido').on(t.pedidoId),
-    check('pedido_items_subtotal_no_negativo', sql`${t.subtotal} >= 0`)
+    check('pedido_items_subtotal_no_negativo', sql`${t.tipoItem} = 'descuento' or ${t.subtotal} >= 0`),
+    check(
+      'pedido_items_costo_unitario_estimado_no_negativo',
+      sql`${t.costoUnitarioEstimado} is null or ${t.costoUnitarioEstimado} >= 0`
+    ),
+    check(
+      'pedido_items_subtotal_costo_estimado_no_negativo',
+      sql`${t.subtotalCostoEstimado} is null or ${t.subtotalCostoEstimado} >= 0`
+    )
   ]
 )
 

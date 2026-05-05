@@ -73,6 +73,7 @@ export const CONCEPTO_ICON: Record<string, LucideIcon> = {
   tapa: Package,
   restauracion: Sparkles,
   materiales_adicionales: ShoppingCart,
+  descuento: Coins,
   instalacion: Wrench,
   colilla: Scissors,
   medidas: Ruler

@@ -17,6 +17,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { resolve } from 'path'
 import * as schema from './schema'
 import type { DB } from './index'
+import { ensureConfigInicial } from './seed'
 
 // Attempt to load AND instantiate the native binding once at module init.
 // Just requiring the module isn't enough — the JS wrapper loads fine even when
@@ -64,5 +65,6 @@ export function createTestDb(): {
   const db = drizzle(sqlite, { schema })
   const migrationsFolder = resolve(__dirname, 'migrations')
   migrate(db, { migrationsFolder })
+  ensureConfigInicial(db as unknown as DB)
   return { db, sqlite }
 }

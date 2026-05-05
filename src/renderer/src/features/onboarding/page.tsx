@@ -1,14 +1,53 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Building2, FileSpreadsheet, Rocket, Check, ArrowRight } from 'lucide-react'
+import {
+  Sparkles,
+  Building2,
+  FileSpreadsheet,
+  Rocket,
+  Check,
+  ArrowRight,
+  Download,
+  Upload,
+  AlertTriangle,
+  CheckCircle2
+} from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import { Card } from '@renderer/components/ui/card'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
+import { Spinner } from '@renderer/components/ui/spinner'
+import { Modal } from '@renderer/components/ui/modal'
 import { cn } from '@renderer/lib/cn'
-import { formatPrimaryShortcut } from '@renderer/lib/shortcuts'
 import { useToast } from '@renderer/contexts/toast-context'
-import type { IpcResult } from '@shared/types'
+import type { IpcResult, MuestraMarcoConProveedor } from '@shared/types'
+
+type ResumenParseo = {
+  negocio: number
+  proveedores: number
+  marcos: number
+  vidrios: number
+  paspartuPintado: number
+  paspartuAcrilico: number
+  retablos: number
+  bastidores: number
+  tapas: number
+  configuracion: number
+}
+
+type ErrorPlantilla = {
+  hoja: string
+  fila: number
+  campo?: string
+  mensaje: string
+}
+
+type ResultadoParseo = {
+  ok: boolean
+  datos: unknown
+  errores: ErrorPlantilla[]
+  resumen: ResumenParseo
+}
 
 const STEPS = [
   { key: 'bienvenida', label: 'Bienvenida', icon: Sparkles },
@@ -30,8 +69,14 @@ export default function OnboardingPage(): React.JSX.Element {
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
   const [hydrated, setHydrated] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [importing, setImporting] = useState(false)
   const [loadingDemo, setLoadingDemo] = useState(false)
+  // Plantilla unificada — reemplaza el import legacy de marcos
+  const [generandoPlantilla, setGenerandoPlantilla] = useState(false)
+  const [subiendoPlantilla, setSubiendoPlantilla] = useState(false)
+  const [parseado, setParseado] = useState<ResultadoParseo | null>(null)
+  const [cargandoPlantilla, setCargandoPlantilla] = useState(false)
+  // Detección de marcos cargados — para personalizar Step 3
+  const [hayMarcos, setHayMarcos] = useState(false)
 
   // I-03: campos vacíos por defecto. El dueño confía más cuando la app NO
   // asume su identidad desde el primer click.
@@ -46,6 +91,8 @@ export default function OnboardingPage(): React.JSX.Element {
   // Hidrata el wizard con lo que ya guardó el dueño antes de cerrar:
   //   - Paso actual (`onboarding_step`): evita empezar en "Bienvenida" cada vez
   //   - Datos del negocio (nombre_negocio, rut, etc.): pre-rellena el form
+  //   - Marcos cargados: para personalizar el step 3 (CTA distinto si ya hay
+  //     precios cargados vs si todavía no)
   // Si es la primera vez, los GETs devuelven vacío y el wizard se ve idéntico
   // al original. Sólo bloqueamos el render hasta terminar para evitar que el
   // usuario vea un flash del paso 0 antes de saltar al paso correcto.
@@ -76,6 +123,14 @@ export default function OnboardingPage(): React.JSX.Element {
           direccion: pares[3]?.ok ? (pares[3].data ?? '') : '',
           correo: pares[4]?.ok ? (pares[4].data ?? '') : ''
         })
+        // Detección de marcos: si ya hay alguno cargado, el step 3 sugiere
+        // ir directo al cotizador. Si no hay, sugiere cargar plantilla primero.
+        const marcosRes = (await window.api.cotizador.listarMuestrasMarcos()) as IpcResult<
+          MuestraMarcoConProveedor[]
+        >
+        if (!cancelled && marcosRes.ok) {
+          setHayMarcos(marcosRes.data.length > 0)
+        }
       } catch (err) {
         // Si algo falla, arrancamos el wizard "limpio" (no bloqueamos al papá).
         console.error('[onboarding] hidratación falló, arranco desde cero', err)
@@ -180,41 +235,105 @@ export default function OnboardingPage(): React.JSX.Element {
   }
 
   /**
-   * I-03 — Llama al backend para abrir el file picker y procesar el Excel.
-   * Muestra toast con cuántos marcos se importaron.
+   * Descarga la plantilla unificada vacía y abre el explorador para que el
+   * dueño la encuentre. La plantilla incluye todas las listas (proveedores,
+   * marcos, vidrios, paspartú, retablos, bastidores, tapas, configuración).
    */
-  async function importarDesdeExcel(): Promise<void> {
-    setImporting(true)
+  async function handleDescargarPlantilla(): Promise<void> {
+    setGenerandoPlantilla(true)
     try {
-      const result = (await window.api.excel.importarMarcos()) as IpcResult<{
-        importados: number
-        errores: string[]
-      }>
-      if (!result.ok) {
+      const res = (await window.api.excel.plantilla.generar()) as IpcResult<string>
+      if (res.ok) {
         showToast({
-          tone: 'error',
-          title: 'No se pudo importar',
-          message: result.error
+          tone: 'success',
+          title: 'Plantilla descargada',
+          message:
+            'Se guardó en la carpeta Descargas y se abrió el explorador. Llénala con tus datos y vuelve aquí para subirla.'
         })
-        return
+      } else {
+        showToast({ tone: 'error', title: 'No se pudo generar', message: res.error })
       }
-      const { importados, errores } = result.data
-      if (importados === 0 && errores.length === 0) {
-        // Usuario canceló el diálogo
-        return
-      }
+    } catch (err) {
       showToast({
-        tone: importados > 0 ? 'success' : 'warning',
-        title: `${importados} marco${importados === 1 ? '' : 's'} importado${importados === 1 ? '' : 's'}`,
-        message:
-          errores.length > 0
-            ? `${errores.length} fila(s) con errores: ${errores.slice(0, 2).join('; ')}${errores.length > 2 ? '…' : ''}`
-            : 'Los precios están listos para usar en el cotizador.'
+        tone: 'error',
+        title: 'Error al generar plantilla',
+        message: err instanceof Error ? err.message : 'Error desconocido'
       })
+    } finally {
+      setGenerandoPlantilla(false)
+    }
+  }
+
+  /**
+   * Sube la plantilla llenada y abre el modal de preview para confirmar la
+   * carga. Si hay errores, muestra el detalle. Si todo OK, permite cargar.
+   */
+  async function handleSubirPlantilla(): Promise<void> {
+    setSubiendoPlantilla(true)
+    try {
+      const res = (await window.api.excel.plantilla.subir()) as IpcResult<ResultadoParseo | null>
+      if (!res.ok) {
+        showToast({ tone: 'error', title: 'No se pudo leer la plantilla', message: res.error })
+        return
+      }
+      if (res.data === null) return // usuario canceló el dialogo
+      setParseado(res.data)
+    } catch (err) {
+      showToast({
+        tone: 'error',
+        title: 'Error al subir plantilla',
+        message: err instanceof Error ? err.message : 'Error desconocido'
+      })
+    } finally {
+      setSubiendoPlantilla(false)
+    }
+  }
+
+  /**
+   * Confirma la carga de la plantilla parseada (modo upsert siempre en
+   * onboarding — es el caso más común y seguro).
+   */
+  async function handleCargarPlantilla(): Promise<void> {
+    if (!parseado || !parseado.ok) return
+    setCargandoPlantilla(true)
+    try {
+      const res = (await window.api.excel.plantilla.cargar(parseado.datos, 'upsert')) as IpcResult<{
+        creados: ResumenParseo
+      }>
+      if (!res.ok) {
+        showToast({ tone: 'error', title: 'Error al cargar', message: res.error })
+        return
+      }
+      const total = Object.values(res.data.creados).reduce((a, n) => a + n, 0)
+      showToast({
+        tone: 'success',
+        title: 'Datos cargados',
+        message: `Se cargaron ${total} elementos a tu negocio. Vamos al paso final.`
+      })
+      setParseado(null)
+      // Refrescar la detección de marcos para personalizar el step 3
+      const marcos = (await window.api.cotizador.listarMuestrasMarcos()) as IpcResult<
+        MuestraMarcoConProveedor[]
+      >
+      if (marcos.ok) setHayMarcos(marcos.data.length > 0)
       goToStep(3)
     } finally {
-      setImporting(false)
+      setCargandoPlantilla(false)
     }
+  }
+
+  /**
+   * Saltar el wizard sin configurar nada. Marca onboarding completado y va
+   * al dashboard. El dueño puede configurar después desde Configuración.
+   */
+  async function saltarWizard(): Promise<void> {
+    showToast({
+      tone: 'info',
+      title: 'Wizard saltado',
+      message:
+        'Puedes configurar todo en cualquier momento desde Configuración → "Cargar datos desde plantilla Excel".'
+    })
+    await completarOnboarding('/')
   }
 
   async function saveConfig(): Promise<void> {
@@ -303,14 +422,13 @@ export default function OnboardingPage(): React.JSX.Element {
               </div>
               <h1 className="text-2xl font-semibold text-text mb-3">Bienvenido a Casa Alberto</h1>
               <p className="text-sm text-text-muted mb-6 max-w-sm mx-auto">
-                Tu nueva herramienta para gestionar la marquetería. Vamos a dejar lista la base para
-                cotizar, crear pedidos y facturar sin perder el hilo del proceso.
+                Tu nueva herramienta para gestionar la marquetería. En 3 pasos tienes todo listo.
               </p>
 
               <GuidanceHint
                 tone="accent"
-                title="Qué vas a resolver en este onboarding"
-                message="Primero guardas los datos del negocio, luego decides cómo cargar precios y al final entras al flujo principal recomendado."
+                title="Cómo funciona"
+                message="(1) Datos básicos del negocio. (2) Cargas tus precios desde un Excel que descargas aquí. (3) Listo para cotizar."
                 className="mb-8 text-left"
               />
 
@@ -327,6 +445,13 @@ export default function OnboardingPage(): React.JSX.Element {
                 >
                   {loadingDemo ? 'Cargando datos de ejemplo…' : 'Explorar con datos de ejemplo'}
                 </Button>
+                <button
+                  type="button"
+                  onClick={saltarWizard}
+                  className="text-xs text-text-muted hover:text-text underline-offset-4 hover:underline cursor-pointer pt-2"
+                >
+                  Saltar el wizard y configurar después
+                </button>
               </div>
             </div>
           )}
@@ -340,8 +465,8 @@ export default function OnboardingPage(): React.JSX.Element {
 
               <GuidanceHint
                 tone="info"
-                title="Empieza por lo mínimo"
-                message="Si hoy solo tienes a mano nombre, teléfono y dirección, con eso ya puedes avanzar y completar el resto más tarde."
+                title="Si no tienes todo a mano, no pasa nada"
+                message="Llena lo que sepas y deja vacío el resto. Puedes completar después en Configuración."
                 className="mb-6"
               />
 
@@ -352,9 +477,10 @@ export default function OnboardingPage(): React.JSX.Element {
                   onChange={(event) =>
                     setDatos((prev) => ({ ...prev, nombre: event.target.value }))
                   }
+                  placeholder="Casa Alberto"
                 />
                 <Input
-                  label="NIT / RUT"
+                  label="NIT / Cédula"
                   value={datos.rut}
                   onChange={(event) => setDatos((prev) => ({ ...prev, rut: event.target.value }))}
                   placeholder="Ej: 79.234.567-1"
@@ -369,7 +495,7 @@ export default function OnboardingPage(): React.JSX.Element {
                     placeholder="Ej: 310 234 5678"
                   />
                   <Input
-                    label="Correo"
+                    label="Correo (opcional)"
                     type="email"
                     value={datos.correo}
                     onChange={(event) =>
@@ -406,33 +532,63 @@ export default function OnboardingPage(): React.JSX.Element {
 
           {step === 2 && (
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-text mb-1">Precios iniciales</h2>
+              <h2 className="text-xl font-bold tracking-tight text-text mb-1">
+                Lista de precios
+              </h2>
               <p className="text-sm text-text-muted mb-6">
-                Puedes importar tu lista de precios o empezar con la base de ejemplo y ajustar
-                luego.
+                Carga proveedores, marcos, vidrios y demás listas de una sola vez con la plantilla
+                Excel.
               </p>
 
               <GuidanceHint
                 tone="info"
-                title="Recomendación para arrancar rápido"
-                message="Si todavía no tienes el Excel listo, entra primero al cotizador, valida el flujo y vuelve a Configuración cuando quieras afinar precios."
+                title="Cómo funciona"
+                message="(1) Descarga la plantilla. (2) Llénala con los datos de tu negocio (puedes hacerlo con tu papá). (3) Vuelve aquí y súbela. (4) La app valida y carga todo automáticamente."
                 className="mb-6"
               />
 
               <div className="space-y-3 mb-8">
                 <button
                   className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:border-accent hover:bg-accent/5 cursor-pointer transition-colors text-left disabled:cursor-wait disabled:opacity-60"
-                  onClick={importarDesdeExcel}
-                  disabled={importing}
+                  onClick={handleDescargarPlantilla}
+                  disabled={generandoPlantilla}
                 >
-                  <FileSpreadsheet size={24} className="text-accent-strong shrink-0" />
-                  <div>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10">
+                    {generandoPlantilla ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      <Download size={20} className="text-accent-strong" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-text">
-                      {importing ? 'Importando marcos…' : 'Importar marcos desde Excel'}
+                      {generandoPlantilla ? 'Generando plantilla...' : '1. Descargar plantilla vacía'}
                     </p>
                     <p className="text-xs text-text-muted">
-                      Sube un archivo .xlsx con tu lista de marcos (referencia, colilla,
-                      precio/metro).
+                      Crea un archivo Excel con todas las hojas necesarias. Se guarda en Descargas
+                      y se abre el explorador.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:border-success hover:bg-success-bg/40 cursor-pointer transition-colors text-left disabled:cursor-wait disabled:opacity-60"
+                  onClick={handleSubirPlantilla}
+                  disabled={subiendoPlantilla}
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-bg">
+                    {subiendoPlantilla ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      <Upload size={20} className="text-success-strong" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-text">
+                      {subiendoPlantilla ? 'Leyendo plantilla...' : '2. Subir plantilla llenada'}
+                    </p>
+                    <p className="text-xs text-text-muted">
+                      Cuando tengas el Excel con los datos reales, súbelo aquí.
                     </p>
                   </div>
                 </button>
@@ -441,11 +597,11 @@ export default function OnboardingPage(): React.JSX.Element {
                   className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:border-border-strong cursor-pointer transition-colors text-left"
                   onClick={() => goToStep(3)}
                 >
-                  <ArrowRight size={24} className="text-text-soft shrink-0" />
+                  <ArrowRight size={20} className="text-text-soft shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-text">Ingresar manualmente después</p>
+                    <p className="text-sm font-medium text-text">Configurar precios después</p>
                     <p className="text-xs text-text-muted">
-                      Puedes agregar y editar precios desde Configuración y desde el cotizador.
+                      Saltar este paso. Puedes cargar precios desde Configuración cuando quieras.
                     </p>
                   </div>
                 </button>
@@ -465,61 +621,156 @@ export default function OnboardingPage(): React.JSX.Element {
                 <Rocket size={32} className="text-success-strong" />
               </div>
               <h2 className="text-xl font-bold tracking-tight text-text mb-3">Todo listo</h2>
-              <p className="text-sm text-text-muted mb-3 max-w-sm mx-auto">
-                Ya tienes la base mínima para trabajar. Estos son los siguientes pasos más útiles:
-              </p>
-              <div className="mb-4">
-                <GuidanceHint
-                  tone="accent"
-                  title="Esta semana"
-                  message="Revisa el calendario y las entregas programadas de esta semana."
-                  actionLabel="Ver ahora"
-                  onAction={() => navigate('/agenda?action=ver-semana')}
-                />
-              </div>
-              <div className="text-left space-y-2 mb-8 max-w-sm mx-auto">
-                {[
-                  'Crear tu primera cotización con ayuda paso a paso.',
-                  'Convertir una cotización en pedido y seguirla en el tablero.',
-                  'Generar facturas y registrar abonos sin perder el saldo.'
-                ].map((text) => (
-                  <div key={text} className="flex items-center gap-2 text-sm text-text-muted">
-                    <Check size={16} className="text-success-strong shrink-0" />
-                    {text}
+
+              {hayMarcos ? (
+                <>
+                  <p className="text-sm text-text-muted mb-6 max-w-sm mx-auto">
+                    Ya tienes precios cargados. Empieza creando tu primera cotización.
+                  </p>
+                  <div className="flex flex-col gap-3 max-w-xs mx-auto">
+                    <Button className="w-full" onClick={finishToCotizador}>
+                      <Rocket size={18} />
+                      Ir al cotizador
+                    </Button>
+                    <Button variant="ghost" className="w-full" onClick={finishToDashboard}>
+                      Ir al dashboard
+                    </Button>
                   </div>
-                ))}
-              </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-text-muted mb-6 max-w-sm mx-auto">
+                    Para cotizar necesitas tener al menos un marco cargado. Te recomiendo cargar
+                    la plantilla primero.
+                  </p>
+                  <GuidanceHint
+                    tone="warning"
+                    title="Sin precios cargados"
+                    message="Si entras al cotizador sin marcos, no podrás generar cotizaciones. Carga la plantilla en Configuración primero."
+                    className="mb-6 text-left"
+                  />
+                  <div className="flex flex-col gap-3 max-w-xs mx-auto">
+                    <Button className="w-full" onClick={() => completarOnboarding('/configuracion')}>
+                      <FileSpreadsheet size={18} />
+                      Cargar precios primero
+                    </Button>
+                    <Button variant="ghost" className="w-full" onClick={finishToCotizador}>
+                      Ir al cotizador igual
+                    </Button>
+                  </div>
+                </>
+              )}
 
-              <GuidanceHint
-                tone="success"
-                title="Siguiente módulo recomendado"
-                message="Empieza por el cotizador. Es la entrada natural del trabajo y desde ahí ya puedes crear pedidos y seguir el proceso completo."
-                className="mb-6 text-left"
-              />
-
-              <div className="flex flex-col gap-3 max-w-xs mx-auto">
-                <Button className="w-full" onClick={finishToCotizador}>
-                  <Rocket size={18} />
-                  Ir al cotizador
-                </Button>
-                <Button variant="secondary" className="w-full" onClick={finishToDashboard}>
-                  Ir al dashboard
-                </Button>
-                <Button variant="ghost" className="w-full" onClick={() => goToStep(2)}>
-                  Atrás
-                </Button>
-                <p className="text-xs text-text-muted">
-                  Tip: usa{' '}
-                  <kbd className="px-1 py-0.5 bg-surface-muted rounded text-text-muted">
-                    {formatPrimaryShortcut('k')}
-                  </kbd>{' '}
-                  para buscar cualquier cosa.
-                </p>
-              </div>
+              <Button variant="ghost" className="mt-3" onClick={() => goToStep(2)}>
+                Atrás
+              </Button>
             </div>
           )}
         </div>
       </Card>
+
+      {parseado && (
+        <Modal
+          open
+          onClose={() => setParseado(null)}
+          title="Vista previa de la plantilla"
+          size="lg"
+        >
+          {parseado.ok ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success-bg p-3">
+                <CheckCircle2 size={20} className="shrink-0 text-success-strong" />
+                <p className="text-sm text-success-strong">
+                  Plantilla válida.{' '}
+                  <strong>
+                    {Object.values(parseado.resumen).reduce((a, n) => a + n, 0)} elementos
+                  </strong>{' '}
+                  listos para cargar.
+                </p>
+              </div>
+
+              <div className="rounded-md bg-surface-muted/50 p-3 space-y-1 text-sm">
+                {Object.entries(parseado.resumen).map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-text-muted capitalize">{k.replace(/([A-Z])/g, ' $1')}</span>
+                    <span
+                      className={cn(
+                        'tabular-nums font-medium',
+                        v === 0 ? 'text-text-soft' : 'text-text'
+                      )}
+                    >
+                      {v}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setParseado(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleCargarPlantilla}
+                  disabled={cargandoPlantilla}
+                  className="flex-1"
+                >
+                  {cargandoPlantilla ? <Spinner size="sm" /> : <FileSpreadsheet size={16} />}
+                  {cargandoPlantilla ? 'Cargando...' : 'Cargar a la app'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-md border border-warning/30 bg-warning-bg p-3 flex items-start gap-3">
+                <AlertTriangle size={20} className="shrink-0 text-warning-strong" />
+                <div>
+                  <p className="text-sm font-semibold text-warning-strong">
+                    La plantilla tiene {parseado.errores.length}{' '}
+                    {parseado.errores.length === 1 ? 'error' : 'errores'}
+                  </p>
+                  <p className="mt-1 text-xs text-text">
+                    Corrige los siguientes puntos en el Excel y vuelve a subirlo. No se cargó nada.
+                  </p>
+                </div>
+              </div>
+              <div className="max-h-72 overflow-y-auto rounded-md border border-border">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-surface-muted">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        Hoja
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        Fila
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        Problema
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parseado.errores.map((e, i) => (
+                      <tr key={i} className="border-t border-border">
+                        <td className="px-3 py-2 font-mono text-xs text-text">{e.hoja}</td>
+                        <td className="px-3 py-2 tabular-nums text-text-muted">
+                          {e.fila > 0 ? e.fila : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-error-strong">
+                          {e.campo ? `[${e.campo}] ` : ''}
+                          {e.mensaje}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Button onClick={() => setParseado(null)} className="w-full">
+                Cerrar y corregir
+              </Button>
+            </div>
+          )}
+        </Modal>
+      )}
     </div>
   )
 }

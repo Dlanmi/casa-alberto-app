@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX `idx_facturas_pedido_activa` ON `facturas` (`pedido_id`) WHERE estado != 'anulada';

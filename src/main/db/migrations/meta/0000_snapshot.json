@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b411c0cd-3905-4ac2-a56f-db148a4f937c",
+  "id": "b6ca57c5-9b39-42e5-bc9e-695b635d1b4d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "acudientes": {
@@ -62,7 +62,9 @@
       "indexes": {
         "acudientes_cliente_id_unique": {
           "name": "acudientes_cliente_id_unique",
-          "columns": ["cliente_id"],
+          "columns": [
+            "cliente_id"
+          ],
           "isUnique": true
         }
       },
@@ -71,8 +73,117 @@
           "name": "acudientes_cliente_id_clientes_id_fk",
           "tableFrom": "acudientes",
           "tableTo": "clientes",
-          "columnsFrom": ["cliente_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "cliente_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "asistencias": {
+      "name": "asistencias",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "estudiante_id": {
+          "name": "estudiante_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "clase_id": {
+          "name": "clase_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fecha": {
+          "name": "fecha",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "presente": {
+          "name": "presente",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "notas": {
+          "name": "notas",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "idx_asistencias_estudiante_fecha": {
+          "name": "idx_asistencias_estudiante_fecha",
+          "columns": [
+            "estudiante_id",
+            "fecha"
+          ],
+          "isUnique": false
+        },
+        "idx_asistencias_clase_fecha": {
+          "name": "idx_asistencias_clase_fecha",
+          "columns": [
+            "clase_id",
+            "fecha"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "asistencias_estudiante_id_estudiantes_id_fk": {
+          "name": "asistencias_estudiante_id_estudiantes_id_fk",
+          "tableFrom": "asistencias",
+          "tableTo": "estudiantes",
+          "columnsFrom": [
+            "estudiante_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "asistencias_clase_id_clases_id_fk": {
+          "name": "asistencias_clase_id_clases_id_fk",
+          "tableFrom": "asistencias",
+          "tableTo": "clases",
+          "columnsFrom": [
+            "clase_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -202,6 +313,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "es_menor": {
+          "name": "es_menor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "activo": {
           "name": "activo",
           "type": "integer",
@@ -230,22 +349,30 @@
       "indexes": {
         "clientes_cedula_unique": {
           "name": "clientes_cedula_unique",
-          "columns": ["cedula"],
+          "columns": [
+            "cedula"
+          ],
           "isUnique": true
         },
         "idx_clientes_nombre": {
           "name": "idx_clientes_nombre",
-          "columns": ["nombre"],
+          "columns": [
+            "nombre"
+          ],
           "isUnique": false
         },
         "idx_clientes_cedula": {
           "name": "idx_clientes_cedula",
-          "columns": ["cedula"],
+          "columns": [
+            "cedula"
+          ],
           "isUnique": false
         },
         "idx_clientes_telefono": {
           "name": "idx_clientes_telefono",
-          "columns": ["telefono"],
+          "columns": [
+            "telefono"
+          ],
           "isUnique": false
         }
       },
@@ -289,7 +416,9 @@
       "indexes": {
         "configuracion_clave_unique": {
           "name": "configuracion_clave_unique",
-          "columns": ["clave"],
+          "columns": [
+            "clave"
+          ],
           "isUnique": true
         }
       },
@@ -359,8 +488,12 @@
           "name": "contrato_items_contrato_id_contratos_id_fk",
           "tableFrom": "contrato_items",
           "tableTo": "contratos",
-          "columnsFrom": ["contrato_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "contrato_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -470,22 +603,31 @@
       "indexes": {
         "contratos_numero_unique": {
           "name": "contratos_numero_unique",
-          "columns": ["numero"],
+          "columns": [
+            "numero"
+          ],
           "isUnique": true
         },
         "idx_contratos_numero": {
           "name": "idx_contratos_numero",
-          "columns": ["numero"],
+          "columns": [
+            "numero"
+          ],
           "isUnique": false
         },
         "idx_contratos_cliente": {
           "name": "idx_contratos_cliente",
-          "columns": ["cliente_id"],
+          "columns": [
+            "cliente_id"
+          ],
           "isUnique": false
         },
         "idx_contratos_estado_fecha": {
           "name": "idx_contratos_estado_fecha",
-          "columns": ["estado", "fecha"],
+          "columns": [
+            "estado",
+            "fecha"
+          ],
           "isUnique": false
         }
       },
@@ -494,8 +636,12 @@
           "name": "contratos_cliente_id_clientes_id_fk",
           "tableFrom": "contratos",
           "tableTo": "clientes",
-          "columnsFrom": ["cliente_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "cliente_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -582,7 +728,9 @@
       "indexes": {
         "cuentas_cobro_numero_unique": {
           "name": "cuentas_cobro_numero_unique",
-          "columns": ["numero"],
+          "columns": [
+            "numero"
+          ],
           "isUnique": true
         }
       },
@@ -591,8 +739,12 @@
           "name": "cuentas_cobro_contrato_id_contratos_id_fk",
           "tableFrom": "cuentas_cobro",
           "tableTo": "contratos",
-          "columnsFrom": ["contrato_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "contrato_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -659,8 +811,12 @@
           "name": "devoluciones_factura_id_facturas_id_fk",
           "tableFrom": "devoluciones",
           "tableTo": "facturas",
-          "columnsFrom": ["factura_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "factura_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -741,7 +897,9 @@
       "indexes": {
         "idx_estudiantes_cliente": {
           "name": "idx_estudiantes_cliente",
-          "columns": ["cliente_id"],
+          "columns": [
+            "cliente_id"
+          ],
           "isUnique": false
         }
       },
@@ -750,8 +908,12 @@
           "name": "estudiantes_cliente_id_clientes_id_fk",
           "tableFrom": "estudiantes",
           "tableTo": "clientes",
-          "columnsFrom": ["cliente_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "cliente_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -759,8 +921,12 @@
           "name": "estudiantes_clase_id_clases_id_fk",
           "tableFrom": "estudiantes",
           "tableTo": "clases",
-          "columnsFrom": ["clase_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "clase_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -856,28 +1022,46 @@
       "indexes": {
         "facturas_numero_unique": {
           "name": "facturas_numero_unique",
-          "columns": ["numero"],
+          "columns": [
+            "numero"
+          ],
           "isUnique": true
         },
         "idx_facturas_numero": {
           "name": "idx_facturas_numero",
-          "columns": ["numero"],
+          "columns": [
+            "numero"
+          ],
           "isUnique": false
         },
         "idx_facturas_cliente": {
           "name": "idx_facturas_cliente",
-          "columns": ["cliente_id"],
+          "columns": [
+            "cliente_id"
+          ],
           "isUnique": false
         },
         "idx_facturas_pedido": {
           "name": "idx_facturas_pedido",
-          "columns": ["pedido_id"],
+          "columns": [
+            "pedido_id"
+          ],
           "isUnique": false
         },
         "idx_facturas_estado": {
           "name": "idx_facturas_estado",
-          "columns": ["estado"],
+          "columns": [
+            "estado"
+          ],
           "isUnique": false
+        },
+        "idx_facturas_pedido_activa": {
+          "name": "idx_facturas_pedido_activa",
+          "columns": [
+            "pedido_id"
+          ],
+          "isUnique": true,
+          "where": "estado != 'anulada'"
         }
       },
       "foreignKeys": {
@@ -885,8 +1069,12 @@
           "name": "facturas_pedido_id_pedidos_id_fk",
           "tableFrom": "facturas",
           "tableTo": "pedidos",
-          "columnsFrom": ["pedido_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "pedido_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -894,8 +1082,12 @@
           "name": "facturas_cliente_id_clientes_id_fk",
           "tableFrom": "facturas",
           "tableTo": "clientes",
-          "columnsFrom": ["cliente_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "cliente_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -966,12 +1158,17 @@
       "indexes": {
         "idx_historial_registro": {
           "name": "idx_historial_registro",
-          "columns": ["tabla", "registro_id"],
+          "columns": [
+            "tabla",
+            "registro_id"
+          ],
           "isUnique": false
         },
         "idx_historial_fecha": {
           "name": "idx_historial_fecha",
-          "columns": ["fecha"],
+          "columns": [
+            "fecha"
+          ],
           "isUnique": false
         }
       },
@@ -1152,27 +1349,38 @@
       "indexes": {
         "idx_movfin_tipo": {
           "name": "idx_movfin_tipo",
-          "columns": ["tipo"],
+          "columns": [
+            "tipo"
+          ],
           "isUnique": false
         },
         "idx_movfin_categoria": {
           "name": "idx_movfin_categoria",
-          "columns": ["categoria"],
+          "columns": [
+            "categoria"
+          ],
           "isUnique": false
         },
         "idx_movfin_fecha": {
           "name": "idx_movfin_fecha",
-          "columns": ["fecha"],
+          "columns": [
+            "fecha"
+          ],
           "isUnique": false
         },
         "idx_movfin_referencia": {
           "name": "idx_movfin_referencia",
-          "columns": ["referencia_tipo", "referencia_id"],
+          "columns": [
+            "referencia_tipo",
+            "referencia_id"
+          ],
           "isUnique": false
         },
         "idx_movfin_proveedor": {
           "name": "idx_movfin_proveedor",
-          "columns": ["proveedor_id"],
+          "columns": [
+            "proveedor_id"
+          ],
           "isUnique": false
         }
       },
@@ -1181,8 +1389,12 @@
           "name": "movimientos_financieros_proveedor_id_proveedores_id_fk",
           "tableFrom": "movimientos_financieros",
           "tableTo": "proveedores",
-          "columnsFrom": ["proveedor_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "proveedor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1274,7 +1486,9 @@
       "indexes": {
         "idx_movinv_inventario": {
           "name": "idx_movinv_inventario",
-          "columns": ["inventario_id"],
+          "columns": [
+            "inventario_id"
+          ],
           "isUnique": false
         }
       },
@@ -1283,8 +1497,12 @@
           "name": "movimientos_inventario_inventario_id_inventario_id_fk",
           "tableFrom": "movimientos_inventario",
           "tableTo": "inventario",
-          "columnsFrom": ["inventario_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "inventario_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1292,8 +1510,12 @@
           "name": "movimientos_inventario_pedido_id_pedidos_id_fk",
           "tableFrom": "movimientos_inventario",
           "tableTo": "pedidos",
-          "columnsFrom": ["pedido_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "pedido_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1301,8 +1523,12 @@
           "name": "movimientos_inventario_proveedor_id_proveedores_id_fk",
           "tableFrom": "movimientos_inventario",
           "tableTo": "proveedores",
-          "columnsFrom": ["proveedor_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "proveedor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1347,9 +1573,23 @@
           "notNull": true,
           "autoincrement": false
         },
+        "costo_metro_estimado": {
+          "name": "costo_metro_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "descripcion": {
           "name": "descripcion",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "proveedor_id": {
+          "name": "proveedor_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1382,16 +1622,41 @@
       "indexes": {
         "muestras_marcos_referencia_unique": {
           "name": "muestras_marcos_referencia_unique",
-          "columns": ["referencia"],
+          "columns": [
+            "referencia"
+          ],
           "isUnique": true
         },
         "idx_marcos_referencia": {
           "name": "idx_marcos_referencia",
-          "columns": ["referencia"],
+          "columns": [
+            "referencia"
+          ],
+          "isUnique": false
+        },
+        "idx_marcos_proveedor": {
+          "name": "idx_marcos_proveedor",
+          "columns": [
+            "proveedor_id"
+          ],
           "isUnique": false
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "muestras_marcos_proveedor_id_proveedores_id_fk": {
+          "name": "muestras_marcos_proveedor_id_proveedores_id_fk",
+          "tableFrom": "muestras_marcos",
+          "tableTo": "proveedores",
+          "columnsFrom": [
+            "proveedor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
@@ -1402,6 +1667,10 @@
         "muestras_marcos_colilla_positiva": {
           "name": "muestras_marcos_colilla_positiva",
           "value": "\"muestras_marcos\".\"colilla_cm\" >= 0"
+        },
+        "muestras_marcos_costo_estimado_no_negativo": {
+          "name": "muestras_marcos_costo_estimado_no_negativo",
+          "value": "\"muestras_marcos\".\"costo_metro_estimado\" is null or \"muestras_marcos\".\"costo_metro_estimado\" >= 0"
         }
       }
     },
@@ -1462,12 +1731,16 @@
       "indexes": {
         "idx_pagos_factura": {
           "name": "idx_pagos_factura",
-          "columns": ["factura_id"],
+          "columns": [
+            "factura_id"
+          ],
           "isUnique": false
         },
         "idx_pagos_fecha": {
           "name": "idx_pagos_fecha",
-          "columns": ["fecha"],
+          "columns": [
+            "fecha"
+          ],
           "isUnique": false
         }
       },
@@ -1476,8 +1749,12 @@
           "name": "pagos_factura_id_facturas_id_fk",
           "tableFrom": "pagos",
           "tableTo": "facturas",
-          "columnsFrom": ["factura_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "factura_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1550,7 +1827,10 @@
       "indexes": {
         "idx_pagos_clases_estud_mes": {
           "name": "idx_pagos_clases_estud_mes",
-          "columns": ["estudiante_id", "mes"],
+          "columns": [
+            "estudiante_id",
+            "mes"
+          ],
           "isUnique": false
         }
       },
@@ -1559,8 +1839,12 @@
           "name": "pagos_clases_estudiante_id_estudiantes_id_fk",
           "tableFrom": "pagos_clases",
           "tableTo": "estudiantes",
-          "columnsFrom": ["estudiante_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "estudiante_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1627,8 +1911,12 @@
           "name": "pagos_clases_detalle_pago_clase_id_pagos_clases_id_fk",
           "tableFrom": "pagos_clases_detalle",
           "tableTo": "pagos_clases",
-          "columnsFrom": ["pago_clase_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "pago_clase_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1695,11 +1983,25 @@
           "notNull": false,
           "autoincrement": false
         },
+        "costo_unitario_estimado": {
+          "name": "costo_unitario_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "subtotal": {
           "name": "subtotal",
           "type": "real",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "subtotal_costo_estimado": {
+          "name": "subtotal_costo_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "metadata": {
@@ -1721,7 +2023,9 @@
       "indexes": {
         "idx_pedido_items_pedido": {
           "name": "idx_pedido_items_pedido",
-          "columns": ["pedido_id"],
+          "columns": [
+            "pedido_id"
+          ],
           "isUnique": false
         }
       },
@@ -1730,8 +2034,12 @@
           "name": "pedido_items_pedido_id_pedidos_id_fk",
           "tableFrom": "pedido_items",
           "tableTo": "pedidos",
-          "columnsFrom": ["pedido_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "pedido_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1741,7 +2049,15 @@
       "checkConstraints": {
         "pedido_items_subtotal_no_negativo": {
           "name": "pedido_items_subtotal_no_negativo",
-          "value": "\"pedido_items\".\"subtotal\" >= 0"
+          "value": "\"pedido_items\".\"tipo_item\" = 'descuento' or \"pedido_items\".\"subtotal\" >= 0"
+        },
+        "pedido_items_costo_unitario_estimado_no_negativo": {
+          "name": "pedido_items_costo_unitario_estimado_no_negativo",
+          "value": "\"pedido_items\".\"costo_unitario_estimado\" is null or \"pedido_items\".\"costo_unitario_estimado\" >= 0"
+        },
+        "pedido_items_subtotal_costo_estimado_no_negativo": {
+          "name": "pedido_items_subtotal_costo_estimado_no_negativo",
+          "value": "\"pedido_items\".\"subtotal_costo_estimado\" is null or \"pedido_items\".\"subtotal_costo_estimado\" >= 0"
         }
       }
     },
@@ -1842,6 +2158,66 @@
           "autoincrement": false,
           "default": 0
         },
+        "bruto_cotizado": {
+          "name": "bruto_cotizado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "precio_lista": {
+          "name": "precio_lista",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "descuento_monto": {
+          "name": "descuento_monto",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "descuento_motivo": {
+          "name": "descuento_motivo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "costo_estimado_total": {
+          "name": "costo_estimado_total",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "margen_estimado": {
+          "name": "margen_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "margen_estimado_pct": {
+          "name": "margen_estimado_pct",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "estado_rentabilidad": {
+          "name": "estado_rentabilidad",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'incompleta'"
+        },
         "precio_total": {
           "name": "precio_total",
           "type": "real",
@@ -1906,32 +2282,45 @@
       "indexes": {
         "pedidos_numero_unique": {
           "name": "pedidos_numero_unique",
-          "columns": ["numero"],
+          "columns": [
+            "numero"
+          ],
           "isUnique": true
         },
         "idx_pedidos_numero": {
           "name": "idx_pedidos_numero",
-          "columns": ["numero"],
+          "columns": [
+            "numero"
+          ],
           "isUnique": false
         },
         "idx_pedidos_cliente": {
           "name": "idx_pedidos_cliente",
-          "columns": ["cliente_id"],
+          "columns": [
+            "cliente_id"
+          ],
           "isUnique": false
         },
         "idx_pedidos_estado": {
           "name": "idx_pedidos_estado",
-          "columns": ["estado"],
+          "columns": [
+            "estado"
+          ],
           "isUnique": false
         },
         "idx_pedidos_fecha_entrega": {
           "name": "idx_pedidos_fecha_entrega",
-          "columns": ["fecha_entrega"],
+          "columns": [
+            "fecha_entrega"
+          ],
           "isUnique": false
         },
         "idx_pedidos_cliente_estado": {
           "name": "idx_pedidos_cliente_estado",
-          "columns": ["cliente_id", "estado"],
+          "columns": [
+            "cliente_id",
+            "estado"
+          ],
           "isUnique": false
         }
       },
@@ -1940,8 +2329,12 @@
           "name": "pedidos_cliente_id_clientes_id_fk",
           "tableFrom": "pedidos",
           "tableTo": "clientes",
-          "columnsFrom": ["cliente_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "cliente_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1960,6 +2353,22 @@
         "pedidos_materiales_no_negativo": {
           "name": "pedidos_materiales_no_negativo",
           "value": "\"pedidos\".\"total_materiales\" >= 0"
+        },
+        "pedidos_bruto_no_negativo": {
+          "name": "pedidos_bruto_no_negativo",
+          "value": "\"pedidos\".\"bruto_cotizado\" >= 0"
+        },
+        "pedidos_precio_lista_no_negativo": {
+          "name": "pedidos_precio_lista_no_negativo",
+          "value": "\"pedidos\".\"precio_lista\" >= 0"
+        },
+        "pedidos_descuento_no_negativo": {
+          "name": "pedidos_descuento_no_negativo",
+          "value": "\"pedidos\".\"descuento_monto\" >= 0"
+        },
+        "pedidos_costo_estimado_total_no_negativo": {
+          "name": "pedidos_costo_estimado_total_no_negativo",
+          "value": "\"pedidos\".\"costo_estimado_total\" is null or \"pedidos\".\"costo_estimado_total\" >= 0"
         },
         "pedidos_total_no_negativo": {
           "name": "pedidos_total_no_negativo",
@@ -2052,6 +2461,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "costo_estimado": {
+          "name": "costo_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "activo": {
           "name": "activo",
           "type": "integer",
@@ -2085,6 +2501,10 @@
         "precios_bastidores_precio_positivo": {
           "name": "precios_bastidores_precio_positivo",
           "value": "\"precios_bastidores\".\"precio\" >= 0"
+        },
+        "precios_bastidores_costo_estimado_no_negativo": {
+          "name": "precios_bastidores_costo_estimado_no_negativo",
+          "value": "\"precios_bastidores\".\"costo_estimado\" is null or \"precios_bastidores\".\"costo_estimado\" >= 0"
         }
       }
     },
@@ -2117,6 +2537,13 @@
           "type": "real",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "costo_estimado": {
+          "name": "costo_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "descripcion": {
@@ -2159,6 +2586,10 @@
         "precios_paspartu_acrilico_precio_positivo": {
           "name": "precios_paspartu_acrilico_precio_positivo",
           "value": "\"precios_paspartu_acrilico\".\"precio\" >= 0"
+        },
+        "precios_paspartu_acrilico_costo_estimado_no_negativo": {
+          "name": "precios_paspartu_acrilico_costo_estimado_no_negativo",
+          "value": "\"precios_paspartu_acrilico\".\"costo_estimado\" is null or \"precios_paspartu_acrilico\".\"costo_estimado\" >= 0"
         }
       }
     },
@@ -2191,6 +2622,13 @@
           "type": "real",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "costo_estimado": {
+          "name": "costo_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "descripcion": {
@@ -2233,6 +2671,10 @@
         "precios_paspartu_pintado_precio_positivo": {
           "name": "precios_paspartu_pintado_precio_positivo",
           "value": "\"precios_paspartu_pintado\".\"precio\" >= 0"
+        },
+        "precios_paspartu_pintado_costo_estimado_no_negativo": {
+          "name": "precios_paspartu_pintado_costo_estimado_no_negativo",
+          "value": "\"precios_paspartu_pintado\".\"costo_estimado\" is null or \"precios_paspartu_pintado\".\"costo_estimado\" >= 0"
         }
       }
     },
@@ -2265,6 +2707,13 @@
           "type": "real",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "costo_estimado": {
+          "name": "costo_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "activo": {
@@ -2300,6 +2749,10 @@
         "precios_retablos_precio_positivo": {
           "name": "precios_retablos_precio_positivo",
           "value": "\"precios_retablos\".\"precio\" >= 0"
+        },
+        "precios_retablos_costo_estimado_no_negativo": {
+          "name": "precios_retablos_costo_estimado_no_negativo",
+          "value": "\"precios_retablos\".\"costo_estimado\" is null or \"precios_retablos\".\"costo_estimado\" >= 0"
         }
       }
     },
@@ -2332,6 +2785,13 @@
           "type": "real",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "costo_estimado": {
+          "name": "costo_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "activo": {
@@ -2367,6 +2827,10 @@
         "precios_tapas_precio_positivo": {
           "name": "precios_tapas_precio_positivo",
           "value": "\"precios_tapas\".\"precio\" >= 0"
+        },
+        "precios_tapas_costo_estimado_no_negativo": {
+          "name": "precios_tapas_costo_estimado_no_negativo",
+          "value": "\"precios_tapas\".\"costo_estimado\" is null or \"precios_tapas\".\"costo_estimado\" >= 0"
         }
       }
     },
@@ -2387,11 +2851,33 @@
           "notNull": true,
           "autoincrement": false
         },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "espesor_mm": {
+          "name": "espesor_mm",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 2
+        },
         "precio_m2": {
           "name": "precio_m2",
           "type": "real",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "costo_m2_estimado": {
+          "name": "costo_m2_estimado",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "activo": {
@@ -2419,7 +2905,16 @@
           "default": "(datetime('now'))"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_precios_vidrios_tipo_activo": {
+          "name": "idx_precios_vidrios_tipo_activo",
+          "columns": [
+            "tipo"
+          ],
+          "isUnique": true,
+          "where": "activo = 1"
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -2427,6 +2922,14 @@
         "precios_vidrios_precio_positivo": {
           "name": "precios_vidrios_precio_positivo",
           "value": "\"precios_vidrios\".\"precio_m2\" >= 0"
+        },
+        "precios_vidrios_espesor_positivo": {
+          "name": "precios_vidrios_espesor_positivo",
+          "value": "\"precios_vidrios\".\"espesor_mm\" > 0"
+        },
+        "precios_vidrios_costo_estimado_no_negativo": {
+          "name": "precios_vidrios_costo_estimado_no_negativo",
+          "value": "\"precios_vidrios\".\"costo_m2_estimado\" is null or \"precios_vidrios\".\"costo_m2_estimado\" >= 0"
         }
       }
     },
@@ -2453,6 +2956,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "tipo": {
+          "name": "tipo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'otro'"
         },
         "telefono": {
           "name": "telefono",
@@ -2573,8 +3084,12 @@
           "name": "ventas_kits_estudiante_id_estudiantes_id_fk",
           "tableFrom": "ventas_kits",
           "tableTo": "estudiantes",
-          "columnsFrom": ["estudiante_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "estudiante_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -2582,8 +3097,12 @@
           "name": "ventas_kits_cliente_id_clientes_id_fk",
           "tableFrom": "ventas_kits",
           "tableTo": "clientes",
-          "columnsFrom": ["cliente_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "cliente_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         }

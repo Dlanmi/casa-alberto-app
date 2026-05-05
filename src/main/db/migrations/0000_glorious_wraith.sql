@@ -10,6 +10,20 @@ CREATE TABLE `acudientes` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `acudientes_cliente_id_unique` ON `acudientes` (`cliente_id`);--> statement-breakpoint
+CREATE TABLE `asistencias` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`estudiante_id` integer NOT NULL,
+	`clase_id` integer NOT NULL,
+	`fecha` text NOT NULL,
+	`presente` integer DEFAULT true NOT NULL,
+	`notas` text,
+	`created_at` text DEFAULT (datetime('now')) NOT NULL,
+	FOREIGN KEY (`estudiante_id`) REFERENCES `estudiantes`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`clase_id`) REFERENCES `clases`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE INDEX `idx_asistencias_estudiante_fecha` ON `asistencias` (`estudiante_id`,`fecha`);--> statement-breakpoint
+CREATE INDEX `idx_asistencias_clase_fecha` ON `asistencias` (`clase_id`,`fecha`);--> statement-breakpoint
 CREATE TABLE `clases` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`nombre` text NOT NULL,
@@ -29,6 +43,7 @@ CREATE TABLE `clientes` (
 	`correo` text,
 	`direccion` text,
 	`notas` text,
+	`es_menor` integer DEFAULT false NOT NULL,
 	`activo` integer DEFAULT true NOT NULL,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL
@@ -141,6 +156,7 @@ CREATE INDEX `idx_facturas_numero` ON `facturas` (`numero`);--> statement-breakp
 CREATE INDEX `idx_facturas_cliente` ON `facturas` (`cliente_id`);--> statement-breakpoint
 CREATE INDEX `idx_facturas_pedido` ON `facturas` (`pedido_id`);--> statement-breakpoint
 CREATE INDEX `idx_facturas_estado` ON `facturas` (`estado`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_facturas_pedido_activa` ON `facturas` (`pedido_id`) WHERE estado != 'anulada';--> statement-breakpoint
 CREATE TABLE `historial_cambios` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`tabla` text NOT NULL,
@@ -211,16 +227,21 @@ CREATE TABLE `muestras_marcos` (
 	`referencia` text NOT NULL,
 	`colilla_cm` real NOT NULL,
 	`precio_metro` real NOT NULL,
+	`costo_metro_estimado` real,
 	`descripcion` text,
+	`proveedor_id` integer,
 	`activo` integer DEFAULT true NOT NULL,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL,
+	FOREIGN KEY (`proveedor_id`) REFERENCES `proveedores`(`id`) ON UPDATE no action ON DELETE set null,
 	CONSTRAINT "muestras_marcos_precio_positivo" CHECK("muestras_marcos"."precio_metro" >= 0),
-	CONSTRAINT "muestras_marcos_colilla_positiva" CHECK("muestras_marcos"."colilla_cm" >= 0)
+	CONSTRAINT "muestras_marcos_colilla_positiva" CHECK("muestras_marcos"."colilla_cm" >= 0),
+	CONSTRAINT "muestras_marcos_costo_estimado_no_negativo" CHECK("muestras_marcos"."costo_metro_estimado" is null or "muestras_marcos"."costo_metro_estimado" >= 0)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `muestras_marcos_referencia_unique` ON `muestras_marcos` (`referencia`);--> statement-breakpoint
 CREATE INDEX `idx_marcos_referencia` ON `muestras_marcos` (`referencia`);--> statement-breakpoint
+CREATE INDEX `idx_marcos_proveedor` ON `muestras_marcos` (`proveedor_id`);--> statement-breakpoint
 CREATE TABLE `pagos` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`factura_id` integer NOT NULL,
@@ -267,11 +288,15 @@ CREATE TABLE `pedido_items` (
 	`referencia` text,
 	`cantidad` real DEFAULT 1 NOT NULL,
 	`precio_unitario` real,
+	`costo_unitario_estimado` real,
 	`subtotal` real NOT NULL,
+	`subtotal_costo_estimado` real,
 	`metadata` text,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	FOREIGN KEY (`pedido_id`) REFERENCES `pedidos`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "pedido_items_subtotal_no_negativo" CHECK("pedido_items"."subtotal" >= 0)
+	CONSTRAINT "pedido_items_subtotal_no_negativo" CHECK("pedido_items"."tipo_item" = 'descuento' or "pedido_items"."subtotal" >= 0),
+	CONSTRAINT "pedido_items_costo_unitario_estimado_no_negativo" CHECK("pedido_items"."costo_unitario_estimado" is null or "pedido_items"."costo_unitario_estimado" >= 0),
+	CONSTRAINT "pedido_items_subtotal_costo_estimado_no_negativo" CHECK("pedido_items"."subtotal_costo_estimado" is null or "pedido_items"."subtotal_costo_estimado" >= 0)
 );
 --> statement-breakpoint
 CREATE INDEX `idx_pedido_items_pedido` ON `pedido_items` (`pedido_id`);--> statement-breakpoint
@@ -289,6 +314,14 @@ CREATE TABLE `pedidos` (
 	`porcentaje_materiales` real DEFAULT 10 NOT NULL,
 	`subtotal` real DEFAULT 0 NOT NULL,
 	`total_materiales` real DEFAULT 0 NOT NULL,
+	`bruto_cotizado` real DEFAULT 0 NOT NULL,
+	`precio_lista` real DEFAULT 0 NOT NULL,
+	`descuento_monto` real DEFAULT 0 NOT NULL,
+	`descuento_motivo` text,
+	`costo_estimado_total` real,
+	`margen_estimado` real,
+	`margen_estimado_pct` real,
+	`estado_rentabilidad` text DEFAULT 'incompleta' NOT NULL,
 	`precio_total` real NOT NULL,
 	`estado` text DEFAULT 'cotizado' NOT NULL,
 	`tipo_entrega` text DEFAULT 'estandar' NOT NULL,
@@ -301,6 +334,10 @@ CREATE TABLE `pedidos` (
 	CONSTRAINT "pedidos_porcentaje_materiales_rango" CHECK("pedidos"."porcentaje_materiales" BETWEEN 5 AND 10),
 	CONSTRAINT "pedidos_subtotal_no_negativo" CHECK("pedidos"."subtotal" >= 0),
 	CONSTRAINT "pedidos_materiales_no_negativo" CHECK("pedidos"."total_materiales" >= 0),
+	CONSTRAINT "pedidos_bruto_no_negativo" CHECK("pedidos"."bruto_cotizado" >= 0),
+	CONSTRAINT "pedidos_precio_lista_no_negativo" CHECK("pedidos"."precio_lista" >= 0),
+	CONSTRAINT "pedidos_descuento_no_negativo" CHECK("pedidos"."descuento_monto" >= 0),
+	CONSTRAINT "pedidos_costo_estimado_total_no_negativo" CHECK("pedidos"."costo_estimado_total" is null or "pedidos"."costo_estimado_total" >= 0),
 	CONSTRAINT "pedidos_total_no_negativo" CHECK("pedidos"."precio_total" >= 0)
 );
 --> statement-breakpoint
@@ -324,10 +361,12 @@ CREATE TABLE `precios_bastidores` (
 	`ancho_cm` real NOT NULL,
 	`alto_cm` real NOT NULL,
 	`precio` real NOT NULL,
+	`costo_estimado` real,
 	`activo` integer DEFAULT true NOT NULL,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL,
-	CONSTRAINT "precios_bastidores_precio_positivo" CHECK("precios_bastidores"."precio" >= 0)
+	CONSTRAINT "precios_bastidores_precio_positivo" CHECK("precios_bastidores"."precio" >= 0),
+	CONSTRAINT "precios_bastidores_costo_estimado_no_negativo" CHECK("precios_bastidores"."costo_estimado" is null or "precios_bastidores"."costo_estimado" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE `precios_paspartu_acrilico` (
@@ -335,11 +374,13 @@ CREATE TABLE `precios_paspartu_acrilico` (
 	`ancho_cm` real NOT NULL,
 	`alto_cm` real NOT NULL,
 	`precio` real NOT NULL,
+	`costo_estimado` real,
 	`descripcion` text,
 	`activo` integer DEFAULT true NOT NULL,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL,
-	CONSTRAINT "precios_paspartu_acrilico_precio_positivo" CHECK("precios_paspartu_acrilico"."precio" >= 0)
+	CONSTRAINT "precios_paspartu_acrilico_precio_positivo" CHECK("precios_paspartu_acrilico"."precio" >= 0),
+	CONSTRAINT "precios_paspartu_acrilico_costo_estimado_no_negativo" CHECK("precios_paspartu_acrilico"."costo_estimado" is null or "precios_paspartu_acrilico"."costo_estimado" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE `precios_paspartu_pintado` (
@@ -347,11 +388,13 @@ CREATE TABLE `precios_paspartu_pintado` (
 	`ancho_cm` real NOT NULL,
 	`alto_cm` real NOT NULL,
 	`precio` real NOT NULL,
+	`costo_estimado` real,
 	`descripcion` text,
 	`activo` integer DEFAULT true NOT NULL,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL,
-	CONSTRAINT "precios_paspartu_pintado_precio_positivo" CHECK("precios_paspartu_pintado"."precio" >= 0)
+	CONSTRAINT "precios_paspartu_pintado_precio_positivo" CHECK("precios_paspartu_pintado"."precio" >= 0),
+	CONSTRAINT "precios_paspartu_pintado_costo_estimado_no_negativo" CHECK("precios_paspartu_pintado"."costo_estimado" is null or "precios_paspartu_pintado"."costo_estimado" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE `precios_retablos` (
@@ -359,10 +402,12 @@ CREATE TABLE `precios_retablos` (
 	`ancho_cm` real NOT NULL,
 	`alto_cm` real NOT NULL,
 	`precio` real NOT NULL,
+	`costo_estimado` real,
 	`activo` integer DEFAULT true NOT NULL,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL,
-	CONSTRAINT "precios_retablos_precio_positivo" CHECK("precios_retablos"."precio" >= 0)
+	CONSTRAINT "precios_retablos_precio_positivo" CHECK("precios_retablos"."precio" >= 0),
+	CONSTRAINT "precios_retablos_costo_estimado_no_negativo" CHECK("precios_retablos"."costo_estimado" is null or "precios_retablos"."costo_estimado" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE `precios_tapas` (
@@ -370,26 +415,35 @@ CREATE TABLE `precios_tapas` (
 	`ancho_cm` real NOT NULL,
 	`alto_cm` real NOT NULL,
 	`precio` real NOT NULL,
+	`costo_estimado` real,
 	`activo` integer DEFAULT true NOT NULL,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL,
-	CONSTRAINT "precios_tapas_precio_positivo" CHECK("precios_tapas"."precio" >= 0)
+	CONSTRAINT "precios_tapas_precio_positivo" CHECK("precios_tapas"."precio" >= 0),
+	CONSTRAINT "precios_tapas_costo_estimado_no_negativo" CHECK("precios_tapas"."costo_estimado" is null or "precios_tapas"."costo_estimado" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE `precios_vidrios` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`tipo` text NOT NULL,
+	`nombre` text NOT NULL,
+	`espesor_mm` real DEFAULT 2 NOT NULL,
 	`precio_m2` real NOT NULL,
+	`costo_m2_estimado` real,
 	`activo` integer DEFAULT true NOT NULL,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL,
-	CONSTRAINT "precios_vidrios_precio_positivo" CHECK("precios_vidrios"."precio_m2" >= 0)
+	CONSTRAINT "precios_vidrios_precio_positivo" CHECK("precios_vidrios"."precio_m2" >= 0),
+	CONSTRAINT "precios_vidrios_espesor_positivo" CHECK("precios_vidrios"."espesor_mm" > 0),
+	CONSTRAINT "precios_vidrios_costo_estimado_no_negativo" CHECK("precios_vidrios"."costo_m2_estimado" is null or "precios_vidrios"."costo_m2_estimado" >= 0)
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `idx_precios_vidrios_tipo_activo` ON `precios_vidrios` (`tipo`) WHERE activo = 1;--> statement-breakpoint
 CREATE TABLE `proveedores` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`nombre` text NOT NULL,
 	`producto` text,
+	`tipo` text DEFAULT 'otro' NOT NULL,
 	`telefono` text,
 	`dias_pedido` text,
 	`forma_pago` text,

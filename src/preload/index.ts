@@ -18,6 +18,7 @@ import type {
   MuestraMarcoConProveedor,
   NuevaFactura,
   NuevaMuestraMarco,
+  NuevoPrecioVidrio,
   NuevaDevolucion,
   NuevoPago,
   NuevoPedidoDatos,
@@ -103,10 +104,10 @@ const api = {
     desactivarMuestraMarco: (id: number) =>
       invoke<IpcResult<MuestraMarco>>('cotizador:desactivarMuestraMarco', id),
     listarPreciosVidrio: () => invoke<IpcResult<PrecioVidrio[]>>('cotizador:listarPreciosVidrio'),
-    actualizarPrecioVidrio: (id: number, precioM2: number) =>
-      invoke<IpcResult<PrecioVidrio>>('cotizador:actualizarPrecioVidrio', id, precioM2),
-    crearPrecioVidrio: (tipo: string, precioM2: number) =>
-      invoke<IpcResult<PrecioVidrio>>('cotizador:crearPrecioVidrio', tipo, precioM2),
+    actualizarPrecioVidrio: (id: number, data: NuevoPrecioVidrio) =>
+      invoke<IpcResult<PrecioVidrio>>('cotizador:actualizarPrecioVidrio', id, data),
+    crearPrecioVidrio: (data: NuevoPrecioVidrio) =>
+      invoke<IpcResult<PrecioVidrio>>('cotizador:crearPrecioVidrio', data),
     eliminarPrecioVidrio: (id: number) =>
       invoke<IpcResult<PrecioVidrio>>('cotizador:eliminarPrecioVidrio', id),
     enmarcacionEstandar: (input: InputEnmarcacionEstandar) =>
@@ -132,33 +133,35 @@ const api = {
       altoCm: number
       tipoVidrio: string
       precioInstalacion?: number
+      costoInstalacionEstimado?: number | null
       descripcion?: string | null
     }) => invoke<IpcResult<ResultadoCotizacion>>('cotizador:vidrioEspejo', input)
   },
   precios: {
     listarPaspartuPintado: () => invoke('precios:listarPaspartuPintado'),
     crearPaspartuPintado: (data: unknown) => invoke('precios:crearPaspartuPintado', data),
-    actualizarPaspartuPintado: (id: number, precio: number) =>
-      invoke('precios:actualizarPaspartuPintado', id, precio),
+    actualizarPaspartuPintado: (id: number, data: { precio: number; costoEstimado?: number | null }) =>
+      invoke('precios:actualizarPaspartuPintado', id, data),
     eliminarPaspartuPintado: (id: number) => invoke('precios:eliminarPaspartuPintado', id),
     listarPaspartuAcrilico: () => invoke('precios:listarPaspartuAcrilico'),
     crearPaspartuAcrilico: (data: unknown) => invoke('precios:crearPaspartuAcrilico', data),
-    actualizarPaspartuAcrilico: (id: number, precio: number) =>
-      invoke('precios:actualizarPaspartuAcrilico', id, precio),
+    actualizarPaspartuAcrilico: (id: number, data: { precio: number; costoEstimado?: number | null }) =>
+      invoke('precios:actualizarPaspartuAcrilico', id, data),
     eliminarPaspartuAcrilico: (id: number) => invoke('precios:eliminarPaspartuAcrilico', id),
     listarRetablos: () => invoke('precios:listarRetablos'),
     crearRetablo: (data: unknown) => invoke('precios:crearRetablo', data),
-    actualizarRetablo: (id: number, precio: number) =>
-      invoke('precios:actualizarRetablo', id, precio),
+    actualizarRetablo: (id: number, data: { precio: number; costoEstimado?: number | null }) =>
+      invoke('precios:actualizarRetablo', id, data),
     eliminarRetablo: (id: number) => invoke('precios:eliminarRetablo', id),
     listarBastidores: () => invoke('precios:listarBastidores'),
     crearBastidor: (data: unknown) => invoke('precios:crearBastidor', data),
-    actualizarBastidor: (id: number, precio: number) =>
-      invoke('precios:actualizarBastidor', id, precio),
+    actualizarBastidor: (id: number, data: { precio: number; costoEstimado?: number | null }) =>
+      invoke('precios:actualizarBastidor', id, data),
     eliminarBastidor: (id: number) => invoke('precios:eliminarBastidor', id),
     listarTapas: () => invoke('precios:listarTapas'),
     crearTapa: (data: unknown) => invoke('precios:crearTapa', data),
-    actualizarTapa: (id: number, precio: number) => invoke('precios:actualizarTapa', id, precio),
+    actualizarTapa: (id: number, data: { precio: number; costoEstimado?: number | null }) =>
+      invoke('precios:actualizarTapa', id, data),
     eliminarTapa: (id: number) => invoke('precios:eliminarTapa', id)
   },
   pedidos: {
@@ -174,6 +177,14 @@ const api = {
       invoke<IpcResult<Pedido>>('pedidos:cambiarEstado', id, estado),
     actualizarFechaEntrega: (id: number, fecha: string | null) =>
       invoke<IpcResult<Pedido | null>>('pedidos:actualizarFechaEntrega', id, fecha),
+    actualizarTipoEntrega: (id: number, tipo: 'estandar' | 'urgente' | 'sin_afan') =>
+      invoke<IpcResult<Pedido | null>>('pedidos:actualizarTipoEntrega', id, tipo),
+    editarComercial: (input: {
+      pedidoId: number
+      descuentoMonto: number
+      descuentoMotivo?: string | null
+      costoEstimadoTotal?: number | null
+    }) => invoke('pedidos:editarComercial', input),
     resumenEstado: () => invoke('pedidos:resumenEstado'),
     matrizUrgencia: (diasUrgencia?: number) =>
       invoke<IpcResult<MatrizUrgencia>>('pedidos:matrizUrgencia', diasUrgencia),
@@ -237,6 +248,7 @@ const api = {
     listarMovimientos: (opts?: unknown) => invoke('finanzas:listarMovimientos', opts),
     registrarManual: (data: unknown) => invoke('finanzas:registrarManual', data),
     resumenMensual: (mes: string) => invoke('finanzas:resumenMensual', mes),
+    resumenComercialMensual: (mes: string) => invoke('finanzas:resumenComercialMensual', mes),
     reporteMargenPorTipo: (mes: string) => invoke('finanzas:reporteMargenPorTipo', mes)
   },
   inventario: {
@@ -282,7 +294,15 @@ const api = {
     exportarClientes: () => invoke('excel:exportarClientes'),
     exportarInventario: () => invoke('excel:exportarInventario'),
     exportarListasPrecios: () => invoke('excel:exportarListasPrecios'),
-    importarMarcos: () => invoke('excel:importarMarcos')
+    importarMarcos: () => invoke('excel:importarMarcos'),
+    // Plantilla unificada (genera y abre + sube por dialog + carga + exporta actual)
+    plantilla: {
+      generar: () => invoke<IpcResult<string>>('excel:plantilla:generar'),
+      subir: () => invoke('excel:plantilla:subir'),
+      cargar: (parsed: unknown, modo: 'upsert' | 'solo_agregar' | 'reemplazar') =>
+        invoke('excel:plantilla:cargar', parsed, modo),
+      exportarActual: () => invoke<IpcResult<string>>('excel:plantilla:exportarActual')
+    }
   }
 }
 

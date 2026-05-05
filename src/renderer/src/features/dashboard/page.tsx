@@ -17,6 +17,7 @@ import { Card } from '@renderer/components/ui/card'
 import { Badge } from '@renderer/components/ui/badge'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
+import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { mesActualISO, hoyISO, formatCOP, diaSemana } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/cn'
@@ -24,13 +25,31 @@ import { normalizePedidoAlertas, type PedidoAlertaRow } from '@renderer/lib/pedi
 import { UrgencyMatrix } from './urgency-matrix'
 import { BarChartMini } from '@renderer/components/charts/bar-chart-mini'
 import { WorkshopIllustration } from '@renderer/components/illustrations'
-import type { Pedido, Proveedor } from '@shared/types'
+import type { MuestraMarcoConProveedor, Pedido, Proveedor } from '@shared/types'
 
 type ResumenMensual = {
   ingresos: number
   gastos: number
   balance: number
   porCategoria: { categoria: string; tipo: string; total: number }[]
+}
+
+type ResumenComercialMensual = {
+  mes: string
+  ventasBrutasPedidos: number
+  descuentos: number
+  ventasNetasPedidos: number
+  ventasClases: number
+  ventasKits: number
+  ventasTotalesMes: number
+  costoEstimadoCompletos: number
+  ventasNetasCompletos: number
+  margenEstimadoCompletos: number
+  pedidosTotal: number
+  pedidosCompletos: number
+  pedidosIncompletos: number
+  pedidosConDescuento: number
+  pedidosRentabilidadCritica: number
 }
 
 type MovimientoHoy = {
@@ -88,12 +107,21 @@ export default function DashboardPage(): React.JSX.Element {
     () => window.api.finanzas.resumenMensual(mes),
     [mes]
   )
+  const { data: comercial } = useIpc<ResumenComercialMensual>(
+    () => window.api.finanzas.resumenComercialMensual(mes),
+    [mes]
+  )
   const { data: movimientosHoy } = useIpc<MovimientoHoy[]>(
     () => window.api.finanzas.listarMovimientos({ desde: hoy, hasta: hoy }),
     [hoy]
   )
   const { data: proveedores } = useIpc<Proveedor[]>(
     () => window.api.proveedores.listar({ soloActivos: true }),
+    []
+  )
+  // Detección de marcos cargados — define el empty state del dashboard
+  const { data: marcos } = useIpc<MuestraMarcoConProveedor[]>(
+    () => window.api.cotizador.listarMuestrasMarcos(),
     []
   )
 
@@ -204,10 +232,20 @@ export default function DashboardPage(): React.JSX.Element {
       {safePedidos.length === 0 && (
         <GuidanceHint
           tone="accent"
-          title="Bienvenido a Casa Alberto"
-          message="Empieza creando tu primera cotización para generar un pedido."
-          actionLabel="Crear cotización"
-          onAction={() => navigate('/cotizador')}
+          title={
+            (marcos?.length ?? 0) === 0
+              ? 'Primero carga tus precios'
+              : 'Bienvenido a Casa Alberto'
+          }
+          message={
+            (marcos?.length ?? 0) === 0
+              ? 'Antes de cotizar necesitas tener al menos un marco cargado. Carga tu lista de precios desde Configuración con la plantilla Excel.'
+              : 'Empieza creando tu primera cotización para generar un pedido.'
+          }
+          actionLabel={(marcos?.length ?? 0) === 0 ? 'Cargar precios' : 'Crear cotización'}
+          onAction={() =>
+            navigate((marcos?.length ?? 0) === 0 ? '/configuracion' : '/cotizador')
+          }
         />
       )}
 
@@ -390,6 +428,56 @@ export default function DashboardPage(): React.JSX.Element {
                   </span>
                 </p>
               </div>
+            )}
+
+            {/* Mini-card de vista comercial del mes — refleja el modelo de
+                descuento + costo estimado. Distinto del balance del día (que
+                es caja real); este es el margen estimado sobre pedidos
+                facturados. */}
+            {comercial && comercial.pedidosTotal > 0 && (
+              <button
+                type="button"
+                onClick={() => goFinanzas('comercial')}
+                className="mt-3 w-full rounded-md border border-border bg-accent/5 px-4 py-3 text-left cursor-pointer hover:bg-accent/10 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium uppercase tracking-widest text-text-soft">
+                    Margen comercial del mes
+                  </p>
+                  {comercial.pedidosCompletos > 0 ? (
+                    <Badge color="info" size="sm">
+                      {comercial.pedidosCompletos}/{comercial.pedidosTotal}
+                    </Badge>
+                  ) : (
+                    <Badge color="warning" size="sm">
+                      Sin costos
+                    </Badge>
+                  )}
+                </div>
+                <div className="mt-1 flex items-baseline justify-between">
+                  <PrecioDisplay
+                    value={comercial.margenEstimadoCompletos}
+                    size="lg"
+                    className={cn(
+                      comercial.margenEstimadoCompletos >= 0
+                        ? 'text-success-strong'
+                        : 'text-error-strong'
+                    )}
+                  />
+                  {comercial.descuentos > 0 && (
+                    <span className="text-xs text-warning-strong tabular-nums">
+                      − {formatCOP(comercial.descuentos)} descuentos
+                    </span>
+                  )}
+                </div>
+                {comercial.pedidosIncompletos > 0 && (
+                  <p className="mt-1 text-xs text-text-muted">
+                    {comercial.pedidosIncompletos} pedido
+                    {comercial.pedidosIncompletos > 1 ? 's' : ''} sin costo — completar mejora la
+                    precisión.
+                  </p>
+                )}
+              </button>
             )}
 
             <button

@@ -158,6 +158,27 @@ export function KanbanCard({
         </div>
       )}
 
+      {/* Badges de contexto: urgencia y descuento. Lectura visual rápida sin
+          tener que abrir el detalle del pedido. */}
+      <div className="mb-2 flex flex-wrap gap-1">
+        {pedido.tipoEntrega === 'urgente' && (
+          <span
+            className="inline-flex items-center gap-1 rounded-sm bg-warning-bg px-2 py-0.5 text-[10px] font-semibold text-warning-strong"
+            title="Pedido marcado como urgente"
+          >
+            ⚡ Urgente
+          </span>
+        )}
+        {(pedido.descuentoMonto ?? 0) > 0 && (
+          <span
+            className="inline-flex items-center gap-1 rounded-sm bg-warning-bg px-2 py-0.5 text-[10px] font-medium text-warning-strong"
+            title={`Descuento aplicado: $${pedido.descuentoMonto.toLocaleString('es-CO')}${pedido.descuentoMotivo ? ` — ${pedido.descuentoMotivo}` : ''}`}
+          >
+            🏷️ Con descuento
+          </span>
+        )}
+      </div>
+
       {/* Payment progress — solo si tenemos data real de pagos cargada */}
       {pagado !== undefined && <PagoBar total={pedido.precioTotal} pagado={pagado} />}
 

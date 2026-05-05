@@ -67,6 +67,24 @@ type ResumenMensual = {
   porCategoria: { categoria: string; tipo: string; total: number }[]
 }
 
+type ResumenComercialMensual = {
+  mes: string
+  ventasBrutasPedidos: number
+  descuentos: number
+  ventasNetasPedidos: number
+  ventasClases: number
+  ventasKits: number
+  ventasTotalesMes: number
+  costoEstimadoCompletos: number
+  ventasNetasCompletos: number
+  margenEstimadoCompletos: number
+  pedidosTotal: number
+  pedidosCompletos: number
+  pedidosIncompletos: number
+  pedidosConDescuento: number
+  pedidosRentabilidadCritica: number
+}
+
 const CATEGORIA_LABEL: Record<string, string> = {
   enmarcacion: 'Enmarcación',
   clases: 'Clases',
@@ -133,9 +151,17 @@ export default function FinanzasPage(): React.JSX.Element {
     () => window.api.finanzas.reporteMargenPorTipo(mes),
     [mes]
   )
+  const { data: comercial, refetch: refetchComercial } = useIpc<ResumenComercialMensual>(
+    () => window.api.finanzas.resumenComercialMensual(mes),
+    [mes]
+  )
 
+  // Usa rango exclusivo: desde = primer día, hasta = último día del mes.
+  // No usamos `${mes}-31` porque falla en febrero / meses de 30 días.
+  const [yearN, monthN] = mes.split('-').map(Number)
   const desde = `${mes}-01`
-  const hasta = `${mes}-31`
+  const ultimoDia = new Date(yearN, monthN, 0).getDate()
+  const hasta = `${mes}-${String(ultimoDia).padStart(2, '0')}`
 
   const {
     data: movimientos,
@@ -265,6 +291,68 @@ export default function FinanzasPage(): React.JSX.Element {
           icon={DollarSign}
         />
       </div>
+
+      {comercial && (
+        <PageSection
+          title="Pedidos facturados del mes"
+          description="Vista comercial separada de la caja: incluye pedidos, clases y kits del mes."
+        >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              label="Ventas totales"
+              value={
+                <PrecioDisplay
+                  value={comercial.ventasTotalesMes}
+                  size="md"
+                  className="text-success-strong"
+                />
+              }
+              detail={`Pedidos ${formatCOP(comercial.ventasNetasPedidos)} · Clases ${formatCOP(comercial.ventasClases)} · Kits ${formatCOP(comercial.ventasKits)}`}
+              tone="success"
+              icon={TrendingUp}
+            />
+            <MetricCard
+              label="Descuentos en pedidos"
+              value={<PrecioDisplay value={comercial.descuentos} size="md" className="text-warning-strong" />}
+              detail={`Bruto cotizado ${formatCOP(comercial.ventasBrutasPedidos)} · ${comercial.pedidosConDescuento} con descuento`}
+              tone="info"
+              icon={TrendingDown}
+            />
+            <MetricCard
+              label={`Margen estimado (${comercial.pedidosCompletos}/${comercial.pedidosTotal})`}
+              value={
+                <PrecioDisplay
+                  value={comercial.margenEstimadoCompletos}
+                  size="md"
+                  className={cn(
+                    comercial.margenEstimadoCompletos >= 0
+                      ? 'text-success-strong'
+                      : 'text-error-strong'
+                  )}
+                />
+              }
+              detail={`Sobre ${formatCOP(comercial.ventasNetasCompletos)} en pedidos con costo completo`}
+              tone={comercial.margenEstimadoCompletos >= 0 ? 'success' : 'error'}
+              icon={DollarSign}
+            />
+            <MetricCard
+              label="Pedidos por completar costo"
+              value={
+                <span className="text-2xl font-semibold tabular-nums text-text">
+                  {comercial.pedidosIncompletos}
+                </span>
+              }
+              detail={
+                comercial.pedidosIncompletos > 0
+                  ? 'Completar costos mejora la precisión del margen'
+                  : `${comercial.pedidosRentabilidadCritica} pedido(s) con margen crítico`
+              }
+              tone={comercial.pedidosIncompletos > 0 ? 'info' : 'success'}
+              icon={TrendingDown}
+            />
+          </div>
+        </PageSection>
+      )}
 
       {resumen && resumen.porCategoria.length > 0 && (
         <PageSection title="Desglose por categoría">
@@ -481,6 +569,7 @@ export default function FinanzasPage(): React.JSX.Element {
             refetchResumen()
             refetchMov()
             refetchMargen()
+            refetchComercial()
             showToast('success', 'Movimiento registrado')
           }}
         />

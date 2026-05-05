@@ -4,7 +4,7 @@ import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
 import { clientes, facturas, pedidos } from '../schema'
 import { registrarPago } from './facturas'
-import { registrarMovimientoManual, reporteMargenPorTipo } from './finanzas'
+import { registrarMovimientoManual, reporteMargenPorTipo, resumenComercialMensual } from './finanzas'
 
 describe.runIf(nativeAbiAvailable)('reporteMargenPorTipo', () => {
   let db: DB
@@ -114,5 +114,13 @@ describe.runIf(nativeAbiAvailable)('reporteMargenPorTipo', () => {
     expect(reporte.filas).toHaveLength(0)
     expect(reporte.totalIngresos).toBe(0)
     expect(reporte.margenTotal).toBe(0)
+  })
+
+  it('resume ventas, descuentos y margen comercial del mes', () => {
+    const resumen = resumenComercialMensual(db, '2026-04')
+    expect(resumen.ventasBrutasPedidos).toBe(180000)
+    expect(resumen.descuentos).toBe(0)
+    expect(resumen.ventasNetasPedidos).toBe(180000)
+    expect(resumen.pedidosTotal).toBeGreaterThan(0)
   })
 })

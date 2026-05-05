@@ -1,7 +1,9 @@
-import { and, asc, eq, gte } from 'drizzle-orm'
+import { and, asc, eq, gte, sql } from 'drizzle-orm'
 import type { DB } from '../index'
 import {
+  configuracion,
   muestrasMarcos,
+  pedidos,
   preciosBastidores,
   preciosPaspartuAcrilico,
   preciosPaspartuPintado,
@@ -9,6 +11,7 @@ import {
   preciosTapas,
   preciosVidrios,
   proveedores,
+  type EstadoRentabilidad,
   type PedidoItemMetadata,
   type TipoItemPedido,
   type TipoPaspartu,
@@ -26,7 +29,9 @@ export type CotizacionItem = {
   referencia?: string
   cantidad: number
   precioUnitario: number | null
+  costoUnitarioEstimado?: number | null
   subtotal: number
+  subtotalCostoEstimado?: number | null
   metadata?: PedidoItemMetadata
 }
 
@@ -34,8 +39,24 @@ export type ResultadoCotizacion = {
   items: CotizacionItem[]
   subtotal: number
   totalMateriales: number
+  brutoCotizado: number
+  precioLista: number
   precioTotal: number
+  costoEstimadoTotal: number | null
+  margenEstimado: number | null
+  margenEstimadoPct: number | null
+  estadoRentabilidad: EstadoRentabilidad
 }
+
+type EstadoMargen = {
+  costoEstimadoTotal: number | null
+  margenEstimado: number | null
+  margenEstimadoPct: number | null
+  estadoRentabilidad: EstadoRentabilidad
+}
+
+const CLAVE_COSTO_MATERIALES_ARMADO = 'porcentaje_costo_materiales_armado_default'
+const CLAVE_MARGEN_MINIMO_ALERTA = 'margen_minimo_alerta_pct'
 
 // ---------------------------------------------------------------------------
 // Límites operativos (validaciones de sanidad — no cambian fórmulas)
@@ -212,6 +233,64 @@ export function aplicarMaterialesAdicionales(subtotal: number, porcentaje: numbe
   return Math.round(subtotal * (porcentaje / 100))
 }
 
+function leerNumeroConfiguracion(db: DB, clave: string): number | null {
+  const row = db.select({ valor: configuracion.valor }).from(configuracion).where(eq(configuracion.clave, clave)).get()
+  if (!row) return null
+  const valor = Number(row.valor)
+  return Number.isFinite(valor) ? valor : null
+}
+
+// Construye el `tipo` interno de un vidrio a partir del nombre y espesor.
+// Reglas:
+//   - lowercase + sin tildes + reemplaza no-alfanumérico por '_'
+//   - quita prefijo "vidrio" si el dueño lo escribió (UI dice "Vidrio claro
+//     2mm" — el prefijo es ruido y antes producía 'vidrio_claro_2mm_2mm')
+//   - quita sufijo "Xmm" del nombre para no duplicar el espesor
+//   - sufijo final con el espesor: 'claro_2mm', 'antirreflectivo_3mm'
+function buildTipoVidrio(nombre: string, espesorMm: number): string {
+  const base = nombre
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/^vidrio[\s_-]+/i, '')
+    .replace(/\s*\d+(\.\d+)?\s*mm.*$/i, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  const espesor = String(espesorMm).replace(/\.0$/, '').replace(/[^0-9.]+/g, '')
+  if (!base) throw new Error('El nombre del vidrio no puede estar vacío')
+  if (!espesor) throw new Error('El espesor del vidrio es obligatorio')
+  return `${base}_${espesor}mm`
+}
+
+function calcularEstadoMargen(
+  precioLista: number,
+  costoEstimadoTotal: number | null,
+  margenMinimoAlertaPct: number
+): EstadoMargen {
+  if (costoEstimadoTotal === null) {
+    return {
+      costoEstimadoTotal: null,
+      margenEstimado: null,
+      margenEstimadoPct: null,
+      estadoRentabilidad: 'incompleta'
+    }
+  }
+  const margenEstimado = precioLista - costoEstimadoTotal
+  const margenEstimadoPct = precioLista > 0 ? Math.round((margenEstimado / precioLista) * 10000) / 100 : 0
+  return {
+    costoEstimadoTotal,
+    margenEstimado,
+    margenEstimadoPct,
+    estadoRentabilidad:
+      margenEstimado <= 0
+        ? 'critica'
+        : margenEstimadoPct < margenMinimoAlertaPct
+          ? 'baja'
+          : 'saludable'
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Lookups en tablas de precios por medida
 // ---------------------------------------------------------------------------
@@ -244,6 +323,7 @@ export type MuestraMarcoConProveedor = {
   referencia: string
   colillaCm: number
   precioMetro: number
+  costoMetroEstimado: number | null
   descripcion: string | null
   proveedorId: number | null
   proveedorNombre: string | null
@@ -260,6 +340,7 @@ export function listarMuestrasMarcos(db: DB): MuestraMarcoConProveedor[] {
       referencia: muestrasMarcos.referencia,
       colillaCm: muestrasMarcos.colillaCm,
       precioMetro: muestrasMarcos.precioMetro,
+      costoMetroEstimado: muestrasMarcos.costoMetroEstimado,
       descripcion: muestrasMarcos.descripcion,
       proveedorId: muestrasMarcos.proveedorId,
       proveedorNombre: proveedores.nombre,
@@ -281,6 +362,7 @@ export type NuevaMuestraMarco = {
   referencia: string
   colillaCm: number
   precioMetro: number
+  costoMetroEstimado?: number | null
   descripcion?: string | null
   proveedorId?: number | null
 }
@@ -299,6 +381,11 @@ function validarMuestraMarcoData(data: Partial<NuevaMuestraMarco>): void {
   if (data.precioMetro !== undefined) {
     if (!Number.isFinite(data.precioMetro) || data.precioMetro <= 0) {
       throw new Error('El precio por metro debe ser mayor a 0')
+    }
+  }
+  if (data.costoMetroEstimado !== undefined && data.costoMetroEstimado !== null) {
+    if (!Number.isFinite(data.costoMetroEstimado) || data.costoMetroEstimado < 0) {
+      throw new Error('El costo estimado por metro debe ser mayor o igual a 0')
     }
   }
   if (data.referencia !== undefined && !data.referencia.trim()) {
@@ -325,48 +412,102 @@ export function desactivarMuestraMarco(db: DB, id: number) {
     .get()
 }
 
-// CRUD para precios de vidrio
-export function actualizarPrecioVidrio(db: DB, id: number, precioM2: number) {
-  // Sin esta validación un IPC directo podía dejar vidrios a $0 o negativo
-  // y quebrar cotizaciones posteriores. CHECK constraint en DB es la
-  // segunda barrera, pero el mensaje legible viene de aquí.
-  if (!Number.isFinite(precioM2) || precioM2 <= 0) {
+export type NuevoPrecioVidrio = {
+  nombre: string
+  espesorMm: number
+  precioM2: number
+  costoM2Estimado?: number | null
+}
+
+function validarPrecioVidrioData(data: NuevoPrecioVidrio): {
+  nombre: string
+  espesorMm: number
+  precioM2: number
+  costoM2Estimado: number | null
+  tipo: string
+} {
+  const nombre = data.nombre.trim().replace(/\s+/g, ' ')
+  if (!nombre) throw new Error('El nombre del vidrio no puede estar vacío')
+  if (!Number.isFinite(data.espesorMm) || data.espesorMm <= 0) {
+    throw new Error('El espesor del vidrio debe ser mayor a 0')
+  }
+  if (!Number.isFinite(data.precioM2) || data.precioM2 <= 0) {
     throw new Error('El precio por m² debe ser mayor a 0')
   }
+  const costoM2Estimado = data.costoM2Estimado ?? null
+  if (costoM2Estimado !== null && (!Number.isFinite(costoM2Estimado) || costoM2Estimado < 0)) {
+    throw new Error('El costo estimado por m² debe ser mayor o igual a 0')
+  }
+  return {
+    nombre,
+    espesorMm: data.espesorMm,
+    precioM2: data.precioM2,
+    costoM2Estimado,
+    tipo: buildTipoVidrio(nombre, data.espesorMm)
+  }
+}
+
+// CRUD para precios de vidrio.
+//
+// Reglas de edición (BR — proteger pedidos viejos):
+//   - Cambiar precio o costo: siempre permitido (no afecta el `tipo` guardado
+//     en pedidos viejos; el cotizador re-cotiza con el nuevo precio cuando
+//     el dueño abra el pedido).
+//   - Cambiar nombre o espesor: SOLO si el `tipo` resultante coincide con el
+//     viejo. Si el cambio modifica el `tipo`, validamos que no existan pedidos
+//     viejos referenciándolo. Si los hay, rechazamos con un mensaje claro
+//     pidiendo crear un vidrio nuevo en lugar de editar el existente.
+export function actualizarPrecioVidrio(db: DB, id: number, data: NuevoPrecioVidrio) {
+  const normalizado = validarPrecioVidrioData(data)
+  const existing = db.select().from(preciosVidrios).where(eq(preciosVidrios.id, id)).get()
+  if (!existing) throw new Error(`Vidrio ${id} no encontrado`)
+
+  if (normalizado.tipo !== existing.tipo) {
+    // Bloquear si pedidos viejos referencian el tipo actual: cambiarlo los
+    // dejaría huérfanos (cotizador no encuentra el vidrio al re-cotizar).
+    const enUso = db
+      .select({ n: sql<number>`count(*)` })
+      .from(pedidos)
+      .where(eq(pedidos.tipoVidrio, existing.tipo))
+      .get()
+    if ((enUso?.n ?? 0) > 0) {
+      throw new Error(
+        `No se puede cambiar el nombre o espesor de este vidrio porque hay ${enUso?.n} pedido(s) que lo usan. ` +
+          `Crea un vidrio nuevo en lugar de editar este. Solo puedes editar el precio o el costo.`
+      )
+    }
+    // Verificar también que el nuevo tipo no choque con otro vidrio existente.
+    const choque = db
+      .select()
+      .from(preciosVidrios)
+      .where(and(eq(preciosVidrios.tipo, normalizado.tipo), eq(preciosVidrios.activo, true)))
+      .get()
+    if (choque && choque.id !== id) {
+      throw new Error(`Ya existe un vidrio activo con el tipo "${normalizado.nombre}"`)
+    }
+  }
+
   return db
     .update(preciosVidrios)
-    .set({ precioM2 })
+    .set(normalizado)
     .where(eq(preciosVidrios.id, id))
     .returning()
     .get()
 }
 
-export function crearPrecioVidrio(db: DB, tipo: string, precioM2: number) {
-  // Normalizar tipo para evitar duplicados por capitalización/espacios
-  // ('Claro' y 'claro ' son el mismo tipo desde la UI).
-  const tipoNormalizado = tipo.trim().toLowerCase().replace(/\s+/g, '_')
-  if (!tipoNormalizado) throw new Error('El tipo de vidrio no puede estar vacío')
-  // Un vidrio en la lista de precios debe tener precio > 0; aceptar 0 o
-  // negativos abre la puerta a cotizaciones gratis por error.
-  if (!Number.isFinite(precioM2) || precioM2 <= 0) {
-    throw new Error('El precio por m² debe ser mayor a 0')
-  }
-  const existing = db
-    .select()
-    .from(preciosVidrios)
-    .where(eq(preciosVidrios.tipo, tipoNormalizado))
-    .get()
+export function crearPrecioVidrio(db: DB, data: NuevoPrecioVidrio) {
+  const normalizado = validarPrecioVidrioData(data)
+  const existing = db.select().from(preciosVidrios).where(eq(preciosVidrios.tipo, normalizado.tipo)).get()
   if (existing) {
-    if (existing.activo) throw new Error(`Ya existe un vidrio tipo "${tipoNormalizado}"`)
-    // Reactivar el tipo inactivo en vez de crear duplicado
+    if (existing.activo) throw new Error(`Ya existe un vidrio activo con el nombre "${normalizado.nombre}"`)
     return db
       .update(preciosVidrios)
-      .set({ activo: true, precioM2 })
+      .set({ ...normalizado, activo: true })
       .where(eq(preciosVidrios.id, existing.id))
       .returning()
       .get()
   }
-  return db.insert(preciosVidrios).values({ tipo: tipoNormalizado, precioM2 }).returning().get()
+  return db.insert(preciosVidrios).values(normalizado).returning().get()
 }
 
 export function eliminarPrecioVidrio(db: DB, id: number) {
@@ -379,16 +520,51 @@ export function eliminarPrecioVidrio(db: DB, id: number) {
 }
 
 export function listarPreciosVidrio(db: DB) {
-  return db.select().from(preciosVidrios).where(eq(preciosVidrios.activo, true)).all()
+  return db
+    .select()
+    .from(preciosVidrios)
+    .where(eq(preciosVidrios.activo, true))
+    .orderBy(preciosVidrios.nombre, preciosVidrios.espesorMm)
+    .all()
 }
 
+/**
+ * Resuelve un precio de vidrio a partir del `tipo` guardado en el pedido.
+ *
+ * Estrategia:
+ *   1. Match exacto del tipo (`'claro_2mm'`).
+ *   2. Si no hay exacto, extraer la base sin sufijo `_Xmm` y buscar
+ *      cualquier vidrio activo cuya base coincida. Cubre:
+ *      - tipos legacy sin espesor: `'claro'`, `'antirreflectivo'`
+ *      - tipos donde el espesor disponible cambió pero la base sigue
+ *
+ * Si hay al menos un vidrio activo cuyo nombre normalizado empiece por la
+ * base solicitada, esta función nunca devuelve null por mismatch de espesor.
+ */
 export function obtenerPrecioVidrio(db: DB, tipo: TipoVidrioLista) {
-  return (
+  const exacto =
     db
       .select()
       .from(preciosVidrios)
       .where(and(eq(preciosVidrios.tipo, tipo), eq(preciosVidrios.activo, true)))
       .orderBy(asc(preciosVidrios.id))
+      .get() ?? null
+  if (exacto) return exacto
+
+  const base = tipo.replace(/_\d+(\.\d+)?mm$/i, '')
+  if (!base) return null
+  const patron = `${base}_%`
+  return (
+    db
+      .select()
+      .from(preciosVidrios)
+      .where(
+        and(
+          sql`(${preciosVidrios.tipo} = ${base} OR ${preciosVidrios.tipo} LIKE ${patron})`,
+          eq(preciosVidrios.activo, true)
+        )
+      )
+      .orderBy(asc(preciosVidrios.espesorMm), asc(preciosVidrios.id))
       .get() ?? null
   )
 }
@@ -452,7 +628,12 @@ export function cotizarEnmarcacionEstandar(
     referencia: marco.referencia,
     cantidad: 1,
     precioUnitario: marco.precioMetro,
+    costoUnitarioEstimado: marco.costoMetroEstimado ?? null,
     subtotal: calcMarco.precio,
+    subtotalCostoEstimado:
+      marco.costoMetroEstimado !== null && marco.costoMetroEstimado !== undefined
+        ? Math.round(calcMarco.metros * marco.costoMetroEstimado)
+        : null,
     metadata: {
       perimetroCm: calcMarco.perimetroCm,
       colillaCm: marco.colillaCm,
@@ -466,10 +647,15 @@ export function cotizarEnmarcacionEstandar(
     const calcVidrio = calcularPrecioVidrio(input.anchoCm, input.altoCm, pv.precioM2)
     items.push({
       tipoItem: 'vidrio',
-      descripcion: `Vidrio ${input.tipoVidrio}`,
+      descripcion: pv.nombre,
       cantidad: 1,
       precioUnitario: pv.precioM2,
+      costoUnitarioEstimado: pv.costoM2Estimado ?? null,
       subtotal: calcVidrio.precio,
+      subtotalCostoEstimado:
+        pv.costoM2Estimado !== null && pv.costoM2Estimado !== undefined
+          ? Math.round(calcVidrio.areaM2 * pv.costoM2Estimado)
+          : null,
       metadata: {
         anchoRedondeado: calcVidrio.anchoRedondeado,
         altoRedondeado: calcVidrio.altoRedondeado,
@@ -478,7 +664,7 @@ export function cotizarEnmarcacionEstandar(
     })
   }
 
-  return finalizarCotizacion(items, input.porcentajeMateriales ?? 10)
+  return finalizarCotizacion(db, items, input.porcentajeMateriales ?? 10)
 }
 
 export type InputEnmarcacionPaspartu = {
@@ -516,7 +702,9 @@ export function cotizarEnmarcacionPaspartu(
     descripcion: `Paspartú ${input.tipoPaspartu} ${anchoExterior}x${altoExterior}cm`,
     cantidad: 1,
     precioUnitario: pp.precio,
+    costoUnitarioEstimado: pp.costoEstimado ?? null,
     subtotal: pp.precio,
+    subtotalCostoEstimado: pp.costoEstimado ?? null,
     metadata: {
       anchoExteriorCm: anchoExterior,
       altoExteriorCm: altoExterior
@@ -551,7 +739,12 @@ export function cotizarEnmarcacionPaspartu(
     referencia: marco.referencia,
     cantidad: 1,
     precioUnitario: marco.precioMetro,
+    costoUnitarioEstimado: marco.costoMetroEstimado ?? null,
     subtotal: calcMarco.precio,
+    subtotalCostoEstimado:
+      marco.costoMetroEstimado !== null && marco.costoMetroEstimado !== undefined
+        ? Math.round(calcMarco.metros * marco.costoMetroEstimado)
+        : null,
     metadata: {
       perimetroCm: calcMarco.perimetroCm,
       colillaCm: marco.colillaCm,
@@ -565,10 +758,15 @@ export function cotizarEnmarcacionPaspartu(
     const calcVidrio = calcularPrecioVidrio(anchoExterior, altoExterior, pv.precioM2)
     items.push({
       tipoItem: 'vidrio',
-      descripcion: `Vidrio ${input.tipoVidrio}`,
+      descripcion: pv.nombre,
       cantidad: 1,
       precioUnitario: pv.precioM2,
+      costoUnitarioEstimado: pv.costoM2Estimado ?? null,
       subtotal: calcVidrio.precio,
+      subtotalCostoEstimado:
+        pv.costoM2Estimado !== null && pv.costoM2Estimado !== undefined
+          ? Math.round(calcVidrio.areaM2 * pv.costoM2Estimado)
+          : null,
       metadata: {
         anchoRedondeado: calcVidrio.anchoRedondeado,
         altoRedondeado: calcVidrio.altoRedondeado,
@@ -577,7 +775,7 @@ export function cotizarEnmarcacionPaspartu(
     })
   }
 
-  return finalizarCotizacion(items, input.porcentajeMateriales ?? 10)
+  return finalizarCotizacion(db, items, input.porcentajeMateriales ?? 10)
 }
 
 export type InputAcolchado = {
@@ -595,7 +793,8 @@ export function cotizarAcolchado(db: DB, input: InputAcolchado): ResultadoCotiza
       descripcion: `Acolchado ${input.anchoCm}x${input.altoCm}cm`,
       cantidad: 1,
       precioUnitario: null,
-      subtotal: precio
+      subtotal: precio,
+      subtotalCostoEstimado: null
     }
   ]
 
@@ -618,7 +817,12 @@ export function cotizarAcolchado(db: DB, input: InputAcolchado): ResultadoCotiza
       referencia: marco.referencia,
       cantidad: 1,
       precioUnitario: marco.precioMetro,
+      costoUnitarioEstimado: marco.costoMetroEstimado ?? null,
       subtotal: calcMarco.precio,
+      subtotalCostoEstimado:
+        marco.costoMetroEstimado !== null && marco.costoMetroEstimado !== undefined
+          ? Math.round(calcMarco.metros * marco.costoMetroEstimado)
+          : null,
       metadata: {
         perimetroCm: calcMarco.perimetroCm,
         colillaCm: marco.colillaCm,
@@ -627,7 +831,7 @@ export function cotizarAcolchado(db: DB, input: InputAcolchado): ResultadoCotiza
     })
   }
 
-  return finalizarCotizacion(items, input.porcentajeMateriales ?? 10)
+  return finalizarCotizacion(db, items, input.porcentajeMateriales ?? 10)
 }
 
 export type InputAdherido = {
@@ -639,7 +843,7 @@ export type InputAdherido = {
 // Fase 2 §A.6 — Cotiza un trabajo adherido. Solo lámina pegada sobre MDF; no se
 // combina con marco, vidrio ni paspartú (el wizard salta esos pasos). El
 // porcentaje de materiales cubre MDF, Boxer y cartón de respaldo.
-export function cotizarAdherido(_db: DB, input: InputAdherido): ResultadoCotizacion {
+export function cotizarAdherido(db: DB, input: InputAdherido): ResultadoCotizacion {
   const { precio, multiplicador } = calcularPrecioAdherido(input.anchoCm, input.altoCm)
   const items: CotizacionItem[] = [
     {
@@ -648,10 +852,11 @@ export function cotizarAdherido(_db: DB, input: InputAdherido): ResultadoCotizac
       cantidad: 1,
       precioUnitario: null,
       subtotal: precio,
+      subtotalCostoEstimado: null,
       metadata: { multiplicadorAdherido: multiplicador }
     }
   ]
-  return finalizarCotizacion(items, input.porcentajeMateriales ?? 10)
+  return finalizarCotizacion(db, items, input.porcentajeMateriales ?? 10)
 }
 
 export type InputLookupMedida = {
@@ -666,13 +871,16 @@ export function cotizarRetablo(db: DB, input: InputLookupMedida): ResultadoCotiz
   const p = obtenerPrecioRetablo(db, input.anchoCm, input.altoCm)
   if (!p) throw new Error(`Sin precio de retablo para ${input.anchoCm}x${input.altoCm}cm`)
   return finalizarCotizacion(
+    db,
     [
       {
         tipoItem: 'retablo',
         descripcion: `Retablo ${input.anchoCm}x${input.altoCm}cm`,
         cantidad: 1,
         precioUnitario: p.precio,
-        subtotal: p.precio
+        costoUnitarioEstimado: p.costoEstimado ?? null,
+        subtotal: p.precio,
+        subtotalCostoEstimado: p.costoEstimado ?? null
       }
     ],
     input.porcentajeMateriales ?? 10
@@ -685,13 +893,16 @@ export function cotizarBastidor(db: DB, input: InputLookupMedida): ResultadoCoti
   const p = obtenerPrecioBastidor(db, input.anchoCm, input.altoCm)
   if (!p) throw new Error(`Sin precio de bastidor para ${input.anchoCm}x${input.altoCm}cm`)
   return finalizarCotizacion(
+    db,
     [
       {
         tipoItem: 'bastidor',
         descripcion: `Bastidor ${input.anchoCm}x${input.altoCm}cm`,
         cantidad: 1,
         precioUnitario: p.precio,
-        subtotal: p.precio
+        costoUnitarioEstimado: p.costoEstimado ?? null,
+        subtotal: p.precio,
+        subtotalCostoEstimado: p.costoEstimado ?? null
       }
     ],
     input.porcentajeMateriales ?? 10
@@ -707,6 +918,7 @@ export type InputVidrioEspejo = {
   altoCm: number
   tipoVidrio: TipoVidrioLista
   precioInstalacion?: number
+  costoInstalacionEstimado?: number | null
   descripcion?: string | null
 }
 
@@ -718,11 +930,15 @@ export function cotizarVidrioEspejo(db: DB, input: InputVidrioEspejo): Resultado
   const items: CotizacionItem[] = [
     {
       tipoItem: 'vidrio',
-      descripcion:
-        input.descripcion || `Vidrio ${input.tipoVidrio} ${input.anchoCm}x${input.altoCm}cm`,
+      descripcion: input.descripcion || `${pv.nombre} ${input.anchoCm}x${input.altoCm}cm`,
       cantidad: 1,
       precioUnitario: pv.precioM2,
+      costoUnitarioEstimado: pv.costoM2Estimado ?? null,
       subtotal: calc.precio,
+      subtotalCostoEstimado:
+        pv.costoM2Estimado !== null && pv.costoM2Estimado !== undefined
+          ? Math.round(calc.areaM2 * pv.costoM2Estimado)
+          : null,
       metadata: {
         anchoRedondeado: calc.anchoRedondeado,
         altoRedondeado: calc.altoRedondeado,
@@ -738,16 +954,33 @@ export function cotizarVidrioEspejo(db: DB, input: InputVidrioEspejo): Resultado
       descripcion: 'Instalación a domicilio',
       cantidad: 1,
       precioUnitario: instalacion,
-      subtotal: instalacion
+      costoUnitarioEstimado:
+        input.costoInstalacionEstimado !== null && input.costoInstalacionEstimado !== undefined
+          ? Math.round(input.costoInstalacionEstimado)
+          : null,
+      subtotal: instalacion,
+      subtotalCostoEstimado:
+        input.costoInstalacionEstimado !== null && input.costoInstalacionEstimado !== undefined
+          ? Math.round(input.costoInstalacionEstimado)
+          : null
     })
   }
 
   const subtotal = items.reduce((acc, it) => acc + it.subtotal, 0)
+  const precioLista = redondearPrecioFinal(subtotal)
+  const margenMinimoAlertaPct = leerNumeroConfiguracion(db, CLAVE_MARGEN_MINIMO_ALERTA) ?? 20
+  const costoEstimadoTotal = items.every((item) => item.subtotalCostoEstimado !== null && item.subtotalCostoEstimado !== undefined)
+    ? items.reduce((acc, item) => acc + (item.subtotalCostoEstimado ?? 0), 0)
+    : null
+  const estadoMargen = calcularEstadoMargen(precioLista, costoEstimadoTotal, margenMinimoAlertaPct)
   return {
     items,
     subtotal,
+    brutoCotizado: subtotal,
     totalMateriales: 0,
-    precioTotal: redondearPrecioFinal(subtotal)
+    precioLista,
+    precioTotal: precioLista,
+    ...estadoMargen
   }
 }
 
@@ -757,13 +990,16 @@ export function cotizarTapa(db: DB, input: InputLookupMedida): ResultadoCotizaci
   const p = obtenerPrecioTapa(db, input.anchoCm, input.altoCm)
   if (!p) throw new Error(`Sin precio de tapa para ${input.anchoCm}x${input.altoCm}cm`)
   return finalizarCotizacion(
+    db,
     [
       {
         tipoItem: 'tapa',
         descripcion: `Tapa ${input.anchoCm}x${input.altoCm}cm`,
         cantidad: 1,
         precioUnitario: p.precio,
-        subtotal: p.precio
+        costoUnitarioEstimado: p.costoEstimado ?? null,
+        subtotal: p.precio,
+        subtotalCostoEstimado: p.costoEstimado ?? null
       }
     ],
     input.porcentajeMateriales ?? 10
@@ -782,6 +1018,7 @@ function validarMedidaPrecioCreate(data: {
   anchoCm: number
   altoCm: number
   precio: number
+  costoEstimado?: number | null
 }): void {
   if (!Number.isFinite(data.anchoCm) || data.anchoCm <= 0) {
     throw new Error('El ancho debe ser un número mayor a 0')
@@ -791,6 +1028,30 @@ function validarMedidaPrecioCreate(data: {
   }
   if (!Number.isFinite(data.precio) || data.precio <= 0) {
     throw new Error('El precio debe ser un número mayor a 0')
+  }
+  if (data.costoEstimado !== undefined && data.costoEstimado !== null) {
+    if (!Number.isFinite(data.costoEstimado) || data.costoEstimado < 0) {
+      throw new Error('El costo estimado debe ser un número mayor o igual a 0')
+    }
+  }
+}
+
+type MedidaPrecioCostoData = {
+  anchoCm: number
+  altoCm: number
+  precio: number
+  costoEstimado?: number | null
+  descripcion?: string | null
+}
+
+function validarActualizacionPrecioCosto(data: { precio: number; costoEstimado?: number | null }): void {
+  if (!Number.isFinite(data.precio) || data.precio <= 0) {
+    throw new Error('El precio debe ser mayor a 0')
+  }
+  if (data.costoEstimado !== undefined && data.costoEstimado !== null) {
+    if (!Number.isFinite(data.costoEstimado) || data.costoEstimado < 0) {
+      throw new Error('El costo estimado debe ser mayor o igual a 0')
+    }
   }
 }
 
@@ -805,7 +1066,7 @@ export function listarPreciosPaspartuPintado(db: DB) {
 }
 export function crearPrecioPaspartuPintado(
   db: DB,
-  data: { anchoCm: number; altoCm: number; precio: number; descripcion?: string | null }
+  data: MedidaPrecioCostoData
 ) {
   validarMedidaPrecioCreate(data)
   return db.insert(preciosPaspartuPintado).values(data).returning().get()
@@ -818,13 +1079,15 @@ export function eliminarPrecioPaspartuPintado(db: DB, id: number) {
     .returning()
     .get()
 }
-export function actualizarPrecioPaspartuPintado(db: DB, id: number, precio: number) {
-  if (!Number.isFinite(precio) || precio <= 0) {
-    throw new Error('El precio debe ser mayor a 0')
-  }
+export function actualizarPrecioPaspartuPintado(
+  db: DB,
+  id: number,
+  data: { precio: number; costoEstimado?: number | null }
+) {
+  validarActualizacionPrecioCosto(data)
   return db
     .update(preciosPaspartuPintado)
-    .set({ precio })
+    .set(data)
     .where(eq(preciosPaspartuPintado.id, id))
     .returning()
     .get()
@@ -841,7 +1104,7 @@ export function listarPreciosPaspartuAcrilico(db: DB) {
 }
 export function crearPrecioPaspartuAcrilico(
   db: DB,
-  data: { anchoCm: number; altoCm: number; precio: number; descripcion?: string | null }
+  data: MedidaPrecioCostoData
 ) {
   validarMedidaPrecioCreate(data)
   return db.insert(preciosPaspartuAcrilico).values(data).returning().get()
@@ -854,13 +1117,15 @@ export function eliminarPrecioPaspartuAcrilico(db: DB, id: number) {
     .returning()
     .get()
 }
-export function actualizarPrecioPaspartuAcrilico(db: DB, id: number, precio: number) {
-  if (!Number.isFinite(precio) || precio <= 0) {
-    throw new Error('El precio debe ser mayor a 0')
-  }
+export function actualizarPrecioPaspartuAcrilico(
+  db: DB,
+  id: number,
+  data: { precio: number; costoEstimado?: number | null }
+) {
+  validarActualizacionPrecioCosto(data)
   return db
     .update(preciosPaspartuAcrilico)
-    .set({ precio })
+    .set(data)
     .where(eq(preciosPaspartuAcrilico.id, id))
     .returning()
     .get()
@@ -877,7 +1142,7 @@ export function listarPreciosRetablos(db: DB) {
 }
 export function crearPrecioRetablo(
   db: DB,
-  data: { anchoCm: number; altoCm: number; precio: number }
+  data: MedidaPrecioCostoData
 ) {
   validarMedidaPrecioCreate(data)
   return db.insert(preciosRetablos).values(data).returning().get()
@@ -890,13 +1155,15 @@ export function eliminarPrecioRetablo(db: DB, id: number) {
     .returning()
     .get()
 }
-export function actualizarPrecioRetablo(db: DB, id: number, precio: number) {
-  if (!Number.isFinite(precio) || precio <= 0) {
-    throw new Error('El precio debe ser mayor a 0')
-  }
+export function actualizarPrecioRetablo(
+  db: DB,
+  id: number,
+  data: { precio: number; costoEstimado?: number | null }
+) {
+  validarActualizacionPrecioCosto(data)
   return db
     .update(preciosRetablos)
-    .set({ precio })
+    .set(data)
     .where(eq(preciosRetablos.id, id))
     .returning()
     .get()
@@ -913,7 +1180,7 @@ export function listarPreciosBastidores(db: DB) {
 }
 export function crearPrecioBastidor(
   db: DB,
-  data: { anchoCm: number; altoCm: number; precio: number }
+  data: MedidaPrecioCostoData
 ) {
   validarMedidaPrecioCreate(data)
   return db.insert(preciosBastidores).values(data).returning().get()
@@ -926,13 +1193,15 @@ export function eliminarPrecioBastidor(db: DB, id: number) {
     .returning()
     .get()
 }
-export function actualizarPrecioBastidor(db: DB, id: number, precio: number) {
-  if (!Number.isFinite(precio) || precio <= 0) {
-    throw new Error('El precio debe ser mayor a 0')
-  }
+export function actualizarPrecioBastidor(
+  db: DB,
+  id: number,
+  data: { precio: number; costoEstimado?: number | null }
+) {
+  validarActualizacionPrecioCosto(data)
   return db
     .update(preciosBastidores)
-    .set({ precio })
+    .set(data)
     .where(eq(preciosBastidores.id, id))
     .returning()
     .get()
@@ -947,7 +1216,7 @@ export function listarPreciosTapas(db: DB) {
     .orderBy(preciosTapas.anchoCm)
     .all()
 }
-export function crearPrecioTapa(db: DB, data: { anchoCm: number; altoCm: number; precio: number }) {
+export function crearPrecioTapa(db: DB, data: MedidaPrecioCostoData) {
   validarMedidaPrecioCreate(data)
   return db.insert(preciosTapas).values(data).returning().get()
 }
@@ -959,40 +1228,57 @@ export function eliminarPrecioTapa(db: DB, id: number) {
     .returning()
     .get()
 }
-export function actualizarPrecioTapa(db: DB, id: number, precio: number) {
-  if (!Number.isFinite(precio) || precio <= 0) {
-    throw new Error('El precio debe ser mayor a 0')
-  }
-  return db.update(preciosTapas).set({ precio }).where(eq(preciosTapas.id, id)).returning().get()
+export function actualizarPrecioTapa(
+  db: DB,
+  id: number,
+  data: { precio: number; costoEstimado?: number | null }
+) {
+  validarActualizacionPrecioCosto(data)
+  return db.update(preciosTapas).set(data).where(eq(preciosTapas.id, id)).returning().get()
 }
 
 // ---------------------------------------------------------------------------
 // Util interno
 // ---------------------------------------------------------------------------
 
-function finalizarCotizacion(
-  items: CotizacionItem[],
-  porcentajeMateriales: number
-): ResultadoCotizacion {
+function finalizarCotizacion(db: DB, items: CotizacionItem[], porcentajeMateriales: number): ResultadoCotizacion {
   const subtotal = items.reduce((acc, it) => acc + it.subtotal, 0)
   const totalMateriales = aplicarMaterialesAdicionales(subtotal, porcentajeMateriales)
+  const porcentajeCostoMateriales = leerNumeroConfiguracion(db, CLAVE_COSTO_MATERIALES_ARMADO)
+  const subtotalCostoBase = items.every((item) => item.subtotalCostoEstimado !== null && item.subtotalCostoEstimado !== undefined)
+    ? items.reduce((acc, item) => acc + (item.subtotalCostoEstimado ?? 0), 0)
+    : null
   if (totalMateriales > 0) {
     items.push({
       tipoItem: 'materiales_adicionales',
       descripcion: `Materiales adicionales (${porcentajeMateriales}%)`,
       cantidad: 1,
       precioUnitario: null,
-      subtotal: totalMateriales
+      subtotal: totalMateriales,
+      subtotalCostoEstimado:
+        subtotalCostoBase !== null && porcentajeCostoMateriales !== null
+          ? Math.round(totalMateriales * (porcentajeCostoMateriales / 100))
+          : null
     })
   }
   // `precioTotal` se redondea hacia arriba al múltiplo de $1.000 (silent);
   // los items y subtotales quedan en bruto. La diferencia (≤ $999) se absorbe
   // en el TOTAL. Ver src/shared/redondeo.ts para el contexto de la decisión.
+  const brutoCotizado = subtotal + totalMateriales
+  const precioLista = redondearPrecioFinal(brutoCotizado)
+  const margenMinimoAlertaPct = leerNumeroConfiguracion(db, CLAVE_MARGEN_MINIMO_ALERTA) ?? 20
+  const costoEstimadoTotal = items.every((item) => item.subtotalCostoEstimado !== null && item.subtotalCostoEstimado !== undefined)
+    ? items.reduce((acc, item) => acc + (item.subtotalCostoEstimado ?? 0), 0)
+    : null
+  const estadoMargen = calcularEstadoMargen(precioLista, costoEstimadoTotal, margenMinimoAlertaPct)
   return {
     items,
     subtotal,
     totalMateriales,
-    precioTotal: redondearPrecioFinal(subtotal + totalMateriales)
+    brutoCotizado,
+    precioLista,
+    precioTotal: precioLista,
+    ...estadoMargen
   }
 }
 

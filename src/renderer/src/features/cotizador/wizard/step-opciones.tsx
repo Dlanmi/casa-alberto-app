@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react'
+import { useEffect } from 'react'
 import { cn } from '@renderer/lib/cn'
 import { Slider } from '@renderer/components/ui/slider'
 import { useIpc } from '@renderer/hooks/use-ipc'
@@ -23,6 +24,12 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
     () => window.api.cotizador.listarPreciosVidrio(),
     []
   )
+
+  useEffect(() => {
+    if (!vidrios || vidrios.length === 0) return
+    const existe = vidrios.some((vidrio) => vidrio.tipo === data.tipoVidrio)
+    if (!existe) onChange({ tipoVidrio: vidrios[0]!.tipo })
+  }, [data.tipoVidrio, onChange, vidrios])
 
   return (
     <div>
@@ -194,7 +201,8 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
                           <Check size={12} className="text-white" />
                         </div>
                       )}
-                      <span className="text-sm font-semibold text-text">{labelVidrio(v.tipo)}</span>
+                      <span className="text-sm font-semibold text-text">{v.nombre || labelVidrio(v.tipo)}</span>
+                      <span className="text-xs text-text-muted mt-0.5">{v.espesorMm} mm</span>
                       <span className="text-xs font-medium text-accent-strong mt-1">
                         {formatCOP(v.precioM2)}/m²
                       </span>

@@ -50,6 +50,16 @@ const CONFIG_INICIAL: { clave: string; valor: string; descripcion: string }[] = 
     valor: '10',
     descripcion: 'Porcentaje materiales adicionales'
   },
+  {
+    clave: 'porcentaje_costo_materiales_armado_default',
+    valor: '45',
+    descripcion: 'Porcentaje estimado del costo interno sobre el cobro de materiales adicionales'
+  },
+  {
+    clave: 'margen_minimo_alerta_pct',
+    valor: '20',
+    descripcion: 'Margen estimado mínimo (%) antes de alertar rentabilidad baja'
+  },
   { clave: 'tiempo_entrega_default', valor: '8', descripcion: 'Días de entrega por defecto' },
   { clave: 'precio_clase_mensual', valor: '110000', descripcion: 'Precio mensual clases' },
   { clave: 'precio_kit_dibujo', valor: '15000', descripcion: 'Precio kit de dibujo' },
@@ -92,12 +102,13 @@ function seedConfiguracion(db: DB): void {
 function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
   // Muestras de marcos — según Fase 2 (A.1): referencia, colilla (cm), precio/metro
   // La colilla es el desperdicio TOTAL de la muestra (ej: K473 = 48cm). Se suma UNA vez al perímetro.
-  // Cada marco viene de un proveedor fijo (primeros 5 a Alberto, últimos 5 a Edimol).
+  // Cada marco viene de un proveedor fijo (primeros 5 a Alperto, últimos 5 a Edimol).
   const marcos = [
     {
       referencia: 'RN-001',
       colillaCm: 32,
       precioMetro: 28000,
+      costoMetroEstimado: 18000,
       descripcion: 'Roble Natural',
       proveedorId: provs.alberto
     },
@@ -105,6 +116,7 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
       referencia: 'RO-002',
       colillaCm: 36,
       precioMetro: 32000,
+      costoMetroEstimado: 20500,
       descripcion: 'Roble Oscuro',
       proveedorId: provs.alberto
     },
@@ -112,6 +124,7 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
       referencia: 'CE-003',
       colillaCm: 40,
       precioMetro: 35000,
+      costoMetroEstimado: 22500,
       descripcion: 'Cedro',
       proveedorId: provs.alberto
     },
@@ -119,6 +132,7 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
       referencia: 'PA-004',
       colillaCm: 44,
       precioMetro: 42000,
+      costoMetroEstimado: 28500,
       descripcion: 'Plata Antigua',
       proveedorId: provs.alberto
     },
@@ -126,6 +140,7 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
       referencia: 'DC-005',
       colillaCm: 48,
       precioMetro: 48000,
+      costoMetroEstimado: 33000,
       descripcion: 'Dorado Clasico',
       proveedorId: provs.alberto
     },
@@ -133,6 +148,7 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
       referencia: 'NM-006',
       colillaCm: 28,
       precioMetro: 26000,
+      costoMetroEstimado: 17000,
       descripcion: 'Negro Mate',
       proveedorId: provs.edimol
     },
@@ -140,6 +156,7 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
       referencia: 'BL-007',
       colillaCm: 30,
       precioMetro: 30000,
+      costoMetroEstimado: 19500,
       descripcion: 'Blanco Liso',
       proveedorId: provs.edimol
     },
@@ -147,6 +164,7 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
       referencia: 'WE-008',
       colillaCm: 38,
       precioMetro: 38000,
+      costoMetroEstimado: 25500,
       descripcion: 'Wengue',
       proveedorId: provs.edimol
     },
@@ -154,6 +172,7 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
       referencia: 'CH-009',
       colillaCm: 26,
       precioMetro: 25000,
+      costoMetroEstimado: 16000,
       descripcion: 'Chapilla Pino',
       proveedorId: provs.edimol
     },
@@ -161,17 +180,37 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
       referencia: 'TA-010',
       colillaCm: 52,
       precioMetro: 55000,
+      costoMetroEstimado: 39000,
       descripcion: 'Tallado Premium',
       proveedorId: provs.edimol
     }
   ]
   db.insert(muestrasMarcos).values(marcos).run()
 
-  // Vidrios — precios según spec: claro $100.000/m2, antirreflectivo $115.000/m2
+  // Vidrios — catálogo inicial con nombre visible, espesor y costo estimado.
   db.insert(preciosVidrios)
     .values([
-      { tipo: 'claro', precioM2: 100000 },
-      { tipo: 'antirreflectivo', precioM2: 115000 }
+      {
+        tipo: 'claro_2mm',
+        nombre: 'Vidrio claro 2mm',
+        espesorMm: 2,
+        precioM2: 100000,
+        costoM2Estimado: 62000
+      },
+      {
+        tipo: 'claro_3mm',
+        nombre: 'Vidrio claro 3mm',
+        espesorMm: 3,
+        precioM2: 110000,
+        costoM2Estimado: 70000
+      },
+      {
+        tipo: 'antirreflectivo_2mm',
+        nombre: 'Vidrio antirreflectivo 2mm',
+        espesorMm: 2,
+        precioM2: 115000,
+        costoM2Estimado: 76000
+      }
     ])
     .run()
 
@@ -181,46 +220,46 @@ function seedListasPrecios(db: DB, provs: ProveedoresSeed) {
   // El paspartú de 40x50 a $18k es ~35% del marco. Proporción correcta.
   db.insert(preciosPaspartuPintado)
     .values([
-      { anchoCm: 30, altoCm: 40, precio: 12000 },
-      { anchoCm: 40, altoCm: 50, precio: 18000 },
-      { anchoCm: 50, altoCm: 70, precio: 25000 },
-      { anchoCm: 70, altoCm: 100, precio: 38000 }
+      { anchoCm: 30, altoCm: 40, precio: 12000, costoEstimado: 7000 },
+      { anchoCm: 40, altoCm: 50, precio: 18000, costoEstimado: 10500 },
+      { anchoCm: 50, altoCm: 70, precio: 25000, costoEstimado: 15000 },
+      { anchoCm: 70, altoCm: 100, precio: 38000, costoEstimado: 24000 }
     ])
     .run()
 
   // Paspartú acrílico (MDF) — ~40% más caro que el pintado
   db.insert(preciosPaspartuAcrilico)
     .values([
-      { anchoCm: 30, altoCm: 40, precio: 17000 },
-      { anchoCm: 40, altoCm: 50, precio: 25000 },
-      { anchoCm: 50, altoCm: 70, precio: 35000 },
-      { anchoCm: 70, altoCm: 100, precio: 52000 }
+      { anchoCm: 30, altoCm: 40, precio: 17000, costoEstimado: 10000 },
+      { anchoCm: 40, altoCm: 50, precio: 25000, costoEstimado: 15000 },
+      { anchoCm: 50, altoCm: 70, precio: 35000, costoEstimado: 22000 },
+      { anchoCm: 70, altoCm: 100, precio: 52000, costoEstimado: 33000 }
     ])
     .run()
 
   db.insert(preciosRetablos)
     .values([
-      { anchoCm: 20, altoCm: 30, precio: 18000 },
-      { anchoCm: 30, altoCm: 40, precio: 28000 },
-      { anchoCm: 40, altoCm: 60, precio: 45000 },
-      { anchoCm: 60, altoCm: 80, precio: 75000 }
+      { anchoCm: 20, altoCm: 30, precio: 18000, costoEstimado: 11000 },
+      { anchoCm: 30, altoCm: 40, precio: 28000, costoEstimado: 17500 },
+      { anchoCm: 40, altoCm: 60, precio: 45000, costoEstimado: 29000 },
+      { anchoCm: 60, altoCm: 80, precio: 75000, costoEstimado: 49000 }
     ])
     .run()
 
   db.insert(preciosBastidores)
     .values([
-      { anchoCm: 30, altoCm: 40, precio: 22000 },
-      { anchoCm: 40, altoCm: 60, precio: 38000 },
-      { anchoCm: 60, altoCm: 80, precio: 58000 },
-      { anchoCm: 80, altoCm: 100, precio: 85000 }
+      { anchoCm: 30, altoCm: 40, precio: 22000, costoEstimado: 14000 },
+      { anchoCm: 40, altoCm: 60, precio: 38000, costoEstimado: 24500 },
+      { anchoCm: 60, altoCm: 80, precio: 58000, costoEstimado: 38500 },
+      { anchoCm: 80, altoCm: 100, precio: 85000, costoEstimado: 57500 }
     ])
     .run()
 
   db.insert(preciosTapas)
     .values([
-      { anchoCm: 30, altoCm: 40, precio: 12000 },
-      { anchoCm: 40, altoCm: 60, precio: 20000 },
-      { anchoCm: 60, altoCm: 80, precio: 32000 }
+      { anchoCm: 30, altoCm: 40, precio: 12000, costoEstimado: 7500 },
+      { anchoCm: 40, altoCm: 60, precio: 20000, costoEstimado: 12800 },
+      { anchoCm: 60, altoCm: 80, precio: 32000, costoEstimado: 21000 }
     ])
     .run()
 }
@@ -274,7 +313,7 @@ function seedProveedores(db: DB): ProveedoresSeed {
     .insert(proveedores)
     .values([
       {
-        nombre: 'Alberto',
+        nombre: 'Alperto',
         producto: 'Marcos a medida',
         tipo: 'marco',
         telefono: '3101234567',
@@ -308,14 +347,14 @@ function seedProveedores(db: DB): ProveedoresSeed {
     .all()
   const byName = new Map(rows.map((r) => [r.nombre, r.id]))
   return {
-    alberto: byName.get('Alberto')!,
+    alberto: byName.get('Alperto')!,
     edimol: byName.get('Edimol')!,
     homecenter: byName.get('Homecenter')!
   }
 }
 
 function seedInventario(db: DB): void {
-  // Fase 2 (E.2): marcos NO se almacenan — se piden bajo demanda a Alberto/Edimol.
+  // Fase 2 (E.2): marcos NO se almacenan — se piden bajo demanda a Alperto/Edimol.
   // Solo se trackea stock de materiales que sí se compran y almacenan.
   db.insert(inventario)
     .values([
@@ -418,7 +457,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
     anchoCm: 30,
     altoCm: 40,
     muestraMarcoId: 1,
-    tipoVidrio: 'claro'
+    tipoVidrio: 'claro_2mm'
   })
   const p1 = crearPedidoDesdeCotizacion(
     db,
@@ -429,7 +468,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       anchoCm: 30,
       altoCm: 40,
       muestraMarcoId: 1,
-      tipoVidrio: 'claro',
+      tipoVidrio: 'claro_2mm',
       fechaIngreso: '2026-04-01',
       fechaEntrega: '2026-04-09'
     },
@@ -444,7 +483,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
     anchoPaspartuCm: 5,
     tipoPaspartu: 'pintado',
     muestraMarcoId: 3,
-    tipoVidrio: 'antirreflectivo'
+    tipoVidrio: 'antirreflectivo_2mm'
   })
   const p2 = crearPedidoDesdeCotizacion(
     db,
@@ -457,7 +496,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       muestraMarcoId: 3,
       anchoPaspartuCm: 5,
       tipoPaspartu: 'pintado',
-      tipoVidrio: 'antirreflectivo',
+      tipoVidrio: 'antirreflectivo_2mm',
       fechaIngreso: '2026-04-03',
       fechaEntrega: '2026-04-12'
     },
@@ -470,7 +509,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
     anchoCm: 50,
     altoCm: 70,
     muestraMarcoId: 5,
-    tipoVidrio: 'claro'
+    tipoVidrio: 'claro_2mm'
   })
   const p3 = crearPedidoDesdeCotizacion(
     db,
@@ -481,7 +520,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       anchoCm: 50,
       altoCm: 70,
       muestraMarcoId: 5,
-      tipoVidrio: 'claro',
+      tipoVidrio: 'claro_2mm',
       fechaIngreso: '2026-03-25',
       fechaEntrega: '2026-04-05'
     },
@@ -571,7 +610,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
     anchoCm: 40,
     altoCm: 50,
     muestraMarcoId: 2,
-    tipoVidrio: 'claro'
+    tipoVidrio: 'claro_2mm'
   })
   const p8 = crearPedidoDesdeCotizacion(
     db,
@@ -582,7 +621,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       anchoCm: 40,
       altoCm: 50,
       muestraMarcoId: 2,
-      tipoVidrio: 'claro',
+      tipoVidrio: 'claro_2mm',
       fechaIngreso: '2026-02-15',
       fechaEntrega: '2026-02-25'
     },
@@ -599,7 +638,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
     anchoCm: 20,
     altoCm: 25,
     muestraMarcoId: 4,
-    tipoVidrio: 'claro'
+    tipoVidrio: 'claro_2mm'
   })
   const p9 = crearPedidoDesdeCotizacion(
     db,
@@ -610,7 +649,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       anchoCm: 20,
       altoCm: 25,
       muestraMarcoId: 4,
-      tipoVidrio: 'claro',
+      tipoVidrio: 'claro_2mm',
       fechaIngreso: '2026-02-05',
       fechaEntrega: '2026-02-14'
     },
@@ -627,7 +666,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
     anchoCm: 30,
     altoCm: 30,
     muestraMarcoId: 6,
-    tipoVidrio: 'claro'
+    tipoVidrio: 'claro_2mm'
   })
   const p10 = crearPedidoDesdeCotizacion(
     db,
@@ -638,7 +677,7 @@ function seedPedidos(db: DB, clienteIds: number[]): number[] {
       anchoCm: 30,
       altoCm: 30,
       muestraMarcoId: 6,
-      tipoVidrio: 'claro',
+      tipoVidrio: 'claro_2mm',
       fechaIngreso: '2026-01-10',
       fechaEntrega: '2026-01-20'
     },
@@ -762,13 +801,20 @@ export function clearDemoData(db: DB): void {
     // Orden importante: tablas hijas primero para respetar FKs.
     tx.run(sql`DELETE FROM pagos`)
     tx.run(sql`DELETE FROM devoluciones`)
+    tx.run(sql`DELETE FROM movimientos_financieros`)
     tx.run(sql`DELETE FROM facturas`)
-    tx.run(sql`DELETE FROM cotizaciones`)
+    tx.run(sql`DELETE FROM pedido_items`)
     tx.run(sql`DELETE FROM pedidos`)
+    tx.run(sql`DELETE FROM pagos_clases_detalle`)
     tx.run(sql`DELETE FROM pagos_clases`)
-    tx.run(sql`DELETE FROM asistencias_clases`)
+    tx.run(sql`DELETE FROM ventas_kits`)
+    tx.run(sql`DELETE FROM asistencias`)
     tx.run(sql`DELETE FROM estudiantes`)
     tx.run(sql`DELETE FROM clases`)
+    tx.run(sql`DELETE FROM acudientes`)
+    tx.run(sql`DELETE FROM cuentas_cobro`)
+    tx.run(sql`DELETE FROM contrato_items`)
+    tx.run(sql`DELETE FROM contratos`)
     tx.run(sql`DELETE FROM clientes`)
     tx.run(sql`DELETE FROM movimientos_inventario`)
     tx.run(sql`DELETE FROM inventario`)
@@ -783,7 +829,7 @@ export function clearDemoData(db: DB): void {
     tx.run(sql`DELETE FROM historial_cambios`)
     // Reiniciar consecutivos
     tx.run(
-      sql`UPDATE configuracion SET valor = '1' WHERE clave IN ('consecutivo_facturas','consecutivo_pedidos','consecutivo_contratos')`
+      sql`UPDATE configuracion SET valor = '1' WHERE clave IN ('consecutivo_facturas','consecutivo_pedidos','consecutivo_contratos','consecutivo_cuentas_cobro')`
     )
   })
   console.log('[db] clearDemoData: datos de demostración eliminados')

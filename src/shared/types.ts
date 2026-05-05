@@ -47,6 +47,7 @@ import type {
   InputEnmarcacionPaspartu,
   MuestraMarcoConProveedor,
   NuevaMuestraMarco,
+  NuevoPrecioVidrio,
   ResultadoCotizacion
 } from '../main/db/queries/cotizador'
 import type {
@@ -64,10 +65,10 @@ export {
   TIPOS_ENTREGA,
   TIPOS_ITEM_PEDIDO,
   TIPOS_PASPARTU,
-  TIPOS_VIDRIO,
   TIPOS_VIDRIO_LISTA,
   ESTADOS_FACTURA,
   METODOS_PAGO,
+  ESTADOS_RENTABILIDAD,
   DIAS_SEMANA,
   ESTADOS_PAGO_CLASE,
   TIPOS_MOVIMIENTO_FIN,
@@ -87,11 +88,11 @@ export type {
   TipoEntrega,
   TipoItemPedido,
   TipoPaspartu,
-  TipoVidrio,
   TipoVidrioLista,
   TipoProveedor,
   EstadoFactura,
   MetodoPago,
+  EstadoRentabilidad,
   DiaSemana,
   EstadoPagoClase,
   TipoMovimientoFin,
@@ -207,6 +208,9 @@ export type PdfFacturaPayload = {
   items: PdfItem[]
   subtotal: number
   totalMateriales: number
+  precioLista?: number
+  descuentoMonto?: number
+  descuentoMotivo?: string | null
   total: number
   pagos: PdfPago[]
   saldo: number
@@ -221,6 +225,7 @@ export type {
   MatrizUrgencia,
   MuestraMarcoConProveedor,
   NuevaMuestraMarco,
+  NuevoPrecioVidrio,
   CrearPedidoConfirmadoData,
   CrearPedidoConfirmadoResult,
   NuevoPedidoDatos,

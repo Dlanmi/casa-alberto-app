@@ -10,6 +10,116 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.0.0] — Descuentos inteligentes, márgenes reales y carga masiva por Excel
+
+Release mayor que reorganiza cómo Casa Alberto cobra, mide rentabilidad y
+configura sus precios. Antes la app calculaba un precio sugerido y el dueño
+lo cobraba sin contexto interno. Ahora cada pedido tiene visible el costo
+estimado, el margen y el descuento aplicado, y la configuración inicial se
+carga de una sola vez con una plantilla Excel.
+
+### Cotizador y pedidos
+
+- **Ajuste comercial integrado en el wizard**: al cerrar la cotización se
+  puede aplicar descuento (monto manual o "dejar total cerrado en $X") y la
+  app sugiere automáticamente cifras redondeadas al millar.
+- **Margen estimado en vivo**: el panel lateral del wizard muestra costo
+  estimado, margen y un estado de rentabilidad (saludable / ajustado /
+  crítico / incompleto) que se actualiza al instante con cada cambio.
+- **Editar descuento o costo después de creado**: si te equivocaste en el
+  precio o quieres aplicar un descuento más tarde, el panel de detalle del
+  pedido permite ajustar y, si ya cobraste algo, genera devolución
+  automática del exceso.
+- **Cancelación segura**: cancelar un pedido con pagos cobrados ahora crea
+  la devolución correspondiente automáticamente — no quedan cobros
+  fantasma en finanzas.
+- **Regalo permitido**: un pedido con descuento del 100% queda con factura
+  marcada como pagada inmediatamente, ideal para cortesías a clientes.
+- **Pedido urgente**: nuevo toggle al crear el pedido y desde el panel de
+  detalle. Aparece destacado en el tablero kanban con badge ⚡.
+- **Badge "Con descuento"** en el kanban para identificar a simple vista
+  los pedidos con ajuste comercial.
+- **PDF desde el detalle del pedido**: nuevo botón "PDF factura" o "PDF
+  cotización" según corresponda. El PDF muestra precio sugerido, descuento
+  con motivo y total final cuando aplica.
+
+### Listas de precios — Plantilla Excel unificada
+
+- **Una sola plantilla** para cargar TODO de una vez: datos del negocio,
+  proveedores, marcos, vidrios, paspartú pintado/acrílico, retablos,
+  bastidores, tapas y configuración general.
+- **Plantilla con estilos profesionales**: encabezados con color,
+  pestañas identificadas por color, filas de ejemplo en fondo crema,
+  zebra-stripes, frozen pane, auto-filtros, tooltips con ayuda en cada
+  columna.
+- **Vista previa antes de cargar**: la app muestra cuántos elementos detectó
+  y reporta TODOS los errores encontrados (línea + columna específicas)
+  antes de tocar la base de datos.
+- **3 modos de carga**: actualizar y agregar (default), solo agregar
+  nuevos, o reemplazar todo (con doble confirmación).
+- **Costo estimado opcional** en cada lista (marcos, vidrios, paspartú,
+  retablos, bastidores, tapas) — habilita el cálculo de margen real por
+  pedido.
+- **Botón "Exportar configuración actual"** para tener un backup de los
+  precios o editarlos en Excel y volver a subir.
+- **Tamaño máximo subido a 15 MB** (antes 10 MB) por si la plantilla pesa
+  más de lo esperado.
+- **Defensas en 4 capas**: validaciones del Excel, sanitización (anti
+  prototype-pollution, control chars), validaciones de negocio
+  (duplicados, rangos), y CHECK constraints en SQLite.
+
+### Onboarding simplificado
+
+- Step 0 con opción visible "Saltar el wizard y configurar después".
+- Datos del negocio: cambio de "RUT" a "NIT / Cédula" (terminología
+  colombiana) y mensaje claro de "puedes saltar si no tienes todo a mano".
+- Step de precios completamente rediseñado: descarga la plantilla, llénala,
+  súbela. Reemplaza el import individual de marcos.
+- Paso final detecta si hay marcos cargados: si los hay sugiere ir al
+  cotizador, si no sugiere cargar precios primero (evita entrar al
+  cotizador y encontrar listas vacías).
+
+### Dashboard
+
+- Nueva mini-card **"Margen comercial del mes"** con el margen estimado
+  sobre los pedidos completos del mes (separado del balance de caja real).
+- Empty state inteligente: si no hay marcos cargados, sugiere cargar
+  precios primero antes que crear cotización.
+- Vista comercial en /finanzas: ventas brutas, descuentos del mes, ventas
+  netas (incluyendo clases y kits), margen estimado solo sobre pedidos
+  con costo completo (no infla con costos en cero).
+
+### Vidrios — Modelo enriquecido
+
+- Cada vidrio tiene nombre comercial visible, espesor en mm y costo por
+  m² estimado opcional (antes era solo "tipo + precio").
+- El cotizador encuentra vidrios incluso si el pedido viejo guardó un
+  tipo legacy sin espesor.
+- Bloqueo: no se puede cambiar nombre o espesor de un vidrio si hay
+  pedidos referenciándolo (proteje historia).
+
+### Bajo el capó
+
+- Migraciones consolidadas en una sola (0000) para mantener historial
+  limpio. La app borra y crea desde cero al actualizar a esta versión.
+- Módulo `@shared/comercial.ts` con la lógica única de descuento y margen,
+  usado tanto por el wizard como por el backend (antes había dos copias
+  divergentes).
+- 421 tests automatizados pasando (+33 nuevos: importador Excel, modelo
+  de descuentos, edge cases de cancelación y regalo).
+- Build de producción y boot de Electron validados.
+
+### ⚠️ Migración desde 1.7.x
+
+Esta versión rehace el esquema de la base de datos. Al actualizar:
+
+- El historial de pedidos previos se conserva.
+- Los precios viejos (sin costo estimado) seguirán funcionando — solo no
+  calcularán margen estimado hasta que cargues los costos.
+- Si el dueño tenía marcos importados desde Excel, siguen ahí. La nueva
+  plantilla unificada permite re-cargarlos con costos estimados si se
+  quiere medir margen.
+
 ## [1.7.4] — Agenda más clara y navegación rápida
 
 Release de experiencia operativa para hacer más fácil revisar entregas y

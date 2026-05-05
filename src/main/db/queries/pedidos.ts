@@ -17,6 +17,7 @@ import type { EntregaDelDia, PedidoSinAbonoConSaldo } from '@shared/types'
 import { generarConsecutivo } from '../consecutivos'
 import {
   clientes,
+  configuracion,
   devoluciones,
   facturas,
   historialCambios,
@@ -42,6 +43,8 @@ import {
   type ResultadoCotizacion
 } from './cotizador'
 import { TRANSICIONES_VALIDAS } from '@shared/pedido-transitions'
+import { calcularEvaluacionComercial } from '@shared/comercial'
+import { redondearPrecioFinal } from '@shared/redondeo'
 import { validarFechaISO } from '../../lib/validar-fecha'
 import { validarEnum } from '../../lib/validar-enum'
 
@@ -72,7 +75,9 @@ export type NuevoPedidoDatos = {
   tipoVidrio?: string | null
   porcentajeMateriales?: number
   precioManual?: number
+  costoManualEstimado?: number
   precioInstalacion?: number
+  costoInstalacionEstimado?: number
   tipoEntrega?: TipoEntrega
   fechaIngreso: string
   fechaEntrega?: string | null
@@ -82,6 +87,10 @@ export type NuevoPedidoDatos = {
 export type CrearPedidoConfirmadoData = {
   datos: NuevoPedidoDatos
   cotizacion: ResultadoCotizacion
+  descuento?: {
+    monto: number
+    motivo?: string | null
+  } | null
   facturaFecha: string
   abono?: {
     monto: number
@@ -125,6 +134,40 @@ function requireMuestraMarcoId(datos: NuevoPedidoDatos): number {
   return datos.muestraMarcoId
 }
 
+const CLAVE_MARGEN_MINIMO_ALERTA = 'margen_minimo_alerta_pct'
+
+function leerNumeroConfiguracion(db: DB, clave: string, fallback: number): number {
+  const row = db
+    .select({ valor: configuracion.valor })
+    .from(configuracion)
+    .where(eq(configuracion.clave, clave))
+    .get()
+  const valor = Number(row?.valor)
+  return Number.isFinite(valor) ? valor : fallback
+}
+
+/**
+ * Evalúa el pedido con la MISMA fórmula que el wizard. Usa el módulo
+ * compartido `@shared/comercial` con `autoRedondear: false` porque el
+ * frontend ya ajustó el descuento al llegar acá — el backend solo lo
+ * aplica tal cual.
+ */
+function evaluarPedido(
+  db: DB,
+  precioSugerido: number,
+  descuentoMonto: number,
+  costoEstimadoTotal: number | null
+) {
+  const margenMinimoAlertaPct = leerNumeroConfiguracion(db, CLAVE_MARGEN_MINIMO_ALERTA, 20)
+  return calcularEvaluacionComercial({
+    precioSugerido,
+    descuentoMonto,
+    costoEstimado: costoEstimadoTotal,
+    margenMinimoAlertaPct,
+    autoRedondear: false
+  })
+}
+
 function validarCotizacionAritmetica(cotizacion: ResultadoCotizacion): void {
   if (!cotizacion.items.length) throw new Error('La cotización no tiene ítems')
   for (const [index, item] of cotizacion.items.entries()) {
@@ -147,6 +190,11 @@ function validarCotizacionesIguales(
   esperada: ResultadoCotizacion
 ): void {
   validarCotizacionAritmetica(recibida)
+  // Los campos sensibles (precioLista, brutoCotizado, costoEstimadoTotal,
+  // margenEstimado, estadoRentabilidad) NO se validan acá: el caller
+  // (insertarPedidoDesdeCotizacion) usa los de `esperada`, que vienen del
+  // backend recalculado, e ignora los del cliente. Acá solo verificamos
+  // que los items y los totales agregados coincidan.
   if (
     recibida.subtotal !== esperada.subtotal ||
     recibida.totalMateriales !== esperada.totalMateriales ||
@@ -186,7 +234,43 @@ function cotizacionAutorizada(
     if (datos.precioManual !== undefined && datos.precioManual !== recibida.subtotal) {
       throw new Error('La cotización manual no coincide con el precio ingresado')
     }
-    return recibida
+    const costoManualEstimado =
+      datos.costoManualEstimado !== undefined && Number.isFinite(datos.costoManualEstimado)
+        ? Math.max(0, Math.round(datos.costoManualEstimado))
+        : null
+    // Backend re-deriva los campos sensibles ignorando lo que envía el cliente:
+    //   - brutoCotizado = subtotal + totalMateriales
+    //   - precioLista = redondear(brutoCotizado) al múltiplo de $1.000
+    // Antes confiábamos en `recibida.precioLista || recibida.precioTotal`, lo
+    // que dejaba la puerta abierta a manipulación vía IPC directo.
+    const brutoCotizado = recibida.subtotal + recibida.totalMateriales
+    const precioLista = redondearPrecioFinal(brutoCotizado)
+    // Multi-item-safe: cuando hay un solo ítem (caso típico) el costo manual
+    // va completo. Si en el futuro se permite multi-item en restauración,
+    // solo el primero recibe el costo para no multiplicar la suma.
+    const items = recibida.items.map((item, idx) => ({
+      ...item,
+      costoUnitarioEstimado: idx === 0 ? costoManualEstimado : 0,
+      subtotalCostoEstimado: idx === 0 ? costoManualEstimado : 0
+    }))
+    const evaluacion = calcularEvaluacionComercial({
+      precioSugerido: precioLista,
+      descuentoMonto: 0,
+      costoEstimado: costoManualEstimado,
+      margenMinimoAlertaPct: leerNumeroConfiguracion(db, CLAVE_MARGEN_MINIMO_ALERTA, 20),
+      autoRedondear: false
+    })
+    return {
+      ...recibida,
+      items,
+      brutoCotizado,
+      precioLista,
+      precioTotal: precioLista,
+      costoEstimadoTotal: costoManualEstimado,
+      margenEstimado: evaluacion.margenEstimado,
+      margenEstimadoPct: evaluacion.margenEstimadoPct,
+      estadoRentabilidad: evaluacion.estadoRentabilidad
+    }
   }
 
   const { anchoCm, altoCm } = getMedidas(datos)
@@ -237,6 +321,7 @@ function cotizacionAutorizada(
       altoCm,
       tipoVidrio: datos.tipoVidrio,
       precioInstalacion: datos.precioInstalacion ?? 0,
+      costoInstalacionEstimado: datos.costoInstalacionEstimado ?? null,
       descripcion: datos.descripcion ?? null
     })
   } else {
@@ -250,9 +335,14 @@ function cotizacionAutorizada(
 function insertarPedidoDesdeCotizacion(
   db: DB,
   datos: NuevoPedidoDatos,
-  cotizacion: ResultadoCotizacion
+  cotizacion: ResultadoCotizacion,
+  descuento?: { monto: number; motivo?: string | null } | null
 ) {
+  const descuentoMonto = descuento?.monto ?? 0
+  const precioLista = cotizacion.precioLista
+  const evaluacion = evaluarPedido(db, precioLista, descuentoMonto, cotizacion.costoEstimadoTotal)
   const numero = generarConsecutivo(db, 'pedido')
+  const motivo = descuento?.motivo?.trim() || null
   const pedido = db
     .insert(pedidos)
     .values({
@@ -268,7 +358,15 @@ function insertarPedidoDesdeCotizacion(
       porcentajeMateriales: datos.porcentajeMateriales ?? 10,
       subtotal: cotizacion.subtotal,
       totalMateriales: cotizacion.totalMateriales,
-      precioTotal: cotizacion.precioTotal,
+      brutoCotizado: cotizacion.brutoCotizado,
+      precioLista,
+      descuentoMonto: evaluacion.descuentoMonto,
+      descuentoMotivo: motivo,
+      costoEstimadoTotal: cotizacion.costoEstimadoTotal,
+      margenEstimado: evaluacion.margenEstimado,
+      margenEstimadoPct: evaluacion.margenEstimadoPct,
+      estadoRentabilidad: evaluacion.estadoRentabilidad,
+      precioTotal: evaluacion.precioFinal,
       estado: 'cotizado',
       tipoEntrega: datos.tipoEntrega ?? 'estandar',
       fechaIngreso: datos.fechaIngreso,
@@ -287,8 +385,32 @@ function insertarPedidoDesdeCotizacion(
         referencia: item.referencia ?? null,
         cantidad: item.cantidad,
         precioUnitario: item.precioUnitario ?? null,
+        costoUnitarioEstimado: item.costoUnitarioEstimado ?? null,
         subtotal: item.subtotal,
+        subtotalCostoEstimado: item.subtotalCostoEstimado ?? null,
         metadata: item.metadata ?? null
+      })
+      .run()
+  }
+
+  // Ítem descuento: solo aporta `subtotal` negativo. `precioUnitario` queda
+  // null porque el descuento no es un producto cobrable — antes guardábamos
+  // el monto positivo en precioUnitario y subtotal negativo, lo que producía
+  // líneas contradictorias en el PDF (ej "Cliente frecuente · 1 · $5.000 · -$5.000").
+  // El motivo va al campo `descuentoMotivo` del pedido (fuente única de verdad)
+  // y se replica en el ítem solo como descripción legible.
+  if (evaluacion.descuentoMonto > 0) {
+    db.insert(pedidoItems)
+      .values({
+        pedidoId: pedido.id,
+        tipoItem: 'descuento',
+        descripcion: motivo || 'Descuento manual',
+        cantidad: 1,
+        precioUnitario: null,
+        costoUnitarioEstimado: null,
+        subtotal: -evaluacion.descuentoMonto,
+        subtotalCostoEstimado: null,
+        metadata: null
       })
       .run()
   }
@@ -305,7 +427,7 @@ export function crearPedidoDesdeCotizacion(
   const cotizacionValidada = cotizacionAutorizada(db, datos, cotizacion)
 
   return db.transaction((tx) => {
-    return insertarPedidoDesdeCotizacion(tx as unknown as DB, datos, cotizacionValidada)
+    return insertarPedidoDesdeCotizacion(tx as unknown as DB, datos, cotizacionValidada, null)
   })
 }
 
@@ -321,12 +443,21 @@ export function crearPedidoConfirmadoConFactura(
   validarFechasPedido(input.datos)
   validarFechaISO(input.facturaFecha, 'YYYY-MM-DD', 'facturaFecha')
   const cotizacionValidada = cotizacionAutorizada(db, input.datos, input.cotizacion)
+  const descuento = input.descuento ?? null
+  const descuentoMonto = descuento?.monto ?? 0
+  if (!Number.isFinite(descuentoMonto) || descuentoMonto < 0) {
+    throw new Error('El descuento debe ser un número válido mayor o igual a 0')
+  }
+  if (descuentoMonto > cotizacionValidada.precioLista) {
+    throw new Error(`El descuento excede el precio sugerido del pedido (${cotizacionValidada.precioLista})`)
+  }
+  const totalFinal = cotizacionValidada.precioLista - descuentoMonto
   const abono = input.abono?.monto ?? 0
   if (!Number.isFinite(abono) || abono < 0) {
     throw new Error('El abono debe ser un número válido mayor o igual a 0')
   }
-  if (abono > cotizacionValidada.precioTotal) {
-    throw new Error(`El abono excede el total del pedido (${cotizacionValidada.precioTotal})`)
+  if (abono > totalFinal) {
+    throw new Error(`El abono excede el total del pedido (${totalFinal})`)
   }
   if (input.abono && abono > 0) {
     validarEnum(input.abono.metodoPago, METODOS_PAGO, 'metodoPago')
@@ -335,7 +466,7 @@ export function crearPedidoConfirmadoConFactura(
 
   return db.transaction((tx) => {
     const txDb = tx as unknown as DB
-    const pedidoCotizado = insertarPedidoDesdeCotizacion(txDb, input.datos, cotizacionValidada)
+    const pedidoCotizado = insertarPedidoDesdeCotizacion(txDb, input.datos, cotizacionValidada, descuento)
     const pedido = tx
       .update(pedidos)
       .set({ estado: 'confirmado', updatedAt: sql`(datetime('now'))` })
@@ -361,7 +492,7 @@ export function crearPedidoConfirmadoConFactura(
         pedidoId: pedido.id,
         clienteId: pedido.clienteId,
         fecha: input.facturaFecha,
-        total: pedido.precioTotal,
+        total: totalFinal,
         fechaEntrega: pedido.fechaEntrega ?? null
       })
       .returning()
@@ -369,7 +500,19 @@ export function crearPedidoConfirmadoConFactura(
 
     let pago: typeof pagos.$inferSelect | null = null
     let saldo = factura.total
-    if (input.abono && abono > 0) {
+
+    // D3 — Regalo: si el descuento equivale al precio total (totalFinal=0)
+    // marcamos la factura como pagada inmediatamente. NO se crea movimiento
+    // financiero porque no hubo ingreso real, y NO se acepta abono (ya
+    // bloqueado por la validación `abono > totalFinal`).
+    if (totalFinal === 0) {
+      tx.update(facturas)
+        .set({ estado: 'pagada', updatedAt: sql`(datetime('now'))` })
+        .where(eq(facturas.id, factura.id))
+        .run()
+      factura.estado = 'pagada'
+      saldo = 0
+    } else if (input.abono && abono > 0) {
       pago = tx
         .insert(pagos)
         .values({
@@ -581,12 +724,52 @@ export function cambiarEstadoPedido(db: DB, id: number, nuevoEstado: EstadoPedid
       .get()
 
     if (nuevoEstado === 'cancelado') {
+      // BR — Cancelación segura: si el cliente ya pagó algo, antes de anular
+      // la factura registramos una devolución automática del monto cobrado
+      // neto (pagos − devoluciones previas). Sin esto, el dinero del cliente
+      // quedaba en `movimientos_financieros` como ingreso pero la factura
+      // anulada no aparece en reportes, dejando el saldo del cliente
+      // inconsistente.
       const facturasActivas = tx
         .select()
         .from(facturas)
         .where(and(eq(facturas.pedidoId, id), not(eq(facturas.estado, 'anulada'))))
         .all()
       for (const f of facturasActivas) {
+        const totPagos = tx
+          .select({ sum: sql<number>`coalesce(sum(${pagos.monto}), 0)` })
+          .from(pagos)
+          .where(eq(pagos.facturaId, f.id))
+          .get()
+        const totDev = tx
+          .select({ sum: sql<number>`coalesce(sum(${devoluciones.monto}), 0)` })
+          .from(devoluciones)
+          .where(eq(devoluciones.facturaId, f.id))
+          .get()
+        const cobradoNeto = (totPagos?.sum ?? 0) - (totDev?.sum ?? 0)
+        if (cobradoNeto > 0) {
+          const dev = tx
+            .insert(devoluciones)
+            .values({
+              facturaId: f.id,
+              monto: cobradoNeto,
+              motivo: `Cancelación de pedido ${prev.numero}`,
+              fecha: sql`(date('now'))`
+            })
+            .returning()
+            .get()
+          tx.insert(movimientosFinancieros)
+            .values({
+              tipo: 'gasto',
+              categoria: 'devolucion',
+              descripcion: `Devolución por cancelación de pedido ${prev.numero}`,
+              monto: cobradoNeto,
+              fecha: sql`(date('now'))`,
+              referenciaTipo: 'devolucion',
+              referenciaId: dev.id
+            })
+            .run()
+        }
         tx.update(facturas)
           .set({ estado: 'anulada', updatedAt: sql`(datetime('now'))` })
           .where(eq(facturas.id, f.id))
@@ -607,6 +790,232 @@ export function cambiarEstadoPedido(db: DB, id: number, nuevoEstado: EstadoPedid
 
     return updated
   })
+}
+
+// ---------------------------------------------------------------------------
+// Edición comercial posterior del pedido
+// ---------------------------------------------------------------------------
+
+export type EditarPedidoComercialInput = {
+  pedidoId: number
+  descuentoMonto: number
+  descuentoMotivo?: string | null
+  /**
+   * Costo estimado manual. Solo se respeta para pedidos que originalmente
+   * usaron costo manual (restauración, vidrio_espejo). Para pedidos con
+   * cálculo automático (enmarcación, retablo, etc.) se ignora porque el
+   * costo viene de las listas de precios.
+   */
+  costoEstimadoTotal?: number | null
+}
+
+export type EditarPedidoComercialResult = {
+  pedido: typeof pedidos.$inferSelect
+  facturaActualizada: typeof facturas.$inferSelect | null
+  devolucionGenerada: typeof devoluciones.$inferSelect | null
+}
+
+/**
+ * Edita el descuento, motivo y costo estimado de un pedido ya creado.
+ * Recalcula precio total, margen y estado de rentabilidad. Si hay factura
+ * activa, ajusta su total. Si el nuevo total es menor que lo cobrado al
+ * cliente, registra una devolución automática del exceso.
+ *
+ * Bloquea pedidos en estado terminal (entregado, cancelado): editar después
+ * de entregado podría falsear el reporte; cancelado ya tiene factura anulada.
+ */
+export function editarPedidoComercial(
+  db: DB,
+  input: EditarPedidoComercialInput
+): EditarPedidoComercialResult {
+  return db.transaction((tx) => {
+    const txDb = tx as unknown as DB
+    const pedido = tx.select().from(pedidos).where(eq(pedidos.id, input.pedidoId)).get()
+    if (!pedido) throw new Error(`Pedido ${input.pedidoId} no encontrado`)
+    if (pedido.estado === 'entregado' || pedido.estado === 'cancelado') {
+      throw new Error(
+        `No se puede editar un pedido en estado "${pedido.estado}". ` +
+          'Para corregirlo, considera registrar una devolución manual.'
+      )
+    }
+
+    if (!Number.isFinite(input.descuentoMonto) || input.descuentoMonto < 0) {
+      throw new Error('El descuento debe ser un número válido mayor o igual a 0')
+    }
+    if (input.descuentoMonto > pedido.precioLista) {
+      throw new Error(`El descuento excede el precio sugerido (${pedido.precioLista})`)
+    }
+    if (
+      input.costoEstimadoTotal !== undefined &&
+      input.costoEstimadoTotal !== null &&
+      (!Number.isFinite(input.costoEstimadoTotal) || input.costoEstimadoTotal < 0)
+    ) {
+      throw new Error('El costo estimado debe ser un número válido mayor o igual a 0')
+    }
+
+    // Costo: si el pedido usa costo manual (restauración/vidrio_espejo), aceptamos
+    // el override del input. Si usa cálculo automático, mantenemos el costo
+    // calculado en su momento — editar a mano falsearía la rentabilidad.
+    const usaCostoManual =
+      pedido.tipoTrabajo === 'restauracion' || pedido.tipoTrabajo === 'vidrio_espejo'
+    const nuevoCostoEstimadoTotal = usaCostoManual
+      ? input.costoEstimadoTotal === undefined
+        ? pedido.costoEstimadoTotal
+        : input.costoEstimadoTotal
+      : pedido.costoEstimadoTotal
+
+    const evaluacion = evaluarPedido(
+      txDb,
+      pedido.precioLista,
+      input.descuentoMonto,
+      nuevoCostoEstimadoTotal
+    )
+    const nuevoTotal = evaluacion.precioFinal
+    const motivo = input.descuentoMotivo?.trim() || null
+
+    const pedidoActualizado = tx
+      .update(pedidos)
+      .set({
+        descuentoMonto: evaluacion.descuentoMonto,
+        descuentoMotivo: motivo,
+        costoEstimadoTotal: nuevoCostoEstimadoTotal,
+        margenEstimado: evaluacion.margenEstimado,
+        margenEstimadoPct: evaluacion.margenEstimadoPct,
+        estadoRentabilidad: evaluacion.estadoRentabilidad,
+        precioTotal: nuevoTotal,
+        updatedAt: sql`(datetime('now'))`
+      })
+      .where(eq(pedidos.id, input.pedidoId))
+      .returning()
+      .get()
+
+    // Sincroniza el ítem `descuento` en pedido_items: si ahora hay descuento,
+    // upsert; si era 0 y ya no, lo eliminamos para no dejar basura.
+    const itemDescuentoExistente = tx
+      .select()
+      .from(pedidoItems)
+      .where(and(eq(pedidoItems.pedidoId, input.pedidoId), eq(pedidoItems.tipoItem, 'descuento')))
+      .get()
+    if (evaluacion.descuentoMonto > 0) {
+      if (itemDescuentoExistente) {
+        tx.update(pedidoItems)
+          .set({
+            descripcion: motivo || 'Descuento manual',
+            subtotal: -evaluacion.descuentoMonto
+          })
+          .where(eq(pedidoItems.id, itemDescuentoExistente.id))
+          .run()
+      } else {
+        tx.insert(pedidoItems)
+          .values({
+            pedidoId: input.pedidoId,
+            tipoItem: 'descuento',
+            descripcion: motivo || 'Descuento manual',
+            cantidad: 1,
+            precioUnitario: null,
+            costoUnitarioEstimado: null,
+            subtotal: -evaluacion.descuentoMonto,
+            subtotalCostoEstimado: null,
+            metadata: null
+          })
+          .run()
+      }
+    } else if (itemDescuentoExistente) {
+      tx.delete(pedidoItems).where(eq(pedidoItems.id, itemDescuentoExistente.id)).run()
+    }
+
+    // Sincroniza la factura activa si existe.
+    let facturaActualizada: typeof facturas.$inferSelect | null = null
+    let devolucionGenerada: typeof devoluciones.$inferSelect | null = null
+    const facturaActiva = tx
+      .select()
+      .from(facturas)
+      .where(and(eq(facturas.pedidoId, input.pedidoId), not(eq(facturas.estado, 'anulada'))))
+      .get()
+    if (facturaActiva) {
+      const totPagos = tx
+        .select({ sum: sql<number>`coalesce(sum(${pagos.monto}), 0)` })
+        .from(pagos)
+        .where(eq(pagos.facturaId, facturaActiva.id))
+        .get()
+      const totDev = tx
+        .select({ sum: sql<number>`coalesce(sum(${devoluciones.monto}), 0)` })
+        .from(devoluciones)
+        .where(eq(devoluciones.facturaId, facturaActiva.id))
+        .get()
+      const cobradoNeto = (totPagos?.sum ?? 0) - (totDev?.sum ?? 0)
+      // Si el nuevo total es menor que lo cobrado, devolvemos el exceso al
+      // cliente automáticamente (mantiene la factura saldable y el saldo
+      // consistente).
+      if (nuevoTotal < cobradoNeto) {
+        const exceso = cobradoNeto - nuevoTotal
+        devolucionGenerada = tx
+          .insert(devoluciones)
+          .values({
+            facturaId: facturaActiva.id,
+            monto: exceso,
+            motivo: `Ajuste comercial: ${motivo || 'descuento aumentado'}`,
+            fecha: sql`(date('now'))`
+          })
+          .returning()
+          .get()
+        tx.insert(movimientosFinancieros)
+          .values({
+            tipo: 'gasto',
+            categoria: 'devolucion',
+            descripcion: `Devolución por ajuste de pedido ${pedido.numero}`,
+            monto: exceso,
+            fecha: sql`(date('now'))`,
+            referenciaTipo: 'devolucion',
+            referenciaId: devolucionGenerada.id
+          })
+          .run()
+      }
+
+      const cobradoFinal = nuevoTotal < cobradoNeto ? nuevoTotal : cobradoNeto
+      const nuevoEstadoFactura = cobradoFinal >= nuevoTotal && nuevoTotal >= 0 ? 'pagada' : 'pendiente'
+      facturaActualizada = tx
+        .update(facturas)
+        .set({
+          total: nuevoTotal,
+          estado: nuevoEstadoFactura,
+          updatedAt: sql`(datetime('now'))`
+        })
+        .where(eq(facturas.id, facturaActiva.id))
+        .returning()
+        .get()
+    }
+
+    tx.insert(historialCambios)
+      .values({
+        tabla: 'pedidos',
+        registroId: input.pedidoId,
+        campo: 'descuento_monto',
+        valorAnterior: String(pedido.descuentoMonto),
+        valorNuevo: String(evaluacion.descuentoMonto),
+        fecha: sql`(datetime('now'))`
+      })
+      .run()
+
+    return { pedido: pedidoActualizado, facturaActualizada, devolucionGenerada }
+  })
+}
+
+/**
+ * Actualiza el tipo de entrega (estandar / urgente / sin_afan). Permitido en
+ * cualquier estado no terminal — el dueño puede marcar un pedido como urgente
+ * en cualquier momento si el cliente lo pide.
+ */
+export function actualizarTipoEntrega(db: DB, id: number, tipoEntrega: TipoEntrega) {
+  validarEnum(tipoEntrega, ['estandar', 'urgente', 'sin_afan'] as const, 'tipoEntrega')
+  return (
+    db
+      .update(pedidos)
+      .set({ tipoEntrega, updatedAt: sql`(datetime('now'))` })
+      .where(eq(pedidos.id, id))
+      .returning()
+      .get() ?? null
+  )
 }
 
 export function actualizarFechaEntrega(db: DB, id: number, fechaEntrega: string | null) {

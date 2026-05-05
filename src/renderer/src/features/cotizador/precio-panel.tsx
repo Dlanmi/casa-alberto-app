@@ -3,6 +3,7 @@ import { Card } from '@renderer/components/ui/card'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { conceptoIcon } from '@renderer/lib/iconography'
 import { formatCOP } from '@renderer/lib/format'
+import type { EvaluacionComercial } from '@shared/comercial'
 
 type CotizacionItem = {
   tipoItem: string
@@ -27,7 +28,13 @@ type PrecioPanelProps = {
   items: CotizacionItem[]
   subtotal: number
   totalMateriales: number
-  precioTotal: number
+  /**
+   * Evaluación comercial calculada arriba (en wizard-shell). Trae
+   * precioSugerido, descuentoMonto, precioFinal, costoEstimado y margen.
+   * Cuando el usuario activa o ajusta el descuento, esta prop cambia y el
+   * panel se re-renderiza con el nuevo precioFinal y margen al instante.
+   */
+  evaluacion: EvaluacionComercial
   porcentajeMateriales: number
 }
 
@@ -35,13 +42,43 @@ export function PrecioPanel({
   items,
   subtotal,
   totalMateriales,
-  precioTotal,
+  evaluacion,
   porcentajeMateriales
 }: PrecioPanelProps): React.JSX.Element {
   const [showDetail, setShowDetail] = useState(false)
   // AGENT_UX: Price-flash — al cambiar el total, el bloque se re-monta
-  // usando precioTotal como key, lo que re-aplica la animación CSS
+  // usando precioFinal como key, lo que re-aplica la animación CSS
   // 'price-flash' (ya definida en main.css). Evita setState en effect.
+
+  const {
+    precioSugerido,
+    descuentoMonto,
+    precioFinal,
+    costoEstimado,
+    margenEstimado,
+    margenEstimadoPct,
+    estadoRentabilidad
+  } = evaluacion
+
+  const hayDescuento = descuentoMonto > 0
+  const subtotalMasMateriales = subtotal + totalMateriales
+  const huboRedondeo = precioSugerido !== subtotalMasMateriales && precioSugerido > 0
+
+  const margenColor =
+    margenEstimado === null
+      ? 'text-text-muted'
+      : margenEstimado < 0
+        ? 'text-error-strong'
+        : 'text-success-strong'
+
+  const estadoLabel =
+    estadoRentabilidad === 'saludable'
+      ? 'saludable'
+      : estadoRentabilidad === 'baja'
+        ? 'ajustado'
+        : estadoRentabilidad === 'critica'
+          ? 'crítico'
+          : 'incompleto'
 
   return (
     <Card padding="md" className="sticky top-0 space-y-4">
@@ -114,16 +151,52 @@ export function PrecioPanel({
               <span className="text-text-muted">Subtotal</span>
               <span className="tabular-nums text-text">{formatCOP(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-text-muted">Materiales ({porcentajeMateriales}%)</span>
-              <span className="tabular-nums text-text">{formatCOP(totalMateriales)}</span>
-            </div>
+            {totalMateriales > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-text-muted">Materiales ({porcentajeMateriales}%)</span>
+                <span className="tabular-nums text-text">{formatCOP(totalMateriales)}</span>
+              </div>
+            )}
+            {huboRedondeo && (
+              <div className="flex justify-between text-sm">
+                <span className="text-text-muted">Precio sugerido</span>
+                <span className="tabular-nums text-text">{formatCOP(precioSugerido)}</span>
+              </div>
+            )}
+            {hayDescuento && (
+              <div className="flex justify-between text-sm">
+                <span className="text-warning-strong">Descuento</span>
+                <span className="font-semibold tabular-nums text-warning-strong">
+                  − {formatCOP(descuentoMonto)}
+                </span>
+              </div>
+            )}
             <div
-              key={precioTotal}
+              key={precioFinal}
               className="flex items-center justify-between rounded-md border-t border-border pt-3 px-2 -mx-2 animate-price-flash"
             >
-              <span className="font-semibold text-text">Total sugerido</span>
-              <PrecioDisplay value={precioTotal} size="lg" className="text-accent" />
+              <span className="font-semibold text-text">
+                {hayDescuento ? 'Total con descuento' : 'Total sugerido'}
+              </span>
+              <PrecioDisplay value={precioFinal} size="lg" className="text-accent" />
+            </div>
+            <div className="rounded-md bg-surface-muted px-3 py-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-text-muted">Costo estimado</span>
+                <span className="tabular-nums text-text">
+                  {costoEstimado != null ? formatCOP(costoEstimado) : '—'}
+                </span>
+              </div>
+              <div className="mt-1 flex justify-between">
+                <span className="text-text-muted">Margen estimado</span>
+                <span className={`tabular-nums ${margenColor}`}>
+                  {margenEstimado != null ? formatCOP(margenEstimado) : '—'}
+                  {margenEstimadoPct != null && margenEstimado != null && (
+                    <span className="ml-1 text-xs">({Math.round(margenEstimadoPct)}%)</span>
+                  )}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-text-muted">Estado: {estadoLabel}</p>
             </div>
           </div>
         </>

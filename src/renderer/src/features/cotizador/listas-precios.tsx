@@ -42,6 +42,7 @@ type MarcoForm = {
   referencia: string
   colillaCm: string
   precioMetro: string
+  costoMetroEstimado: string
   descripcion: string
   proveedorId: string
 }
@@ -50,6 +51,7 @@ const EMPTY_MARCO_FORM: MarcoForm = {
   referencia: '',
   colillaCm: '',
   precioMetro: '',
+  costoMetroEstimado: '',
   descripcion: '',
   proveedorId: ''
 }
@@ -93,8 +95,8 @@ export function ListasPrecios({ onBack }: Props): React.JSX.Element {
             desc="Precios por medida exterior. El dueño corta el cartón y lo pinta a mano."
             listarFn={() => window.api.precios.listarPaspartuPintado()}
             crearFn={(data: unknown) => window.api.precios.crearPaspartuPintado(data)}
-            editarFn={(id: number, precio: number) =>
-              window.api.precios.actualizarPaspartuPintado(id, precio)
+            editarFn={(id: number, data: { precio: number; costoEstimado?: number | null }) =>
+              window.api.precios.actualizarPaspartuPintado(id, data)
             }
             eliminarFn={(id: number) => window.api.precios.eliminarPaspartuPintado(id)}
           />
@@ -105,8 +107,8 @@ export function ListasPrecios({ onBack }: Props): React.JSX.Element {
             desc="Precios por medida exterior. MDF pintado, más resistente que el cartón."
             listarFn={() => window.api.precios.listarPaspartuAcrilico()}
             crearFn={(data: unknown) => window.api.precios.crearPaspartuAcrilico(data)}
-            editarFn={(id: number, precio: number) =>
-              window.api.precios.actualizarPaspartuAcrilico(id, precio)
+            editarFn={(id: number, data: { precio: number; costoEstimado?: number | null }) =>
+              window.api.precios.actualizarPaspartuAcrilico(id, data)
             }
             eliminarFn={(id: number) => window.api.precios.eliminarPaspartuAcrilico(id)}
           />
@@ -117,8 +119,8 @@ export function ListasPrecios({ onBack }: Props): React.JSX.Element {
             desc="4 listones + tapa MDF. Precio por medida."
             listarFn={() => window.api.precios.listarRetablos()}
             crearFn={(data: unknown) => window.api.precios.crearRetablo(data)}
-            editarFn={(id: number, precio: number) =>
-              window.api.precios.actualizarRetablo(id, precio)
+            editarFn={(id: number, data: { precio: number; costoEstimado?: number | null }) =>
+              window.api.precios.actualizarRetablo(id, data)
             }
             eliminarFn={(id: number) => window.api.precios.eliminarRetablo(id)}
           />
@@ -129,8 +131,8 @@ export function ListasPrecios({ onBack }: Props): React.JSX.Element {
             desc="Estructura de madera para lienzos. Precio por medida."
             listarFn={() => window.api.precios.listarBastidores()}
             crearFn={(data: unknown) => window.api.precios.crearBastidor(data)}
-            editarFn={(id: number, precio: number) =>
-              window.api.precios.actualizarBastidor(id, precio)
+            editarFn={(id: number, data: { precio: number; costoEstimado?: number | null }) =>
+              window.api.precios.actualizarBastidor(id, data)
             }
             eliminarFn={(id: number) => window.api.precios.eliminarBastidor(id)}
           />
@@ -141,7 +143,9 @@ export function ListasPrecios({ onBack }: Props): React.JSX.Element {
             desc="Tapas de reemplazo. Precio por medida."
             listarFn={() => window.api.precios.listarTapas()}
             crearFn={(data: unknown) => window.api.precios.crearTapa(data)}
-            editarFn={(id: number, precio: number) => window.api.precios.actualizarTapa(id, precio)}
+            editarFn={(id: number, data: { precio: number; costoEstimado?: number | null }) =>
+              window.api.precios.actualizarTapa(id, data)
+            }
             eliminarFn={(id: number) => window.api.precios.eliminarTapa(id)}
           />
         )}
@@ -188,6 +192,7 @@ function TabMarcos(): React.JSX.Element {
       referencia: marco.referencia,
       colillaCm: String(marco.colillaCm),
       precioMetro: String(marco.precioMetro),
+      costoMetroEstimado: marco.costoMetroEstimado != null ? String(marco.costoMetroEstimado) : '',
       descripcion: marco.descripcion ?? '',
       proveedorId: marco.proveedorId ? String(marco.proveedorId) : ''
     })
@@ -207,6 +212,8 @@ function TabMarcos(): React.JSX.Element {
     if (!form.colillaCm || isNaN(colilla) || colilla <= 0) errs.colillaCm = 'Debe ser mayor a 0'
     const precio = parseMoneyInput(form.precioMetro)
     if (!form.precioMetro || precio <= 0) errs.precioMetro = 'Debe ser mayor a 0'
+    const costo = parseMoneyInput(form.costoMetroEstimado)
+    if (form.costoMetroEstimado.trim() && costo < 0) errs.costoMetroEstimado = 'No puede ser negativo'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -219,6 +226,9 @@ function TabMarcos(): React.JSX.Element {
         referencia: form.referencia.trim(),
         colillaCm: Number(form.colillaCm),
         precioMetro: parseMoneyInput(form.precioMetro),
+        costoMetroEstimado: form.costoMetroEstimado.trim()
+          ? parseMoneyInput(form.costoMetroEstimado)
+          : null,
         descripcion: form.descripcion.trim() || null,
         proveedorId: form.proveedorId ? Number(form.proveedorId) : null
       }
@@ -319,6 +329,7 @@ function TabMarcos(): React.JSX.Element {
             <Th>Proveedor</Th>
             <Th>Colilla (cm)</Th>
             <Th>Precio/m</Th>
+            <Th>Costo/m</Th>
             <Th>Descripcion</Th>
             <Th className="text-right">Acciones</Th>
           </Tr>
@@ -339,6 +350,9 @@ function TabMarcos(): React.JSX.Element {
               </Td>
               <Td>{marco.colillaCm}</Td>
               <Td className="tabular-nums">{formatCOP(marco.precioMetro)}</Td>
+              <Td className="tabular-nums text-text-muted">
+                {marco.costoMetroEstimado != null ? formatCOP(marco.costoMetroEstimado) : '—'}
+              </Td>
               <Td className="text-text-muted max-w-50 truncate">{marco.descripcion || '-'}</Td>
               <Td className="text-right">
                 <div className="flex items-center justify-end gap-1">
@@ -452,6 +466,16 @@ function MarcoModal({
           />
         </div>
         <Input
+          label="Costo estimado por metro (opcional)"
+          type="text"
+          inputMode="decimal"
+          min={0}
+          value={form.costoMetroEstimado}
+          onChange={(e) => update('costoMetroEstimado', e.target.value)}
+          error={errors.costoMetroEstimado}
+          placeholder="Ej: 8.500"
+        />
+        <Input
           label="Descripcion (opcional)"
           value={form.descripcion}
           onChange={(e) => update('descripcion', e.target.value)}
@@ -472,6 +496,20 @@ function MarcoModal({
 
 // ── Vidrios tab ──
 
+type VidrioForm = {
+  nombre: string
+  espesorMm: string
+  precioM2: string
+  costoM2Estimado: string
+}
+
+const EMPTY_VIDRIO_FORM: VidrioForm = {
+  nombre: '',
+  espesorMm: '2',
+  precioM2: '',
+  costoM2Estimado: ''
+}
+
 function TabVidrios(): React.JSX.Element {
   const { showToast } = useToast()
   const {
@@ -480,81 +518,81 @@ function TabVidrios(): React.JSX.Element {
     refetch
   } = useIpc<PrecioVidrio[]>(() => window.api.cotizador.listarPreciosVidrio(), [])
 
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [editValue, setEditValue] = useState('')
-  const [editError, setEditError] = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingVidrio, setEditingVidrio] = useState<PrecioVidrio | null>(null)
+  const [form, setForm] = useState<VidrioForm>(EMPTY_VIDRIO_FORM)
+  const [errors, setErrors] = useState<Partial<Record<keyof VidrioForm, string>>>({})
   const [saving, setSaving] = useState(false)
-
-  const [showCreate, setShowCreate] = useState(false)
-  const [newTipo, setNewTipo] = useState('')
-  const [newPrecio, setNewPrecio] = useState('')
-  const [creating, setCreating] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<PrecioVidrio | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  function startEdit(vidrio: PrecioVidrio): void {
-    setEditingId(vidrio.id)
-    setEditValue(String(vidrio.precioM2))
-    setEditError('')
+  function openCreate(): void {
+    setEditingVidrio(null)
+    setForm(EMPTY_VIDRIO_FORM)
+    setErrors({})
+    setModalOpen(true)
   }
 
-  function cancelEdit(): void {
-    setEditingId(null)
-    setEditValue('')
-    setEditError('')
+  function openEdit(vidrio: PrecioVidrio): void {
+    setEditingVidrio(vidrio)
+    setForm({
+      nombre: vidrio.nombre,
+      espesorMm: String(vidrio.espesorMm),
+      precioM2: String(vidrio.precioM2),
+      costoM2Estimado: vidrio.costoM2Estimado != null ? String(vidrio.costoM2Estimado) : ''
+    })
+    setErrors({})
+    setModalOpen(true)
   }
 
-  async function saveEdit(id: number): Promise<void> {
-    const precio = parseMoneyInput(editValue)
-    if (!editValue.trim() || precio <= 0) {
-      setEditError('Debe ser un numero valido mayor a 0')
-      return
+  function closeModal(): void {
+    setModalOpen(false)
+    setEditingVidrio(null)
+  }
+
+  function validate(): boolean {
+    const nextErrors: Partial<Record<keyof VidrioForm, string>> = {}
+    if (!form.nombre.trim()) nextErrors.nombre = 'Requerido'
+    const espesor = Number(form.espesorMm)
+    if (!form.espesorMm.trim() || !Number.isFinite(espesor) || espesor <= 0) {
+      nextErrors.espesorMm = 'Debe ser mayor a 0'
     }
+    const precio = parseMoneyInput(form.precioM2)
+    if (!form.precioM2.trim() || precio <= 0) nextErrors.precioM2 = 'Debe ser mayor a 0'
+    const costo = parseMoneyInput(form.costoM2Estimado)
+    if (form.costoM2Estimado.trim() && costo < 0) nextErrors.costoM2Estimado = 'No puede ser negativo'
+    setErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
+  }
+
+  async function handleSave(): Promise<void> {
+    if (!validate()) return
     setSaving(true)
     try {
-      const res = (await window.api.cotizador.actualizarPrecioVidrio(
-        id,
-        precio
-      )) as IpcResult<PrecioVidrio>
+      const payload = {
+        nombre: form.nombre.trim(),
+        espesorMm: Number(form.espesorMm),
+        precioM2: parseMoneyInput(form.precioM2),
+        costoM2Estimado: form.costoM2Estimado.trim() ? parseMoneyInput(form.costoM2Estimado) : null
+      }
+      const res = editingVidrio
+        ? ((await window.api.cotizador.actualizarPrecioVidrio(
+            editingVidrio.id,
+            payload
+          )) as IpcResult<PrecioVidrio>)
+        : ((await window.api.cotizador.crearPrecioVidrio(payload)) as IpcResult<PrecioVidrio>)
       if (res.ok) {
-        showToast('success', 'Precio actualizado')
-        cancelEdit()
+        showToast('success', editingVidrio ? 'Vidrio actualizado' : `Vidrio "${payload.nombre}" agregado`)
+        closeModal()
         refetch()
       } else {
         showToast('error', res.error)
       }
     } catch {
-      showToast('error', 'Error al actualizar precio')
+      showToast('error', 'Error al guardar vidrio')
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function handleCreate(e: React.FormEvent): Promise<void> {
-    e.preventDefault()
-    const tipo = newTipo.trim()
-    const precio = parseMoneyInput(newPrecio)
-    if (!tipo || precio <= 0) return
-    setCreating(true)
-    try {
-      const res = (await window.api.cotizador.crearPrecioVidrio(
-        tipo,
-        precio
-      )) as IpcResult<PrecioVidrio>
-      if (res.ok) {
-        showToast('success', `Vidrio "${tipo}" agregado`)
-        setShowCreate(false)
-        setNewTipo('')
-        setNewPrecio('')
-        refetch()
-      } else {
-        showToast('error', res.error)
-      }
-    } catch {
-      showToast('error', 'Error al crear vidrio')
-    } finally {
-      setCreating(false)
     }
   }
 
@@ -566,7 +604,7 @@ function TabVidrios(): React.JSX.Element {
         deleteTarget.id
       )) as IpcResult<PrecioVidrio>
       if (res.ok) {
-        showToast('success', `Vidrio "${deleteTarget.tipo}" eliminado`)
+        showToast('success', `Vidrio "${deleteTarget.nombre}" eliminado`)
         setDeleteTarget(null)
         refetch()
       } else {
@@ -589,7 +627,7 @@ function TabVidrios(): React.JSX.Element {
         <p className="text-sm text-text-muted">
           {tieneVidrios ? `${vidrios.length} tipos de vidrio` : 'Sin vidrios configurados'}
         </p>
-        <Button size="sm" onClick={() => setShowCreate(true)}>
+        <Button size="sm" onClick={openCreate}>
           <Plus size={14} />
           Agregar tipo
         </Button>
@@ -599,63 +637,39 @@ function TabVidrios(): React.JSX.Element {
         <EmptyState
           icon={GlassWater}
           title="No hay vidrios configurados"
-          description="Agrega el primer tipo de vidrio (por ejemplo: claro, antirreflectivo, templado)"
+          description="Agrega el primer vidrio con nombre comercial, espesor y costos estimados."
           actionLabel="Agregar tipo"
-          onAction={() => setShowCreate(true)}
+          onAction={openCreate}
         />
       ) : (
         <Table>
           <Thead>
             <Tr>
-              <Th>Tipo</Th>
+              <Th>Vidrio</Th>
+              <Th>Espesor</Th>
               <Th>Precio/m2</Th>
+              <Th>Costo/m2</Th>
               <Th className="text-right">Acciones</Th>
             </Tr>
           </Thead>
           <Tbody>
             {vidrios.map((vidrio) => (
               <Tr key={vidrio.id}>
-                <Td className="font-medium capitalize">{vidrio.tipo.replace(/_/g, ' ')}</Td>
-                <Td>
-                  {editingId === vidrio.id ? (
-                    <div className="flex items-center gap-2 max-w-50">
-                      <Input
-                        type="text"
-                        inputMode="decimal"
-                        min={0}
-                        value={editValue}
-                        onChange={(e) => {
-                          setEditValue(e.target.value)
-                          setEditError('')
-                        }}
-                        error={editError}
-                        className="h-10"
-                      />
-                    </div>
-                  ) : (
-                    <span className="tabular-nums">{formatCOP(vidrio.precioM2)}</span>
-                  )}
+                <Td className="font-medium">{vidrio.nombre}</Td>
+                <Td className="tabular-nums">{vidrio.espesorMm} mm</Td>
+                <Td className="tabular-nums">{formatCOP(vidrio.precioM2)}</Td>
+                <Td className="tabular-nums text-text-muted">
+                  {vidrio.costoM2Estimado != null ? formatCOP(vidrio.costoM2Estimado) : '—'}
                 </Td>
                 <Td className="text-right">
-                  {editingId === vidrio.id ? (
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="secondary" size="sm" onClick={cancelEdit} disabled={saving}>
-                        Cancelar
-                      </Button>
-                      <Button size="sm" onClick={() => saveEdit(vidrio.id)} disabled={saving}>
-                        {saving ? 'Guardando...' : 'Guardar'}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => startEdit(vidrio)}>
-                        <Pencil size={14} />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(vidrio)}>
-                        <Trash2 size={14} className="text-error" />
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(vidrio)}>
+                      <Pencil size={14} />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(vidrio)}>
+                      <Trash2 size={14} className="text-error" />
+                    </Button>
+                  </div>
                 </Td>
               </Tr>
             ))}
@@ -663,41 +677,58 @@ function TabVidrios(): React.JSX.Element {
         </Table>
       )}
 
-      {showCreate && (
-        <Modal open onClose={() => setShowCreate(false)} title="Nuevo tipo de vidrio" size="sm">
-          <form onSubmit={handleCreate} className="space-y-4">
+      {modalOpen && (
+        <Modal open onClose={closeModal} title={editingVidrio ? 'Editar vidrio' : 'Nuevo vidrio'} size="sm">
+          <div className="space-y-4">
             <Input
-              label="Tipo"
-              value={newTipo}
-              onChange={(e) => setNewTipo(e.target.value)}
-              placeholder="Ej: templado, mate, espejo"
-              required
+              label="Nombre visible"
+              value={form.nombre}
+              onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
+              error={errors.nombre}
+              placeholder="Ej: Vidrio claro"
               autoFocus
+            />
+            <Input
+              label="Espesor (mm)"
+              type="number"
+              min="1"
+              step="0.5"
+              value={form.espesorMm}
+              onChange={(e) => setForm((prev) => ({ ...prev, espesorMm: e.target.value }))}
+              error={errors.espesorMm}
+              placeholder="Ej: 3"
             />
             <Input
               label="Precio por m2"
               type="text"
               inputMode="decimal"
               min="0"
-              value={newPrecio}
-              onChange={(e) => setNewPrecio(e.target.value)}
+              value={form.precioM2}
+              onChange={(e) => setForm((prev) => ({ ...prev, precioM2: e.target.value }))}
+              error={errors.precioM2}
               placeholder="Ej: 120.000"
-              required
+            />
+            <Input
+              label="Costo estimado por m2 (opcional)"
+              type="text"
+              inputMode="decimal"
+              min="0"
+              value={form.costoM2Estimado}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, costoM2Estimado: e.target.value }))
+              }
+              error={errors.costoM2Estimado}
+              placeholder="Ej: 70.000"
             />
             <div className="flex gap-3 pt-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="flex-1"
-                onClick={() => setShowCreate(false)}
-              >
+              <Button type="button" variant="secondary" className="flex-1" onClick={closeModal}>
                 Cancelar
               </Button>
-              <Button type="submit" className="flex-1" disabled={creating}>
-                {creating ? 'Guardando...' : 'Guardar'}
+              <Button onClick={handleSave} className="flex-1" disabled={saving}>
+                {saving ? 'Guardando...' : editingVidrio ? 'Guardar cambios' : 'Guardar'}
               </Button>
             </div>
-          </form>
+          </div>
         </Modal>
       )}
 
@@ -706,7 +737,7 @@ function TabVidrios(): React.JSX.Element {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
         title="Eliminar tipo de vidrio?"
-        message={`Se eliminará "${deleteTarget?.tipo ?? ''}" de la lista. No afecta pedidos existentes.`}
+        message={`Se eliminará "${deleteTarget?.nombre ?? ''}" de la lista. No afecta pedidos existentes.`}
         confirmLabel="Eliminar"
         danger
         loading={deleting}
@@ -719,7 +750,13 @@ function TabVidrios(): React.JSX.Element {
 /* Generic Tab: Medida × Precio (paspartú, retablos, bastidores, tapas) */
 /* ------------------------------------------------------------------ */
 
-type MedidaItem = { id: number; anchoCm: number; altoCm: number; precio: number }
+type MedidaItem = {
+  id: number
+  anchoCm: number
+  altoCm: number
+  precio: number
+  costoEstimado: number | null
+}
 
 function TabMedidaPrecio({
   title,
@@ -736,7 +773,7 @@ function TabMedidaPrecio({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   crearFn: (data: unknown) => Promise<any>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  editarFn: (id: number, precio: number) => Promise<any>
+  editarFn: (id: number, data: { precio: number; costoEstimado?: number | null }) => Promise<any>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   eliminarFn: (id: number) => Promise<any>
 }): React.JSX.Element {
@@ -744,22 +781,25 @@ function TabMedidaPrecio({
   const { data: items, loading, refetch } = useIpc<MedidaItem[]>(listarFn, [])
   const [showCreate, setShowCreate] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
-  const [form, setForm] = useState({ anchoCm: '', altoCm: '', precio: '' })
+  const [form, setForm] = useState({ anchoCm: '', altoCm: '', precio: '', costoEstimado: '' })
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [editCosto, setEditCosto] = useState('')
   const [editError, setEditError] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
 
   function startEdit(item: MedidaItem): void {
     setEditingId(item.id)
     setEditValue(String(item.precio))
+    setEditCosto(item.costoEstimado != null ? String(item.costoEstimado) : '')
     setEditError('')
   }
 
   function cancelEdit(): void {
     setEditingId(null)
     setEditValue('')
+    setEditCosto('')
     setEditError('')
   }
 
@@ -769,9 +809,10 @@ function TabMedidaPrecio({
       setEditError('Debe ser un número válido mayor a 0')
       return
     }
+    const costoEstimado = editCosto.trim() ? parseMoneyInput(editCosto) : null
     setSavingEdit(true)
     try {
-      const res = (await editarFn(id, precio)) as IpcResult<MedidaItem>
+      const res = (await editarFn(id, { precio, costoEstimado })) as IpcResult<MedidaItem>
       if (res.ok) {
         showToast('success', 'Precio actualizado')
         cancelEdit()
@@ -791,14 +832,15 @@ function TabMedidaPrecio({
     const ancho = parseFloat(form.anchoCm)
     const alto = parseFloat(form.altoCm)
     const precio = parseMoneyInput(form.precio)
+    const costoEstimado = form.costoEstimado.trim() ? parseMoneyInput(form.costoEstimado) : null
     if (!ancho || !alto || !precio) return
     setSaving(true)
     try {
-      const res = (await crearFn({ anchoCm: ancho, altoCm: alto, precio })) as IpcResult<MedidaItem>
+      const res = (await crearFn({ anchoCm: ancho, altoCm: alto, precio, costoEstimado })) as IpcResult<MedidaItem>
       if (res.ok) {
         showToast('success', 'Precio agregado')
         setShowCreate(false)
-        setForm({ anchoCm: '', altoCm: '', precio: '' })
+        setForm({ anchoCm: '', altoCm: '', precio: '', costoEstimado: '' })
         refetch()
       } else {
         showToast('error', res.error)
@@ -850,6 +892,7 @@ function TabMedidaPrecio({
               <Th>Ancho (cm)</Th>
               <Th>Alto (cm)</Th>
               <Th className="text-right">Precio</Th>
+              <Th className="text-right">Costo est.</Th>
               <Th className="w-32 text-right">Acciones</Th>
             </Tr>
           </Thead>
@@ -860,7 +903,7 @@ function TabMedidaPrecio({
                 <Td className="tabular-nums">{item.altoCm}</Td>
                 <Td className="text-right">
                   {editingId === item.id ? (
-                    <div className="flex justify-end">
+                    <div className="grid gap-2 justify-end">
                       <div className="max-w-40">
                         <Input
                           type="text"
@@ -875,10 +918,24 @@ function TabMedidaPrecio({
                           className="h-10"
                         />
                       </div>
+                      <div className="max-w-40">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          min={0}
+                          value={editCosto}
+                          onChange={(e) => setEditCosto(e.target.value)}
+                          className="h-10"
+                          placeholder="Costo"
+                        />
+                      </div>
                     </div>
                   ) : (
                     <span className="tabular-nums font-medium">{formatCOP(item.precio)}</span>
                   )}
+                </Td>
+                <Td className="text-right tabular-nums text-text-muted">
+                  {editingId === item.id ? null : item.costoEstimado != null ? formatCOP(item.costoEstimado) : '—'}
                 </Td>
                 <Td>
                   {editingId === item.id ? (
@@ -955,6 +1012,15 @@ function TabMedidaPrecio({
               onChange={(e) => setForm((p) => ({ ...p, precio: e.target.value }))}
               placeholder="Ej: 25.000"
               required
+            />
+            <Input
+              label="Costo estimado (opcional)"
+              type="text"
+              inputMode="decimal"
+              min="0"
+              value={form.costoEstimado}
+              onChange={(e) => setForm((p) => ({ ...p, costoEstimado: e.target.value }))}
+              placeholder="Ej: 15.000"
             />
             <div className="flex gap-3 pt-2">
               <Button

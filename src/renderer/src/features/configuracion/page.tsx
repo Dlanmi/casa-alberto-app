@@ -4,7 +4,6 @@ import {
   Check,
   X,
   Pencil,
-  FileSpreadsheet,
   HardDrive,
   Cloud,
   RotateCcw,
@@ -21,6 +20,7 @@ import { EmptyState } from '@renderer/components/ui/empty-state'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { DirectoryScreen } from '@renderer/components/layout/page-frame'
 import { cn } from '@renderer/lib/cn'
+import { PlantillaImporter } from './plantilla-importer'
 import type { BackupInfo, Configuracion, IpcResult } from '@shared/types'
 
 type ConfigGroup = {
@@ -188,16 +188,8 @@ export default function ConfiguracionPage(): React.JSX.Element {
       guidance={{
         title: 'Prioridad sugerida',
         message:
-          'Completa primero los datos del negocio y luego revisa precios. Eso deja listos los documentos y el cotizador.',
-        actionLabel: importing ? 'Importando...' : 'Importar precios desde Excel',
-        onAction: handleImportExcel,
+          'Si vas a configurar el negocio por primera vez, descarga la plantilla Excel abajo, llénala con tus datos y súbela. Carga todo en una sola operación.',
         tone: 'info'
-      }}
-      primaryAction={{
-        label: importing ? 'Importando...' : 'Importar precios desde Excel',
-        onClick: handleImportExcel,
-        icon: FileSpreadsheet,
-        disabled: importing
       }}
     >
       {!configs || configs.length === 0 ? (
@@ -210,6 +202,7 @@ export default function ConfiguracionPage(): React.JSX.Element {
         />
       ) : (
         <div className="space-y-4">
+          <PlantillaImporter />
           {Array.from(grouped.entries()).map(([groupName, items]) => (
             <Card key={groupName} padding="md" className="space-y-4 border-border bg-surface">
               <div>

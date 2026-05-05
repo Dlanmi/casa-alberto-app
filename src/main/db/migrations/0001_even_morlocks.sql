@@ -1,1 +1,0 @@
-ALTER TABLE `clientes` ADD `es_menor` integer DEFAULT false NOT NULL;

@@ -30,8 +30,24 @@ describe.runIf(nativeAbiAvailable)('cotizarVidrioEspejo (Fase 2 §A.8)', () => {
     const testDb = createTestDb()
     db = testDb.db
     // Seed the vidrio lookup: claro a $100.000/m2, antirreflectivo a $115.000/m2.
-    db.insert(preciosVidrios).values({ tipo: 'claro', precioM2: 100000 }).run()
-    db.insert(preciosVidrios).values({ tipo: 'antirreflectivo', precioM2: 115000 }).run()
+    db.insert(preciosVidrios)
+      .values({
+        tipo: 'claro',
+        nombre: 'Vidrio claro 2mm',
+        espesorMm: 2,
+        precioM2: 100000,
+        costoM2Estimado: 62000
+      })
+      .run()
+    db.insert(preciosVidrios)
+      .values({
+        tipo: 'antirreflectivo',
+        nombre: 'Vidrio antirreflectivo 2mm',
+        espesorMm: 2,
+        precioM2: 115000,
+        costoM2Estimado: 76000
+      })
+      .run()
   })
 
   it('redondea dimensiones al múltiplo de 10 y calcula área × precio/m²', () => {
@@ -81,7 +97,15 @@ describe.runIf(nativeAbiAvailable)('cotizarVidrioEspejo (Fase 2 §A.8)', () => {
   it('lanza si el tipo de vidrio no está configurado', () => {
     // Borramos la fila antirreflectivo para simular la ausencia del precio.
     const freshDb = createTestDb().db
-    freshDb.insert(preciosVidrios).values({ tipo: 'claro', precioM2: 100000 }).run()
+    freshDb.insert(preciosVidrios)
+      .values({
+        tipo: 'claro',
+        nombre: 'Vidrio claro 2mm',
+        espesorMm: 2,
+        precioM2: 100000,
+        costoM2Estimado: 62000
+      })
+      .run()
     expect(() =>
       cotizarVidrioEspejo(freshDb, {
         anchoCm: 50,
@@ -220,21 +244,29 @@ describe.runIf(nativeAbiAvailable)('cotizador · A3 validar precios > 0', () => 
 
   describe('crearPrecioVidrio', () => {
     it('rechaza precio 0', () => {
-      expect(() => crearPrecioVidrio(db, 'claro', 0)).toThrow(/mayor a 0/i)
+      expect(() => crearPrecioVidrio(db, { nombre: 'Vidrio claro', espesorMm: 2, precioM2: 0 })).toThrow(/mayor a 0/i)
     })
 
     it('rechaza precio negativo', () => {
-      expect(() => crearPrecioVidrio(db, 'claro', -1000)).toThrow(/mayor a 0/i)
+      expect(() =>
+        crearPrecioVidrio(db, { nombre: 'Vidrio claro', espesorMm: 2, precioM2: -1000 })
+      ).toThrow(/mayor a 0/i)
     })
 
     it('rechaza tipo vacío', () => {
-      expect(() => crearPrecioVidrio(db, '   ', 100000)).toThrow(/tipo/i)
+      expect(() => crearPrecioVidrio(db, { nombre: '   ', espesorMm: 2, precioM2: 100000 })).toThrow(
+        /nombre/i
+      )
     })
 
     it('actualizarPrecioVidrio también rechaza valores inválidos', () => {
-      const v = crearPrecioVidrio(db, 'claro', 100000)
-      expect(() => actualizarPrecioVidrio(db, v!.id, 0)).toThrow(/mayor a 0/i)
-      expect(() => actualizarPrecioVidrio(db, v!.id, -1)).toThrow(/mayor a 0/i)
+      const v = crearPrecioVidrio(db, { nombre: 'Vidrio claro', espesorMm: 2, precioM2: 100000 })
+      expect(() =>
+        actualizarPrecioVidrio(db, v!.id, { nombre: 'Vidrio claro', espesorMm: 2, precioM2: 0 })
+      ).toThrow(/mayor a 0/i)
+      expect(() =>
+        actualizarPrecioVidrio(db, v!.id, { nombre: 'Vidrio claro', espesorMm: 2, precioM2: -1 })
+      ).toThrow(/mayor a 0/i)
     })
   })
 
@@ -276,7 +308,7 @@ describe.runIf(nativeAbiAvailable)('cotizador · A3 validar precios > 0', () => 
 
     it('actualizarPrecioRetablo rechaza precio 0', () => {
       const r = crearPrecioRetablo(db, { anchoCm: 30, altoCm: 40, precio: 10000 })
-      expect(() => actualizarPrecioRetablo(db, r.id, 0)).toThrow(/mayor a 0/i)
+      expect(() => actualizarPrecioRetablo(db, r.id, { precio: 0 })).toThrow(/mayor a 0/i)
     })
   })
 })
@@ -408,7 +440,15 @@ describe.runIf(nativeAbiAvailable)(
       // Precio paspartú para obra 60x80 ampliada con paspartú de 5cm → exterior 70x90.
       crearPrecioPaspartuPintado(db, { anchoCm: 70, altoCm: 90, precio: 22000 })
       // Precio vidrio.
-      db.insert(preciosVidrios).values({ tipo: 'claro', precioM2: 100000 }).run()
+      db.insert(preciosVidrios)
+        .values({
+          tipo: 'claro',
+          nombre: 'Vidrio claro 2mm',
+          espesorMm: 2,
+          precioM2: 100000,
+          costoM2Estimado: 62000
+        })
+        .run()
     })
 
     it('sin suplemento: el breakdown NO incluye el item de suplemento', () => {

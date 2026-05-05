@@ -56,7 +56,7 @@ const EMPTY_STATS: StatsGenerales = {
 function proveedor(overrides: Partial<Proveedor> = {}): Proveedor {
   return {
     id: 1,
-    nombre: 'Alberto',
+    nombre: 'Alperto',
     producto: null,
     tipo: 'otro',
     telefono: null,
@@ -149,10 +149,10 @@ describe('tipDiaProveedorHoy', () => {
   it('singular cuando un solo proveedor tiene hoy', () => {
     const ctx: HelpContext = {
       hoy: LUNES,
-      proveedores: [proveedor({ diasPedido: 'lunes,miercoles', nombre: 'Alberto' })]
+      proveedores: [proveedor({ diasPedido: 'lunes,miercoles', nombre: 'Alperto' })]
     }
     const tip = tipDiaProveedorHoy(ctx)
-    expect(tip?.title).toBe('Hoy toca pedir a Alberto')
+    expect(tip?.title).toBe('Hoy toca pedir a Alperto')
     expect(tip?.to).toBe('/proveedores')
   })
 
@@ -160,12 +160,12 @@ describe('tipDiaProveedorHoy', () => {
     const ctx: HelpContext = {
       hoy: LUNES,
       proveedores: [
-        proveedor({ id: 1, diasPedido: 'lunes', nombre: 'Alberto' }),
+        proveedor({ id: 1, diasPedido: 'lunes', nombre: 'Alperto' }),
         proveedor({ id: 2, diasPedido: 'lunes,viernes', nombre: 'Edimol' })
       ]
     }
     const tip = tipDiaProveedorHoy(ctx)
-    expect(tip?.title).toMatch(/Alberto/)
+    expect(tip?.title).toMatch(/Alperto/)
     expect(tip?.title).toMatch(/Edimol/)
   })
 
@@ -339,7 +339,7 @@ describe('tipPlaybookDelDia', () => {
     const LUNES = new Date('2026-04-20T10:00:00')
     const proveedor: Proveedor = {
       id: 1,
-      nombre: 'Alberto',
+      nombre: 'Alperto',
       producto: null,
       tipo: 'otro',
       telefono: null,
@@ -357,7 +357,7 @@ describe('tipPlaybookDelDia', () => {
       proveedores: [proveedor]
     })
     const lastItem = tip!.actionItems![tip!.actionItems!.length - 1]
-    expect(lastItem.label).toMatch(/Alberto/)
+    expect(lastItem.label).toMatch(/Alperto/)
   })
 
   it('cada item tiene al menos una acción navigate', () => {
@@ -569,7 +569,7 @@ describe('tipResumenSemana', () => {
   it('incluye días de proveedor únicos ordenados', () => {
     const prov: Proveedor = {
       id: 1,
-      nombre: 'Alberto',
+      nombre: 'Alperto',
       producto: null,
       tipo: 'otro',
       telefono: null,

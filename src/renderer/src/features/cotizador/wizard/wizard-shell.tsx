@@ -1,10 +1,12 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { ArrowLeft, ArrowRight, Check, Cloud, CloudOff, Loader2, X } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import { useMoneyInput } from '@renderer/lib/use-money-input'
 import { redondearPrecioFinal } from '@shared/redondeo'
+import { calcularEvaluacionComercial } from '@shared/comercial'
+import type { EvaluacionComercial } from '@shared/comercial'
 import { StepDots } from '@renderer/components/ui/step-dots'
 import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
@@ -32,6 +34,10 @@ import type {
   Cliente
 } from '@shared/types'
 
+export type MetodoPagoWizard = 'efectivo' | 'transferencia'
+
+export type TipoEntregaWizard = 'estandar' | 'urgente' | 'sin_afan'
+
 export type WizardData = {
   anchoCm: number
   altoCm: number
@@ -50,9 +56,25 @@ export type WizardData = {
   tipoVidrio: string
   porcentajeMateriales: number
   precioManual: number
+  costoManualEstimado: number
   descripcionManual: string
   precioInstalacion: number
+  costoInstalacionEstimado: number
   tipoVidrioEspejo: string
+  // Ajuste comercial — vive en WizardData para que el panel lateral, el
+  // resumen y el auto-save vean el mismo estado. Antes vivían como useState
+  // local de step-resumen.tsx, lo que causaba: (1) el panel lateral nunca
+  // mostraba el descuento aplicado; (2) volver atrás al wizard reseteaba el
+  // descuento; (3) el auto-save no persistía el descuento.
+  conDescuento: boolean
+  descuentoNum: number
+  motivoDescuento: string
+  // Datos del pedido (paso final) — también suben aquí por consistencia.
+  conAbono: boolean
+  abonoNum: number
+  metodoPago: MetodoPagoWizard
+  notas: string
+  tipoEntrega: TipoEntregaWizard
 }
 
 const INITIAL_DATA: WizardData = {
@@ -65,12 +87,22 @@ const INITIAL_DATA: WizardData = {
   anchoPaspartuCm: 5,
   conSuplemento: false,
   conVidrio: true,
-  tipoVidrio: 'claro',
+  tipoVidrio: '',
   porcentajeMateriales: 10,
   precioManual: 0,
+  costoManualEstimado: 0,
   descripcionManual: '',
   precioInstalacion: 0,
-  tipoVidrioEspejo: 'claro'
+  costoInstalacionEstimado: 0,
+  tipoVidrioEspejo: '',
+  conDescuento: false,
+  descuentoNum: 0,
+  motivoDescuento: '',
+  conAbono: true,
+  abonoNum: 0,
+  metodoPago: 'efectivo',
+  notas: '',
+  tipoEntrega: 'estandar'
 }
 
 const STEPS = [
@@ -123,11 +155,18 @@ export function WizardShell({
       d.altoCm > 0 ||
       d.muestraMarcoId !== null ||
       d.precioManual > 0 ||
-      d.descripcionManual.length > 0
+      d.descripcionManual.length > 0 ||
+      d.conDescuento ||
+      d.descuentoNum > 0 ||
+      d.notas.length > 0
   })
 
   const { data: marcos, loading: marcosLoading } = useIpc<MuestraMarcoConProveedor[]>(
     () => window.api.cotizador.listarMuestrasMarcos(),
+    []
+  )
+  const { data: margenMinimoAlertaPct } = useIpc<number>(
+    () => window.api.configuracion.getNumber('margen_minimo_alerta_pct', 20),
     []
   )
 
@@ -159,12 +198,40 @@ export function WizardShell({
                 descripcion: data.descripcionManual || 'Restauración',
                 subtotal: data.precioManual,
                 cantidad: 1,
-                precioUnitario: data.precioManual
+                precioUnitario: data.precioManual,
+                costoUnitarioEstimado: data.costoManualEstimado > 0 ? data.costoManualEstimado : null,
+                subtotalCostoEstimado: data.costoManualEstimado > 0 ? data.costoManualEstimado : null
               }
             ],
             subtotal: data.precioManual,
             totalMateriales: 0,
-            precioTotal: redondearPrecioFinal(data.precioManual)
+            brutoCotizado: data.precioManual,
+            precioLista: redondearPrecioFinal(data.precioManual),
+            precioTotal: redondearPrecioFinal(data.precioManual),
+            costoEstimadoTotal: data.costoManualEstimado > 0 ? data.costoManualEstimado : null,
+            margenEstimado:
+              data.costoManualEstimado > 0
+                ? redondearPrecioFinal(data.precioManual) - data.costoManualEstimado
+                : null,
+            margenEstimadoPct:
+              data.costoManualEstimado > 0
+                ? Math.round(
+                    ((redondearPrecioFinal(data.precioManual) - data.costoManualEstimado) /
+                      redondearPrecioFinal(data.precioManual)) *
+                      10000
+                  ) / 100
+                : null,
+            estadoRentabilidad:
+              data.costoManualEstimado <= 0
+                ? 'incompleta'
+                : redondearPrecioFinal(data.precioManual) - data.costoManualEstimado <= 0
+                  ? 'critica'
+                  : ((redondearPrecioFinal(data.precioManual) - data.costoManualEstimado) /
+                        redondearPrecioFinal(data.precioManual)) *
+                        100 <
+                      (margenMinimoAlertaPct ?? 20)
+                    ? 'baja'
+                    : 'saludable'
           })
           return
         }
@@ -250,6 +317,7 @@ export function WizardShell({
             altoCm: data.altoCm,
             tipoVidrio: data.tipoVidrioEspejo,
             precioInstalacion: data.precioInstalacion,
+            costoInstalacionEstimado: data.costoInstalacionEstimado || null,
             descripcion: data.descripcionManual || null
           })) as IpcResult<ResultadoCotizacion>
         } else {
@@ -281,10 +349,36 @@ export function WizardShell({
     data.tipoVidrio,
     data.porcentajeMateriales,
     data.precioManual,
+    data.costoManualEstimado,
     data.descripcionManual,
     data.precioInstalacion,
-    data.tipoVidrioEspejo
+    data.costoInstalacionEstimado,
+    data.tipoVidrioEspejo,
+    margenMinimoAlertaPct
   ])
+
+  // Evaluación comercial — única fuente de verdad para precio final, descuento
+  // efectivo, costo y margen. Tanto el panel lateral como step-resumen leen
+  // de aquí. Cambios en cotizacion o en data.descuentoNum se propagan al
+  // panel automáticamente vía React.
+  const evaluacionComercial: EvaluacionComercial = useMemo(
+    () =>
+      calcularEvaluacionComercial({
+        precioSugerido: cotizacion?.precioLista ?? cotizacion?.precioTotal ?? 0,
+        descuentoMonto: data.conDescuento ? data.descuentoNum : 0,
+        costoEstimado: cotizacion?.costoEstimadoTotal ?? null,
+        margenMinimoAlertaPct: margenMinimoAlertaPct ?? 20,
+        autoRedondear: true
+      }),
+    [
+      cotizacion?.precioLista,
+      cotizacion?.precioTotal,
+      cotizacion?.costoEstimadoTotal,
+      data.conDescuento,
+      data.descuentoNum,
+      margenMinimoAlertaPct
+    ]
+  )
 
   const isEnmarcacion = tipoTrabajo === 'enmarcacion_estandar'
   const esManual = tipoTrabajo === 'restauracion'
@@ -365,11 +459,18 @@ export function WizardShell({
           visible al fondo cuando el contenido es corto. */}
       <div className="overflow-y-auto min-h-0">
         {/* Barra compacta de precio — visible solo cuando el panel lateral
-            está oculto (pantallas < lg). Muestra el total en una línea. */}
-        {(cotizacion?.precioTotal ?? 0) > 0 && (
+            está oculto (pantallas < lg). Muestra el precio final con
+            descuento aplicado para que el dueño no se confunda. */}
+        {evaluacionComercial.precioSugerido > 0 && (
           <div className="lg:hidden flex items-center justify-between rounded-lg border border-border bg-surface-muted px-4 py-3 mb-6">
-            <span className="text-sm font-medium text-text">Total sugerido</span>
-            <PrecioDisplay value={cotizacion?.precioTotal ?? 0} size="lg" className="text-accent" />
+            <span className="text-sm font-medium text-text">
+              {evaluacionComercial.descuentoMonto > 0 ? 'Total con descuento' : 'Total sugerido'}
+            </span>
+            <PrecioDisplay
+              value={evaluacionComercial.precioFinal}
+              size="lg"
+              className="text-accent"
+            />
           </div>
         )}
 
@@ -431,7 +532,9 @@ export function WizardShell({
                 {currentStep?.key === 'resumen' && (
                   <StepResumen
                     data={data}
+                    onChange={updateData}
                     cotizacion={cotizacion}
+                    evaluacion={evaluacionComercial}
                     tipoTrabajo={tipoTrabajo}
                     cliente={cliente}
                     onClienteChange={onClienteChange}
@@ -478,13 +581,16 @@ export function WizardShell({
 
           {/* Panel de precio lateral — solo visible en pantallas anchas (lg+)
               para que el contenido del wizard tenga espacio suficiente. En
-              pantallas normales se muestra la barra compacta de arriba. */}
+              pantallas normales se muestra la barra compacta de arriba.
+              Recibe la evaluacionComercial completa para que el descuento y
+              el margen se actualicen al instante cuando el usuario lo
+              configura en el paso de resumen. */}
           <div className="w-72 shrink-0 hidden lg:block">
             <PrecioPanel
               items={cotizacion?.items ?? []}
               subtotal={cotizacion?.subtotal ?? 0}
               totalMateriales={cotizacion?.totalMateriales ?? 0}
-              precioTotal={cotizacion?.precioTotal ?? 0}
+              evaluacion={evaluacionComercial}
               porcentajeMateriales={data.porcentajeMateriales}
             />
           </div>
@@ -671,32 +777,12 @@ function StepVidrioEspejo({
   onChange: (partial: Partial<WizardData>) => void
 }): React.JSX.Element {
   // BR-010 — los precios se leen desde la tabla precios_vidrios para que el
-  // dueño pueda editarlos sin tocar código. Fallback a los valores de Fase 2.
+  // dueño pueda editarlos sin tocar código.
   const { data: preciosVidrio } = useIpc<PrecioVidrio[]>(
     () => window.api.cotizador.listarPreciosVidrio(),
     []
   )
-  const opcionesVidrio =
-    preciosVidrio && preciosVidrio.length > 0
-      ? preciosVidrio
-      : ([
-          {
-            id: -1,
-            tipo: 'claro',
-            precioM2: 100000,
-            activo: true,
-            createdAt: '',
-            updatedAt: ''
-          },
-          {
-            id: -2,
-            tipo: 'antirreflectivo',
-            precioM2: 115000,
-            activo: true,
-            createdAt: '',
-            updatedAt: ''
-          }
-        ] as PrecioVidrio[])
+  const opcionesVidrio = preciosVidrio ?? []
   const vidrioSeleccionado =
     opcionesVidrio.find((p) => p.tipo === data.tipoVidrioEspejo) ?? opcionesVidrio[0]
 
@@ -720,15 +806,11 @@ function StepVidrioEspejo({
   const areaM2 = (anchoRedondeado * altoRedondeado) / 10000
   const precioUnitario = vidrioSeleccionado?.precioM2 ?? 0
   const precioCalculado = Math.round(areaM2 * precioUnitario)
-  const formatTipo = (tipo: string): string =>
-    tipo
-      .split('_')
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ')
-
   const instalacion = useMoneyInput(data.precioInstalacion, (n) =>
     onChange({ precioInstalacion: n })
+  )
+  const costoInstalacion = useMoneyInput(data.costoInstalacionEstimado, (n) =>
+    onChange({ costoInstalacionEstimado: n })
   )
 
   return (
@@ -741,31 +823,39 @@ function StepVidrioEspejo({
       <div className="space-y-6 max-w-lg">
         <div>
           <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-3">Tipo</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {opcionesVidrio.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => onChange({ tipoVidrioEspejo: option.tipo })}
-                className={cn(
-                  'relative flex flex-col items-start p-4 rounded-lg border-2 cursor-pointer transition-all text-left',
-                  data.tipoVidrioEspejo === option.tipo
-                    ? 'border-accent bg-accent/10 shadow-1'
-                    : 'border-border hover:border-border-strong'
-                )}
-              >
-                {data.tipoVidrioEspejo === option.tipo && (
-                  <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-accent flex items-center justify-center">
-                    <Check size={12} className="text-white" />
-                  </div>
-                )}
-                <span className="text-sm font-semibold text-text">{formatTipo(option.tipo)}</span>
-                <span className="text-xs text-text-muted mt-0.5">Precio activo por m²</span>
-                <span className="text-xs font-medium text-accent-strong mt-1">
-                  {formatPrecio(option.precioM2)}
-                </span>
-              </button>
-            ))}
-          </div>
+          {opcionesVidrio.length === 0 ? (
+            <GuidanceHint
+              tone="warning"
+              title="Primero configura los vidrios"
+              message="Agrega al menos un vidrio en Listas de precios para poder cotizar este servicio."
+            />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {opcionesVidrio.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => onChange({ tipoVidrioEspejo: option.tipo })}
+                  className={cn(
+                    'relative flex flex-col items-start p-4 rounded-lg border-2 cursor-pointer transition-all text-left',
+                    data.tipoVidrioEspejo === option.tipo
+                      ? 'border-accent bg-accent/10 shadow-1'
+                      : 'border-border hover:border-border-strong'
+                  )}
+                >
+                  {data.tipoVidrioEspejo === option.tipo && (
+                    <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-accent flex items-center justify-center">
+                      <Check size={12} className="text-white" />
+                    </div>
+                  )}
+                  <span className="text-sm font-semibold text-text">{option.nombre}</span>
+                  <span className="text-xs text-text-muted mt-0.5">{option.espesorMm} mm</span>
+                  <span className="text-xs font-medium text-accent-strong mt-1">
+                    {formatPrecio(option.precioM2)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {anchoRedondeado > 0 && altoRedondeado > 0 && (
@@ -806,6 +896,17 @@ function StepVidrioEspejo({
           placeholder="0 si no aplica"
           hint="Incluye transporte y mano de obra de instalación a domicilio."
         />
+        <Input
+          label="Costo estimado de instalación (opcional)"
+          type="text"
+          inputMode="decimal"
+          min={0}
+          value={costoInstalacion.raw}
+          onChange={costoInstalacion.handleChange}
+          onBlur={costoInstalacion.handleBlur}
+          placeholder="Ej: 45.000"
+          hint="Se usa solo para calcular margen interno, no se muestra al cliente."
+        />
       </div>
     </div>
   )
@@ -823,6 +924,9 @@ function StepPrecioManual({
   const esRestauracion = tipoTrabajo === 'restauracion'
 
   const precio = useMoneyInput(data.precioManual, (n) => onChange({ precioManual: n }), {
+    min: 0
+  })
+  const costo = useMoneyInput(data.costoManualEstimado, (n) => onChange({ costoManualEstimado: n }), {
     min: 0
   })
 
@@ -857,6 +961,17 @@ function StepPrecioManual({
           onBlur={precio.handleBlur}
           placeholder="Ej: 150.000"
           hint="Este es el precio final que se cobrará al cliente."
+        />
+        <Input
+          label="Costo estimado interno (opcional)"
+          type="text"
+          inputMode="decimal"
+          min={0}
+          value={costo.raw}
+          onChange={costo.handleChange}
+          onBlur={costo.handleBlur}
+          placeholder="Ej: 80.000"
+          hint="Sirve para calcular margen estimado sin mostrarlo al cliente."
         />
       </div>
     </div>

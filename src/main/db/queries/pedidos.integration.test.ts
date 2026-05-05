@@ -4,21 +4,23 @@
 //      via reclasificarPedidos.
 //   2. Devuelve todos los pedidos ya reclasificados.
 import { beforeEach, describe, expect, it } from 'vitest'
-import { sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
-import { clientes, facturas, muestrasMarcos, pagos, pedidos, preciosVidrios } from '../schema'
+import { clientes, facturas, muestrasMarcos, pagos, pedidoItems, pedidos, preciosVidrios } from '../schema'
 import { cotizarEnmarcacionEstandar } from './cotizador'
 import {
   cambiarEstadoPedido,
   crearPedidoConfirmadoConFactura,
   crearPedidoDesdeCotizacion,
+  editarPedidoComercial,
   obtenerSaldosPorPedido,
   pedidosAgenda,
   pedidosSinAbonoConSaldo,
   pedidosSinReclamar,
   reclasificarPedidos
 } from './pedidos'
+import { devoluciones, movimientosFinancieros } from '../schema'
 
 describe.runIf(nativeAbiAvailable)(
   'pedidosAgenda (agenda global de pedidos activos)',
@@ -584,7 +586,15 @@ describe.runIf(nativeAbiAvailable)('crearPedidoDesdeCotizacion · defensas de co
       })
       .returning()
       .get().id
-    db.insert(preciosVidrios).values({ tipo: 'claro', precioM2: 100000 }).run()
+    db.insert(preciosVidrios)
+      .values({
+        tipo: 'claro',
+        nombre: 'Vidrio claro 2mm',
+        espesorMm: 2,
+        precioM2: 100000,
+        costoM2Estimado: 62000
+      })
+      .run()
   })
 
   it('rechaza una cotización manipulada aunque el renderer la envíe por IPC', () => {
@@ -657,6 +667,49 @@ describe.runIf(nativeAbiAvailable)('crearPedidoDesdeCotizacion · defensas de co
     expect(result.saldo).toBe(result.factura.total - 10000)
   })
 
+  it('guarda descuento explícito y ajusta factura, ítems y rentabilidad', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro'
+    })
+
+    const result = crearPedidoConfirmadoConFactura(db, {
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        descripcion: 'Pedido con descuento',
+        anchoCm: 30,
+        altoCm: 40,
+        muestraMarcoId,
+        tipoVidrio: 'claro',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-04-01'
+      },
+      cotizacion,
+      descuento: {
+        monto: 5000,
+        motivo: 'Cliente frecuente'
+      },
+      facturaFecha: '2026-04-01'
+    })
+
+    expect(result.pedido.precioLista).toBe(cotizacion.precioLista)
+    expect(result.pedido.descuentoMonto).toBe(5000)
+    expect(result.pedido.precioTotal).toBe(cotizacion.precioLista - 5000)
+    expect(result.factura.total).toBe(cotizacion.precioLista - 5000)
+
+    const descuentoItem = db
+      .select()
+      .from(pedidoItems)
+      .where(and(eq(pedidoItems.pedidoId, result.pedido.id), eq(pedidoItems.tipoItem, 'descuento')))
+      .get()
+    expect(descuentoItem).toBeTruthy()
+    expect(descuentoItem?.subtotal).toBe(-5000)
+    expect(descuentoItem?.descripcion).toContain('Cliente frecuente')
+  })
+
   it('no deja pedido parcial si falla la validación del abono', () => {
     const cotizacion = cotizarEnmarcacionEstandar(db, {
       anchoCm: 30,
@@ -698,5 +751,299 @@ describe.runIf(nativeAbiAvailable)('crearPedidoDesdeCotizacion · defensas de co
       .get()
     expect(pedidoCount?.n).toBe(0)
     expect(facturaCount?.n).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Edge cases del modelo comercial — Fase 3 del rediseño
+// ---------------------------------------------------------------------------
+describe.runIf(nativeAbiAvailable)('Modelo comercial · edge cases', () => {
+  let db: DB
+  let clienteId: number
+  let muestraMarcoId: number
+
+  beforeEach(() => {
+    db = createTestDb().db
+    clienteId = db.insert(clientes).values({ nombre: 'Cliente Edge' }).returning().get().id
+    muestraMarcoId = db
+      .insert(muestrasMarcos)
+      .values({
+        referencia: 'EDG-001',
+        colillaCm: 30,
+        precioMetro: 30000,
+        costoMetroEstimado: 18000
+      })
+      .returning()
+      .get().id
+    db.insert(preciosVidrios)
+      .values({
+        tipo: 'claro_2mm',
+        nombre: 'Vidrio claro 2mm',
+        espesorMm: 2,
+        precioM2: 100000,
+        costoM2Estimado: 60000
+      })
+      .run()
+  })
+
+  it('cancelar pedido con pagos genera devolución automática y movimiento de gasto', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro_2mm'
+    })
+
+    const result = crearPedidoConfirmadoConFactura(db, {
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        descripcion: 'Pedido para cancelar',
+        anchoCm: 30,
+        altoCm: 40,
+        muestraMarcoId,
+        tipoVidrio: 'claro_2mm',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-04-01'
+      },
+      cotizacion,
+      facturaFecha: '2026-04-01',
+      abono: {
+        monto: 25000,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-01'
+      }
+    })
+
+    expect(result.pago?.monto).toBe(25000)
+
+    // Cancelar el pedido — debe anular factura Y crear devolución por el monto cobrado.
+    cambiarEstadoPedido(db, result.pedido.id, 'cancelado')
+
+    const devs = db.select().from(devoluciones).where(eq(devoluciones.facturaId, result.factura.id)).all()
+    expect(devs).toHaveLength(1)
+    expect(devs[0].monto).toBe(25000)
+    expect(devs[0].motivo).toContain(result.pedido.numero)
+
+    const movDev = db
+      .select()
+      .from(movimientosFinancieros)
+      .where(
+        and(
+          eq(movimientosFinancieros.tipo, 'gasto'),
+          eq(movimientosFinancieros.categoria, 'devolucion')
+        )
+      )
+      .all()
+    expect(movDev).toHaveLength(1)
+    expect(movDev[0].monto).toBe(25000)
+
+    const facturaActualizada = db
+      .select()
+      .from(facturas)
+      .where(eq(facturas.id, result.factura.id))
+      .get()
+    expect(facturaActualizada?.estado).toBe('anulada')
+  })
+
+  it('descuento del 100% (regalo) crea factura con total 0 y la marca como pagada', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro_2mm'
+    })
+
+    const result = crearPedidoConfirmadoConFactura(db, {
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        descripcion: 'Regalo a cliente vip',
+        anchoCm: 30,
+        altoCm: 40,
+        muestraMarcoId,
+        tipoVidrio: 'claro_2mm',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-04-01'
+      },
+      cotizacion,
+      descuento: {
+        monto: cotizacion.precioLista,
+        motivo: 'Cortesía'
+      },
+      facturaFecha: '2026-04-01'
+    })
+
+    expect(result.pedido.precioTotal).toBe(0)
+    expect(result.factura.total).toBe(0)
+    expect(result.factura.estado).toBe('pagada')
+    expect(result.saldo).toBe(0)
+    expect(result.pago).toBeNull()
+
+    // No se crea movimiento financiero de ingreso (no hubo dinero real).
+    const movs = db
+      .select()
+      .from(movimientosFinancieros)
+      .where(eq(movimientosFinancieros.tipo, 'ingreso'))
+      .all()
+    expect(movs).toHaveLength(0)
+  })
+
+  it('rechaza descuento con abono: el abono no puede exceder el total final', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro_2mm'
+    })
+    expect(() =>
+      crearPedidoConfirmadoConFactura(db, {
+        datos: {
+          clienteId,
+          tipoTrabajo: 'enmarcacion_estandar',
+          descripcion: 'Pedido inválido',
+          anchoCm: 30,
+          altoCm: 40,
+          muestraMarcoId,
+          tipoVidrio: 'claro_2mm',
+          porcentajeMateriales: 10,
+          fechaIngreso: '2026-04-01'
+        },
+        cotizacion,
+        descuento: { monto: cotizacion.precioLista - 1000 },
+        facturaFecha: '2026-04-01',
+        abono: { monto: 50000, metodoPago: 'efectivo', fecha: '2026-04-01' }
+      })
+    ).toThrow(/abono excede/i)
+  })
+
+  it('editarPedidoComercial agrega descuento y recalcula factura activa', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro_2mm'
+    })
+
+    const original = crearPedidoConfirmadoConFactura(db, {
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        descripcion: 'Pedido para editar',
+        anchoCm: 30,
+        altoCm: 40,
+        muestraMarcoId,
+        tipoVidrio: 'claro_2mm',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-04-01'
+      },
+      cotizacion,
+      facturaFecha: '2026-04-01'
+    })
+
+    const totalOriginal = original.pedido.precioTotal
+    const editado = editarPedidoComercial(db, {
+      pedidoId: original.pedido.id,
+      descuentoMonto: 5000,
+      descuentoMotivo: 'Cliente frecuente'
+    })
+
+    expect(editado.pedido.descuentoMonto).toBe(5000)
+    expect(editado.pedido.precioTotal).toBe(totalOriginal - 5000)
+    expect(editado.facturaActualizada?.total).toBe(totalOriginal - 5000)
+    expect(editado.devolucionGenerada).toBeNull()
+
+    // Verifica que el ítem 'descuento' fue creado en pedido_items.
+    const itemDescuento = db
+      .select()
+      .from(pedidoItems)
+      .where(and(eq(pedidoItems.pedidoId, original.pedido.id), eq(pedidoItems.tipoItem, 'descuento')))
+      .get()
+    expect(itemDescuento).toBeTruthy()
+    expect(itemDescuento?.subtotal).toBe(-5000)
+    expect(itemDescuento?.descripcion).toContain('Cliente frecuente')
+  })
+
+  it('editarPedidoComercial reduce total bajo lo pagado y crea devolución del exceso', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro_2mm'
+    })
+
+    const original = crearPedidoConfirmadoConFactura(db, {
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        descripcion: 'Pedido con abono',
+        anchoCm: 30,
+        altoCm: 40,
+        muestraMarcoId,
+        tipoVidrio: 'claro_2mm',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-04-01'
+      },
+      cotizacion,
+      facturaFecha: '2026-04-01',
+      abono: {
+        monto: cotizacion.precioLista,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-01'
+      }
+    })
+
+    // Cliente había pagado todo. Aplicamos descuento posterior → genera devolución.
+    const editado = editarPedidoComercial(db, {
+      pedidoId: original.pedido.id,
+      descuentoMonto: 10000,
+      descuentoMotivo: 'Ajuste post-cobro'
+    })
+
+    expect(editado.devolucionGenerada).not.toBeNull()
+    expect(editado.devolucionGenerada?.monto).toBe(10000)
+    expect(editado.facturaActualizada?.total).toBe(cotizacion.precioLista - 10000)
+    expect(editado.facturaActualizada?.estado).toBe('pagada')
+  })
+
+  it('editarPedidoComercial bloquea pedidos entregados o cancelados', () => {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro_2mm'
+    })
+
+    const original = crearPedidoConfirmadoConFactura(db, {
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        descripcion: 'Pedido entregado',
+        anchoCm: 30,
+        altoCm: 40,
+        muestraMarcoId,
+        tipoVidrio: 'claro_2mm',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-04-01'
+      },
+      cotizacion,
+      facturaFecha: '2026-04-01',
+      abono: {
+        monto: cotizacion.precioLista,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-01'
+      }
+    })
+
+    cambiarEstadoPedido(db, original.pedido.id, 'en_proceso')
+    cambiarEstadoPedido(db, original.pedido.id, 'listo')
+    cambiarEstadoPedido(db, original.pedido.id, 'entregado')
+
+    expect(() =>
+      editarPedidoComercial(db, {
+        pedidoId: original.pedido.id,
+        descuentoMonto: 5000
+      })
+    ).toThrow(/no se puede editar/i)
   })
 })

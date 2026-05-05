@@ -9,11 +9,15 @@ import {
   Truck,
   Inbox,
   Calendar,
-  Check
+  Check,
+  Pencil,
+  Download
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
+import { Modal } from '@renderer/components/ui/modal'
+import { Input } from '@renderer/components/ui/input'
 import { Spinner } from '@renderer/components/ui/spinner'
 import { EstadoPedidoBadge } from '@renderer/components/shared/estado-badge'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
@@ -21,12 +25,14 @@ import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { PagoBar } from '@renderer/components/shared/pago-bar'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { cn } from '@renderer/lib/cn'
+import { formatCOP } from '@renderer/lib/format'
 import { useIpc } from '@renderer/hooks/use-ipc'
+import { useMoneyInput } from '@renderer/lib/use-money-input'
 import { useToast } from '@renderer/contexts/toast-context'
 import { useSlidePanel, SLIDE_PANEL_EXIT_MS } from '@renderer/hooks/use-slide-panel'
 import { TIPO_TRABAJO_LABEL, ESTADO_PEDIDO_LABEL } from '@renderer/lib/constants'
 import type { LucideIcon } from 'lucide-react'
-import type { Pedido, Factura, EstadoPedido, IpcResult } from '@shared/types'
+import type { Cliente, Pedido, Factura, EstadoPedido, IpcResult, PedidoItem } from '@shared/types'
 
 const NEXT_ESTADO: Partial<Record<EstadoPedido, EstadoPedido>> = {
   cotizado: 'confirmado',
@@ -86,7 +92,10 @@ export function PedidoDetailPanel({
   const [editingFecha, setEditingFecha] = useState(false)
   const [fechaInput, setFechaInput] = useState(pedido.fechaEntrega ?? '')
   const [savingFecha, setSavingFecha] = useState(false)
+  const [editingComercial, setEditingComercial] = useState(false)
+  const [generandoPdf, setGenerandoPdf] = useState(false)
   const nextEstado = NEXT_ESTADO[pedido.estado]
+  const puedeEditarComercial = pedido.estado !== 'entregado' && pedido.estado !== 'cancelado'
 
   // Fetch facturas for this pedido to find a linked factura
   const {
@@ -116,6 +125,82 @@ export function PedidoDetailPanel({
   // pagado = total de la factura - saldo pendiente
   const pagado = facturaActiva && saldo != null ? facturaActiva.total - saldo : 0
   const saldoPendiente = facturaActiva && saldo != null ? saldo : 0
+
+  /**
+   * Genera el PDF del pedido. Si tiene factura activa, usa el número de
+   * factura formal; si no, genera una cotización con número COT-... La data
+   * (items, descuento, motivo) viene del pedido — incluye todo lo necesario
+   * para que la PDF muestre el desglose correcto.
+   */
+  async function handleGenerarPDF(): Promise<void> {
+    setGenerandoPdf(true)
+    try {
+      const pedidoRes = (await window.api.pedidos.obtener(pedido.id)) as IpcResult<
+        Pedido & { items?: PedidoItem[] }
+      >
+      if (!pedidoRes.ok) {
+        showToast({
+          tone: 'error',
+          title: 'No se pudieron cargar los items',
+          message: pedidoRes.error
+        })
+        return
+      }
+      const clienteRes = (await window.api.clientes.obtener(pedido.clienteId)) as IpcResult<Cliente>
+      const cliente = clienteRes.ok ? clienteRes.data : null
+
+      const pdfItems =
+        pedidoRes.data.items?.map((it) => ({
+          descripcion: it.descripcion ?? 'Item',
+          cantidad: it.cantidad,
+          precioUnitario: it.precioUnitario ?? it.subtotal,
+          subtotal: it.subtotal
+        })) ?? []
+
+      const pdfPagos: { fecha: string; monto: number; metodo: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' }[] = []
+      const numero = facturaActiva
+        ? facturaActiva.numero
+        : `COT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${pedido.id}`
+
+      const result = (await window.api.pdf.generarFactura({
+        numero,
+        fecha: new Date().toISOString().slice(0, 10),
+        clienteNombre: cliente?.nombre ?? 'Sin cliente',
+        clienteCedula: cliente?.cedula,
+        clienteTelefono: cliente?.telefono,
+        clienteDireccion: cliente?.direccion,
+        items: pdfItems,
+        subtotal: pedido.subtotal,
+        totalMateriales: pedido.totalMateriales,
+        precioLista: pedido.precioLista || pedido.precioTotal,
+        descuentoMonto: pedido.descuentoMonto ?? 0,
+        descuentoMotivo: pedido.descuentoMotivo,
+        total: pedido.precioTotal,
+        pagos: pdfPagos,
+        saldo: saldoPendiente,
+        notas: pedido.notas
+      })) as IpcResult<string>
+
+      if (result.ok) {
+        showToast({
+          tone: 'success',
+          title: 'PDF generado',
+          message: facturaActiva ? 'Factura abierta para imprimir o enviar.' : 'Cotización abierta.'
+        })
+        await window.api.pdf.abrir(result.data)
+      } else {
+        showToast({ tone: 'error', title: 'No se pudo generar el PDF', message: result.error })
+      }
+    } catch (err) {
+      showToast({
+        tone: 'error',
+        title: 'Error al generar PDF',
+        message: err instanceof Error ? err.message : 'Error desconocido'
+      })
+    } finally {
+      setGenerandoPdf(false)
+    }
+  }
 
   // SPEC-006: registra un abono rápido contra la factura activa del pedido.
   // Recorta el monto al saldo pendiente (no permite sobre-pago) y refresca
@@ -209,9 +294,43 @@ export function PedidoDetailPanel({
           />
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-text-soft">Estado:</span>
           <EstadoPedidoBadge estado={pedido.estado} />
+          {pedido.tipoEntrega === 'urgente' && (
+            <span className="inline-flex items-center gap-1 rounded-sm bg-warning-bg px-2 py-0.5 text-[11px] font-semibold text-warning-strong">
+              ⚡ Urgente
+            </span>
+          )}
+          {puedeEditarComercial && (
+            <button
+              type="button"
+              onClick={async () => {
+                const nuevo = pedido.tipoEntrega === 'urgente' ? 'estandar' : 'urgente'
+                const res = (await window.api.pedidos.actualizarTipoEntrega(
+                  pedido.id,
+                  nuevo
+                )) as IpcResult<Pedido | null>
+                if (res.ok) {
+                  showToast({
+                    tone: 'success',
+                    title:
+                      nuevo === 'urgente' ? 'Marcado como urgente' : 'Urgencia removida',
+                    message:
+                      nuevo === 'urgente'
+                        ? 'Aparece destacado en el tablero.'
+                        : 'Vuelve al flujo estándar.'
+                  })
+                  onPedidoUpdated?.()
+                } else {
+                  showToast({ tone: 'error', title: 'No se pudo cambiar', message: res.error })
+                }
+              }}
+              className="text-xs text-text-muted hover:text-warning-strong cursor-pointer underline-offset-4 hover:underline"
+            >
+              {pedido.tipoEntrega === 'urgente' ? 'Quitar urgencia' : 'Marcar urgente'}
+            </button>
+          )}
         </div>
 
         {/* AGENT_UX: Timeline visual del ciclo de vida */}
@@ -383,11 +502,65 @@ export function PedidoDetailPanel({
               )}
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-text-soft">Precio total</span>
+              <span className="text-text-soft">Precio sugerido</span>
+              <PrecioDisplay value={pedido.precioLista || pedido.precioTotal} />
+            </div>
+            {(pedido.descuentoMonto ?? 0) > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-text-soft">Descuento</span>
+                <span className="font-semibold tabular-nums text-warning-strong">
+                  − ${pedido.descuentoMonto.toLocaleString('es-CO')}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between items-center">
+              <span className="text-text-soft">Precio final</span>
               <PrecioDisplay value={pedido.precioTotal} />
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-text-soft">Costo estimado</span>
+              <span className="tabular-nums text-text">
+                {pedido.costoEstimadoTotal != null ? formatCOP(pedido.costoEstimadoTotal) : '—'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-text-soft">Margen estimado</span>
+              <span
+                className={cn(
+                  'tabular-nums font-medium',
+                  pedido.margenEstimado != null && pedido.margenEstimado < 0
+                    ? 'text-error-strong'
+                    : 'text-success-strong'
+                )}
+              >
+                {pedido.margenEstimado != null ? formatCOP(pedido.margenEstimado) : '—'}
+              </span>
+            </div>
+            {puedeEditarComercial && (
+              <button
+                type="button"
+                onClick={() => setEditingComercial(true)}
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2 text-xs font-medium text-text-muted hover:border-accent hover:text-accent-strong cursor-pointer transition-colors"
+              >
+                <Pencil size={12} />
+                Editar descuento o costo
+              </button>
+            )}
           </div>
         </Card>
+
+        {editingComercial && (
+          <EditarComercialModal
+            pedido={pedido}
+            onClose={() => setEditingComercial(false)}
+            onSaved={() => {
+              setEditingComercial(false)
+              refetchFacturas()
+              refetchSaldo()
+              onPedidoUpdated?.()
+            }}
+          />
+        )}
 
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -480,10 +653,203 @@ export function PedidoDetailPanel({
               </Button>
             )}
         </div>
-        <Button variant="ghost" className="w-full" onClick={requestClose}>
-          Cerrar
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={handleGenerarPDF}
+            disabled={generandoPdf}
+          >
+            {generandoPdf ? <Spinner size="sm" /> : <Download size={16} />}
+            {generandoPdf
+              ? 'Generando...'
+              : facturaActiva
+                ? `PDF factura ${facturaActiva.numero}`
+                : 'PDF cotización'}
+          </Button>
+          <Button variant="ghost" className="flex-1" onClick={requestClose}>
+            Cerrar
+          </Button>
+        </div>
       </div>
     </div>
+  )
+}
+
+// ----------------------------------------------------------------------
+// Modal para editar descuento, motivo y costo estimado de un pedido ya
+// creado (D5). El backend recalcula precio total, margen y, si hay factura
+// activa, ajusta su total con devolución automática si el nuevo total es
+// menor que lo cobrado.
+// ----------------------------------------------------------------------
+function EditarComercialModal({
+  pedido,
+  onClose,
+  onSaved
+}: {
+  pedido: Pedido
+  onClose: () => void
+  onSaved: () => void
+}): React.JSX.Element {
+  const { showToast } = useToast()
+  const [conDescuento, setConDescuento] = useState((pedido.descuentoMonto ?? 0) > 0)
+  const [descuentoNum, setDescuentoNum] = useState(pedido.descuentoMonto ?? 0)
+  const [motivo, setMotivo] = useState(pedido.descuentoMotivo ?? '')
+  const usaCostoManual =
+    pedido.tipoTrabajo === 'restauracion' || pedido.tipoTrabajo === 'vidrio_espejo'
+  const [costoNum, setCostoNum] = useState(pedido.costoEstimadoTotal ?? 0)
+  const [saving, setSaving] = useState(false)
+
+  const descuentoInput = useMoneyInput(descuentoNum, setDescuentoNum, {
+    max: pedido.precioLista || pedido.precioTotal
+  })
+  const costoInput = useMoneyInput(costoNum, setCostoNum, { min: 0 })
+
+  const precioSugerido = pedido.precioLista || pedido.precioTotal
+  const descuentoEfectivo = conDescuento ? descuentoNum : 0
+  const nuevoTotal = Math.max(0, precioSugerido - descuentoEfectivo)
+
+  async function handleGuardar(): Promise<void> {
+    setSaving(true)
+    try {
+      const result = (await window.api.pedidos.editarComercial({
+        pedidoId: pedido.id,
+        descuentoMonto: descuentoEfectivo,
+        descuentoMotivo: motivo.trim() || null,
+        costoEstimadoTotal: usaCostoManual ? (costoNum > 0 ? costoNum : null) : undefined
+      })) as IpcResult<{ devolucionGenerada: { monto: number } | null }>
+      if (!result.ok) {
+        showToast({
+          tone: 'error',
+          title: 'No se pudo editar el pedido',
+          message: result.error
+        })
+        return
+      }
+      const devolucion = result.data.devolucionGenerada
+      showToast({
+        tone: 'success',
+        title: 'Pedido actualizado',
+        message: devolucion
+          ? `Se generó una devolución automática de ${formatCOP(devolucion.monto)} al cliente.`
+          : 'Descuento, costo y margen actualizados.'
+      })
+      onSaved()
+    } catch (err) {
+      showToast({
+        tone: 'error',
+        title: 'Error al editar',
+        message: err instanceof Error ? err.message : 'Error desconocido'
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Editar pedido" size="md">
+      <div className="space-y-4">
+        <div className="rounded-md bg-surface-muted p-3 text-sm">
+          <div className="flex justify-between">
+            <span className="text-text-muted">Precio sugerido</span>
+            <span className="tabular-nums font-medium text-text">{formatCOP(precioSugerido)}</span>
+          </div>
+          {descuentoEfectivo > 0 && (
+            <div className="mt-1 flex justify-between">
+              <span className="text-text-muted">Descuento</span>
+              <span className="tabular-nums text-warning-strong">
+                − {formatCOP(descuentoEfectivo)}
+              </span>
+            </div>
+          )}
+          <div className="mt-2 flex justify-between border-t border-border pt-2">
+            <span className="font-semibold text-text">Precio final</span>
+            <span className="tabular-nums font-semibold text-text">{formatCOP(nuevoTotal)}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between rounded-md border border-border bg-surface p-3">
+          <div>
+            <p className="text-sm font-medium text-text">Aplicar descuento</p>
+            <p className="text-xs text-text-muted">
+              Se ajusta el total y se sincroniza la factura si existe.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setConDescuento((prev) => !prev)
+              if (conDescuento) {
+                setDescuentoNum(0)
+                setMotivo('')
+              }
+            }}
+            className={cn(
+              'relative h-7 w-12 shrink-0 rounded-full transition-colors cursor-pointer',
+              conDescuento ? 'bg-success' : 'bg-border'
+            )}
+            aria-label={conDescuento ? 'Desactivar descuento' : 'Activar descuento'}
+          >
+            <span
+              className={cn(
+                'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-200',
+                conDescuento ? 'left-[23px]' : 'left-[3px]'
+              )}
+            />
+          </button>
+        </div>
+
+        {conDescuento && (
+          <>
+            <Input
+              label="Monto del descuento"
+              type="text"
+              inputMode="decimal"
+              min={0}
+              max={precioSugerido}
+              value={descuentoInput.raw}
+              onChange={descuentoInput.handleChange}
+              onBlur={descuentoInput.handleBlur}
+              placeholder="Ej: 5.000"
+            />
+            <Input
+              label="Motivo (opcional)"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Ej: Cliente frecuente"
+            />
+          </>
+        )}
+
+        {usaCostoManual && (
+          <Input
+            label="Costo estimado interno"
+            type="text"
+            inputMode="decimal"
+            min={0}
+            value={costoInput.raw}
+            onChange={costoInput.handleChange}
+            onBlur={costoInput.handleBlur}
+            placeholder="Ej: 80.000"
+            hint="Solo se usa para calcular margen interno, no se muestra al cliente."
+          />
+        )}
+
+        {nuevoTotal === 0 && precioSugerido > 0 && (
+          <div className="rounded-md bg-warning-bg px-3 py-2 text-xs text-warning-strong">
+            El precio final queda en $0 (regalo). La factura se marcará como pagada y, si ya
+            cobraste algo, se generará una devolución automática.
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={handleGuardar} disabled={saving} className="flex-1">
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   )
 }

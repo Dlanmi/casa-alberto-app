@@ -1,7 +1,6 @@
 import { ipcMain } from 'electron'
 import type { DB } from '../db'
 import type { IpcResult } from '../../shared/types'
-import { validarMonto } from '../lib/validar-monto'
 import { validarFilePathInput } from '../lib/validar-filepath'
 import { validarId } from '../lib/validar-id'
 import { validarEnum } from '../lib/validar-enum'
@@ -86,9 +85,12 @@ import {
 } from '../db/queries/cotizador'
 import {
   actualizarFechaEntrega,
+  actualizarTipoEntrega,
   cambiarEstadoPedido,
   crearPedidoConfirmadoConFactura,
   crearPedidoDesdeCotizacion,
+  editarPedidoComercial,
+  type EditarPedidoComercialInput,
   listarPedidos,
   obtenerMatrizUrgencia,
   obtenerPedido,
@@ -137,6 +139,7 @@ import {
   listarMovimientos,
   registrarMovimientoManual,
   reporteMargenPorTipo,
+  resumenComercialMensual,
   resumenMensual
 } from '../db/queries/finanzas'
 import {
@@ -162,6 +165,37 @@ import {
   exportarListasPrecios,
   importarMarcosDesdeExcel
 } from '../excel/excel-service'
+import {
+  generarYAbrirPlantilla,
+  abrirYParsearPlantilla,
+  cargarPlantilla,
+  exportarYAbrirComoPlantilla,
+  type ModoCarga,
+  type PlantillaParsed
+} from '../excel/plantilla'
+
+// Versión async de wrap: usa la misma política de logging y manejo de
+// errores pero await la función. Necesario para handlers que llaman a
+// código async (ej. exceljs writeFile).
+function wrapAsync<A extends unknown[], R>(
+  fn: (...args: A) => Promise<R>
+): (...args: A) => Promise<IpcResult<R>> {
+  return async (...args: A) => {
+    try {
+      const data = await fn(...args)
+      return { ok: true, data }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const errType = err instanceof Error ? err.constructor.name : typeof err
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[ipc]', fn.name, '→', msg)
+      } else {
+        console.error('[ipc]', fn.name, 'failed:', errType)
+      }
+      return { ok: false, error: msg }
+    }
+  }
+}
 
 function wrap<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => IpcResult<R> {
   return (...args: A) => {
@@ -297,12 +331,10 @@ export function registerIpcHandlers(db: DB): void {
     wrap(desactivarMuestraMarco)(db, id)
   )
   ipcMain.handle('cotizador:listarPreciosVidrio', () => wrap(listarPreciosVidrio)(db))
-  ipcMain.handle('cotizador:actualizarPrecioVidrio', (_e, id: number, precioM2: number) =>
-    wrap(actualizarPrecioVidrio)(db, id, validarMonto(precioM2, { campo: 'Precio por m2' }))
+  ipcMain.handle('cotizador:actualizarPrecioVidrio', (_e, id: number, data) =>
+    wrap(actualizarPrecioVidrio)(db, id, data)
   )
-  ipcMain.handle('cotizador:crearPrecioVidrio', (_e, tipo: string, precioM2: number) =>
-    wrap(crearPrecioVidrio)(db, tipo, validarMonto(precioM2, { campo: 'Precio por m2' }))
-  )
+  ipcMain.handle('cotizador:crearPrecioVidrio', (_e, data) => wrap(crearPrecioVidrio)(db, data))
   ipcMain.handle('cotizador:eliminarPrecioVidrio', (_e, id: number) =>
     wrap(eliminarPrecioVidrio)(db, id)
   )
@@ -311,8 +343,8 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('precios:crearPaspartuPintado', (_e, data) =>
     wrap(crearPrecioPaspartuPintado)(db, data)
   )
-  ipcMain.handle('precios:actualizarPaspartuPintado', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioPaspartuPintado)(db, id, validarMonto(precio, { campo: 'Precio' }))
+  ipcMain.handle('precios:actualizarPaspartuPintado', (_e, id: number, data) =>
+    wrap(actualizarPrecioPaspartuPintado)(db, id, data)
   )
   ipcMain.handle('precios:eliminarPaspartuPintado', (_e, id: number) =>
     wrap(eliminarPrecioPaspartuPintado)(db, id)
@@ -321,30 +353,30 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('precios:crearPaspartuAcrilico', (_e, data) =>
     wrap(crearPrecioPaspartuAcrilico)(db, data)
   )
-  ipcMain.handle('precios:actualizarPaspartuAcrilico', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioPaspartuAcrilico)(db, id, validarMonto(precio, { campo: 'Precio' }))
+  ipcMain.handle('precios:actualizarPaspartuAcrilico', (_e, id: number, data) =>
+    wrap(actualizarPrecioPaspartuAcrilico)(db, id, data)
   )
   ipcMain.handle('precios:eliminarPaspartuAcrilico', (_e, id: number) =>
     wrap(eliminarPrecioPaspartuAcrilico)(db, id)
   )
   ipcMain.handle('precios:listarRetablos', () => wrap(listarPreciosRetablos)(db))
   ipcMain.handle('precios:crearRetablo', (_e, data) => wrap(crearPrecioRetablo)(db, data))
-  ipcMain.handle('precios:actualizarRetablo', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioRetablo)(db, id, validarMonto(precio, { campo: 'Precio' }))
+  ipcMain.handle('precios:actualizarRetablo', (_e, id: number, data) =>
+    wrap(actualizarPrecioRetablo)(db, id, data)
   )
   ipcMain.handle('precios:eliminarRetablo', (_e, id: number) => wrap(eliminarPrecioRetablo)(db, id))
   ipcMain.handle('precios:listarBastidores', () => wrap(listarPreciosBastidores)(db))
   ipcMain.handle('precios:crearBastidor', (_e, data) => wrap(crearPrecioBastidor)(db, data))
-  ipcMain.handle('precios:actualizarBastidor', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioBastidor)(db, id, validarMonto(precio, { campo: 'Precio' }))
+  ipcMain.handle('precios:actualizarBastidor', (_e, id: number, data) =>
+    wrap(actualizarPrecioBastidor)(db, id, data)
   )
   ipcMain.handle('precios:eliminarBastidor', (_e, id: number) =>
     wrap(eliminarPrecioBastidor)(db, id)
   )
   ipcMain.handle('precios:listarTapas', () => wrap(listarPreciosTapas)(db))
   ipcMain.handle('precios:crearTapa', (_e, data) => wrap(crearPrecioTapa)(db, data))
-  ipcMain.handle('precios:actualizarTapa', (_e, id: number, precio: number) =>
-    wrap(actualizarPrecioTapa)(db, id, validarMonto(precio, { campo: 'Precio' }))
+  ipcMain.handle('precios:actualizarTapa', (_e, id: number, data) =>
+    wrap(actualizarPrecioTapa)(db, id, data)
   )
   ipcMain.handle('precios:eliminarTapa', (_e, id: number) => wrap(eliminarPrecioTapa)(db, id))
 
@@ -384,6 +416,12 @@ export function registerIpcHandlers(db: DB): void {
   )
   ipcMain.handle('pedidos:actualizarFechaEntrega', (_e, id: number, fecha) =>
     wrap(actualizarFechaEntrega)(db, validarId(id, 'pedidoId'), fecha)
+  )
+  ipcMain.handle('pedidos:actualizarTipoEntrega', (_e, id: number, tipo) =>
+    wrap(actualizarTipoEntrega)(db, validarId(id, 'pedidoId'), tipo)
+  )
+  ipcMain.handle('pedidos:editarComercial', (_e, input: EditarPedidoComercialInput) =>
+    wrap(editarPedidoComercial)(db, input)
   )
   ipcMain.handle('pedidos:alertas:atrasados', () => wrap(pedidosAtrasados)(db))
   ipcMain.handle('pedidos:alertas:entregaProxima', (_e, dias?: number) =>
@@ -473,6 +511,9 @@ export function registerIpcHandlers(db: DB): void {
     wrap(registrarMovimientoManual)(db, data)
   )
   ipcMain.handle('finanzas:resumenMensual', (_e, mes: string) => wrap(resumenMensual)(db, mes))
+  ipcMain.handle('finanzas:resumenComercialMensual', (_e, mes: string) =>
+    wrap(resumenComercialMensual)(db, mes)
+  )
   ipcMain.handle('finanzas:reporteMargenPorTipo', (_e, mes: string) =>
     wrap(reporteMargenPorTipo)(db, mes)
   )
@@ -530,6 +571,15 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('excel:exportarInventario', () => wrap(exportarInventario)(db))
   ipcMain.handle('excel:exportarListasPrecios', () => wrap(exportarListasPrecios)(db))
   ipcMain.handle('excel:importarMarcos', () => wrap(importarMarcosDesdeExcel)(db))
+  // Plantilla unificada: generar+abrir, abrir-y-parsear (sin tocar DB), cargar (transaccional)
+  // generar usa wrapAsync porque exceljs writeFile devuelve Promise.
+  ipcMain.handle('excel:plantilla:generar', () => wrapAsync(generarYAbrirPlantilla)())
+  ipcMain.handle('excel:plantilla:subir', () => wrap(abrirYParsearPlantilla)())
+  ipcMain.handle(
+    'excel:plantilla:cargar',
+    (_e, parsed: PlantillaParsed, modo: ModoCarga) => wrap(cargarPlantilla)(db, parsed, modo)
+  )
+  ipcMain.handle('excel:plantilla:exportarActual', () => wrap(exportarYAbrirComoPlantilla)(db))
 
   // updater — estado del auto-updater (solo lectura) + acciones
   ipcMain.handle('updater:getStatus', () => wrap(getUpdateStatus)())

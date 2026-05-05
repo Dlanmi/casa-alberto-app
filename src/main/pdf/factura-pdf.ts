@@ -31,6 +31,9 @@ type FacturaData = {
   items: { descripcion: string; cantidad: number; precioUnitario: number; subtotal: number }[]
   subtotal: number
   totalMateriales: number
+  precioLista?: number
+  descuentoMonto?: number
+  descuentoMotivo?: string | null
   total: number
   pagos: { fecha: string; monto: number; metodo: string }[]
   saldo: number
@@ -144,6 +147,13 @@ function renderFormatoPagina(doc: PDFKit.PDFDocument, data: FacturaData, negocio
   y += 8
 
   // Totals
+  // Layout limpio:
+  //   - Sin descuento → Subtotal · Materiales · TOTAL
+  //   - Con descuento → Subtotal · Materiales · Precio sugerido · Descuento · TOTAL
+  // El "Precio sugerido" intermedio solo aparece cuando hay descuento, para
+  // que el cliente vea claramente el origen del total final. Antes se mostraba
+  // siempre que hubiera redondeo (~$1.000), generando ruido visual sin valor.
+  const tieneDescuento = (data.descuentoMonto ?? 0) > 0
   doc.font('Helvetica')
   doc.text('Subtotal:', col.unit, y)
   doc.text(formatCOP(data.subtotal), col.sub, y)
@@ -152,6 +162,21 @@ function renderFormatoPagina(doc: PDFKit.PDFDocument, data: FacturaData, negocio
     doc.text('Materiales:', col.unit, y)
     doc.text(formatCOP(data.totalMateriales), col.sub, y)
     y += 14
+  }
+  if (tieneDescuento) {
+    const sugerido = data.precioLista ?? data.subtotal + data.totalMateriales
+    doc.text('Precio sugerido:', col.unit, y)
+    doc.text(formatCOP(sugerido), col.sub, y)
+    y += 14
+    doc.text('Descuento:', col.unit, y)
+    doc.text(`-${formatCOP(data.descuentoMonto ?? 0)}`, col.sub, y)
+    y += 14
+    if (data.descuentoMotivo) {
+      doc.fontSize(8).fillColor('#78716c')
+      doc.text(`(${data.descuentoMotivo})`, col.desc, y)
+      doc.fontSize(9).fillColor('black')
+      y += 12
+    }
   }
   doc.font('Helvetica-Bold').fontSize(11)
   doc.text('TOTAL:', col.unit, y)
@@ -254,13 +279,29 @@ function renderFormatoTermico(doc: PDFKit.PDFDocument, data: FacturaData, negoci
 
   doc.fontSize(8).text('-'.repeat(42), { align: 'center', width: usable })
 
-  // Totales
+  // Totales — mismo criterio que página: precio sugerido solo si hay descuento.
+  const tieneDescuentoTerm = (data.descuentoMonto ?? 0) > 0
   doc.fontSize(7).font('Helvetica')
   doc.text('Subtotal:', margin, doc.y, { width: usable, continued: true })
   doc.text(formatCOP(data.subtotal), margin, doc.y, { width: usable, align: 'right' })
   if (data.totalMateriales > 0) {
     doc.text('Materiales:', margin, doc.y, { width: usable, continued: true })
     doc.text(formatCOP(data.totalMateriales), margin, doc.y, { width: usable, align: 'right' })
+  }
+  if (tieneDescuentoTerm) {
+    const sugerido = data.precioLista ?? data.subtotal + data.totalMateriales
+    doc.text('Precio sugerido:', margin, doc.y, { width: usable, continued: true })
+    doc.text(formatCOP(sugerido), margin, doc.y, { width: usable, align: 'right' })
+    doc.text('Descuento:', margin, doc.y, { width: usable, continued: true })
+    doc.text(`-${formatCOP(data.descuentoMonto ?? 0)}`, margin, doc.y, {
+      width: usable,
+      align: 'right'
+    })
+    if (data.descuentoMotivo) {
+      doc.fontSize(6).fillColor('#78716c')
+      doc.text(`(${data.descuentoMotivo})`, margin, doc.y, { width: usable })
+      doc.fontSize(7).fillColor('black')
+    }
   }
   doc.fontSize(9).font('Helvetica-Bold')
   doc.text('TOTAL:', margin, doc.y, { width: usable, continued: true })

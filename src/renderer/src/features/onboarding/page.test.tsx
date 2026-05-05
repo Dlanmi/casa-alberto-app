@@ -35,6 +35,9 @@ function stubApi(
           }),
           guardar: guardarMock,
           marcarOnboardingCompleto: vi.fn(async () => ({ ok: true, data: undefined }))
+        },
+        cotizador: {
+          listarMuestrasMarcos: vi.fn(async () => ({ ok: true, data: [] }))
         }
       }
     })
@@ -61,12 +64,12 @@ describe('OnboardingPage', () => {
 
     // Esperamos a que la hidratación termine y aparezca el paso 0.
     await waitFor(() => {
-      expect(screen.getByText('Qué vas a resolver en este onboarding')).toBeTruthy()
+      expect(screen.getByText('Cómo funciona')).toBeTruthy()
     })
 
     await user.click(screen.getByRole('button', { name: /comenzar configuración/i }))
 
-    expect(screen.getByText('Empieza por lo mínimo')).toBeTruthy()
+    expect(screen.getByText('Si no tienes todo a mano, no pasa nada')).toBeTruthy()
     expect(
       screen.getByText(/Estos datos aparecen en facturas, cotizaciones y contratos./i)
     ).toBeTruthy()
@@ -87,7 +90,7 @@ describe('OnboardingPage', () => {
 
     // Debe saltar directo al paso de precios (step === 2)
     await waitFor(() => {
-      expect(screen.getByText(/Precios iniciales/i)).toBeTruthy()
+      expect(screen.getByText(/Lista de precios/i)).toBeTruthy()
     })
   })
 
@@ -137,7 +140,7 @@ describe('OnboardingPage', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Qué vas a resolver en este onboarding')).toBeTruthy()
+      expect(screen.getByText('Cómo funciona')).toBeTruthy()
     })
 
     // Avanzar al paso de datos. La persistencia de "step=1" va a fallar.
@@ -150,7 +153,7 @@ describe('OnboardingPage', () => {
 
     // Y el state revierte al paso 0 (Bienvenida) para que el usuario reintente.
     await waitFor(() => {
-      expect(screen.getByText('Qué vas a resolver en este onboarding')).toBeTruthy()
+      expect(screen.getByText('Cómo funciona')).toBeTruthy()
     })
 
     // Confirmamos que la mutación fue invocada (avance optimista) antes de
