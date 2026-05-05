@@ -10,6 +10,31 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.0.1] — Arreglo: actualización desde versiones anteriores no rompe la app
+
+Patch que cierra el error de instalación reportado al actualizar de 1.7.4
+a 2.0.0: la base de datos antigua quedaba con un registro de migraciones
+incompatible con la migración consolidada nueva, y al abrir la app
+aparecía el error "No se pudo inicializar la base de datos".
+
+### Arreglado
+
+- **Guard automático** detecta cuando la base de datos viene de una versión
+  anterior con migraciones incompatibles. Antes de fallar, hace un respaldo
+  automático y muestra un diálogo claro explicando lo que va a pasar.
+- El dueño ve un mensaje accesible: cuántos clientes/pedidos/facturas hay
+  y dónde queda guardado el respaldo, con dos opciones: resetear (recomendado)
+  o cerrar la app para revisar manualmente.
+- Si acepta resetear, la app borra las tablas obsoletas y crea la nueva
+  estructura desde cero. El respaldo queda en la misma carpeta de datos
+  con sufijo `.pre-reset-{fecha}.bak` por si necesitas recuperarlo.
+
+### Para los que tienen instalada 2.0.0 con DB rota
+
+Esta versión también puede arreglar la instalación 2.0.0 sin tener que
+borrar nada manualmente: al abrir la app, el guard detecta la DB legacy
+y ofrece resetearla con un click.
+
 ## [2.0.0] — Descuentos inteligentes, márgenes reales y carga masiva por Excel
 
 Release mayor que reorganiza cómo Casa Alberto cobra, mide rentabilidad y
