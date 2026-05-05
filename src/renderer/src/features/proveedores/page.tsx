@@ -12,6 +12,7 @@ import {
   PackageCheck
 } from 'lucide-react'
 import { useIpc } from '@renderer/hooks/use-ipc'
+import { useQueryFlag } from '@renderer/hooks/use-query-flag'
 import { useSlidePanel, SLIDE_PANEL_EXIT_MS } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useErrorShake } from '@renderer/hooks/use-error-shake'
@@ -21,7 +22,7 @@ import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
 import { SubmitButton, SUBMIT_SUCCESS_VISIBLE_MS } from '@renderer/components/ui/submit-button'
 import { Modal } from '@renderer/components/ui/modal'
-import { Input } from '@renderer/components/ui/input'
+import { TelefonoField, TextField } from '@renderer/components/shared/form-fields'
 import { Select } from '@renderer/components/ui/select'
 import { Badge } from '@renderer/components/ui/badge'
 import { EmptyState } from '@renderer/components/ui/empty-state'
@@ -29,6 +30,7 @@ import { TruckIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { DirectoryScreen, MetricCard, PageSection } from '@renderer/components/layout/page-frame'
 import { formatTelefono } from '@renderer/lib/format'
+import { formatPrimaryShortcut } from '@renderer/lib/shortcuts'
 import { cn } from '@renderer/lib/cn'
 import { TIPOS_PROVEEDOR, type Proveedor, type TipoProveedor } from '@shared/types'
 
@@ -56,6 +58,13 @@ export default function ProveedoresPage(): React.JSX.Element {
   const [editProveedor, setEditProveedor] = useState<Proveedor | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const { showToast } = useToast()
+
+  // Acción rápida del CommandPalette / atajo Ctrl+Shift+V: abre modal
+  // de nuevo proveedor.
+  useQueryFlag('nuevo', () => {
+    setEditProveedor(null)
+    setShowModal(true)
+  })
 
   const {
     data: proveedores,
@@ -109,7 +118,8 @@ export default function ProveedoresPage(): React.JSX.Element {
           setEditProveedor(null)
           setShowModal(true)
         },
-        icon: Plus
+        icon: Plus,
+        tooltip: `Nuevo proveedor (${formatPrimaryShortcut('Shift+V')})`
       }}
       filters={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -511,18 +521,22 @@ function ProveedorFormModal({
           Completa lo esencial para poder llamar, pedir o coordinar entregas sin tener que salir de
           esta ficha.
         </p>
-        <Input
-          label="Nombre *"
+        <TextField
+          label="Nombre"
           value={form.nombre}
-          onChange={(e) => handleChange('nombre', e.target.value)}
+          onChange={(v) => handleChange('nombre', v)}
           error={errors.nombre}
           placeholder="Nombre del proveedor"
+          maxLength={120}
+          required
+          autoFocus
         />
-        <Input
+        <TextField
           label="Producto"
           value={form.producto}
-          onChange={(e) => handleChange('producto', e.target.value)}
+          onChange={(v) => handleChange('producto', v)}
           placeholder="Qué producto suministra"
+          maxLength={120}
         />
         <Select
           label="Tipo"
@@ -531,38 +545,42 @@ function ProveedorFormModal({
           options={TIPO_OPTIONS}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Teléfono"
+          <TelefonoField
             value={form.telefono}
-            onChange={(e) => handleChange('telefono', e.target.value)}
-            placeholder="300 123 4567"
+            onChange={(v) => handleChange('telefono', v)}
           />
-          <Input
+          <TextField
             label="Días de pedido"
             value={form.diasPedido}
-            onChange={(e) => handleChange('diasPedido', e.target.value)}
+            onChange={(v) => handleChange('diasPedido', v)}
             placeholder="Lunes y jueves"
+            maxLength={80}
           />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
+          <TextField
             label="Forma de pago"
             value={form.formaPago}
-            onChange={(e) => handleChange('formaPago', e.target.value)}
+            onChange={(v) => handleChange('formaPago', v)}
             placeholder="Contraentrega, crédito..."
+            maxLength={80}
           />
-          <Input
+          <TextField
             label="Forma de entrega"
             value={form.formaEntrega}
-            onChange={(e) => handleChange('formaEntrega', e.target.value)}
+            onChange={(v) => handleChange('formaEntrega', v)}
             placeholder="Domicilio, recogida..."
+            maxLength={80}
           />
         </div>
-        <Input
+        <TextField
           label="Notas"
           value={form.notas}
-          onChange={(e) => handleChange('notas', e.target.value)}
+          onChange={(v) => handleChange('notas', v)}
           placeholder="Notas adicionales"
+          maxLength={500}
+          multiline
+          rows={2}
         />
         <div className="flex gap-3 pt-2">
           <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>

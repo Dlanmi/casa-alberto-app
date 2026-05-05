@@ -5,6 +5,10 @@
 // el padre solo ve el número parseado, y un efecto sincroniza cuando
 // el padre resetea el valor.
 //
+// Reformateo en blur: cuando el dueño sale del campo, mostramos el número
+// canónico. Si tipeó "43,32" ve "43.32" — confirmación. Si tipeó "abc"
+// ve "" — error visible sin necesidad de mensaje.
+//
 // Para montos en pesos colombianos usar `useMoneyInput` — el `.` allá
 // es separador de miles, no decimal.
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
@@ -19,6 +23,7 @@ export function useDecimalInput(
 ): {
   raw: string
   handleChange: (e: ChangeEvent<HTMLInputElement>) => void
+  handleBlur: () => void
 } {
   const [raw, setRaw] = useState<string>(value > 0 ? String(value) : '')
   const optsRef = useRef(opts)
@@ -44,5 +49,12 @@ export function useDecimalInput(
     onChange(parseNumberInput(next, optsRef.current))
   }
 
-  return { raw, handleChange }
+  // Al salir del foco mostramos el número canónico. Si el dueño tipeó algo
+  // no numérico, ve el campo vacío y se da cuenta del error inmediato.
+  const handleBlur = (): void => {
+    if (value > 0) setRaw(String(value))
+    else setRaw('')
+  }
+
+  return { raw, handleChange, handleBlur }
 }

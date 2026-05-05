@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { DirectoryScreen } from '@renderer/components/layout/page-frame'
 import { useIpc } from '@renderer/hooks/use-ipc'
+import { useQueryFlag } from '@renderer/hooks/use-query-flag'
 import { useSlidePanel, SLIDE_PANEL_EXIT_MS } from '@renderer/hooks/use-slide-panel'
 import { useIpcMutation } from '@renderer/hooks/use-ipc-mutation'
 import { useErrorShake } from '@renderer/hooks/use-error-shake'
@@ -30,7 +31,12 @@ import { Button } from '@renderer/components/ui/button'
 import { SubmitButton, SUBMIT_SUCCESS_VISIBLE_MS } from '@renderer/components/ui/submit-button'
 import { Badge } from '@renderer/components/ui/badge'
 import { Modal } from '@renderer/components/ui/modal'
-import { Input } from '@renderer/components/ui/input'
+import {
+  CedulaField,
+  CorreoField,
+  TelefonoField,
+  TextField
+} from '@renderer/components/shared/form-fields'
 import { EmptyState } from '@renderer/components/ui/empty-state'
 import { PeopleIllustration } from '@renderer/components/illustrations'
 import { PageLoader } from '@renderer/components/ui/spinner'
@@ -39,6 +45,7 @@ import { ConfirmDialog } from '@renderer/components/shared/confirm-dialog'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
 import { iniciales, formatTelefono } from '@renderer/lib/format'
+import { formatPrimaryShortcut } from '@renderer/lib/shortcuts'
 import { cn } from '@renderer/lib/cn'
 import { getAlertaPedido, type PedidoAlertaRow } from '@renderer/lib/pedidos-alertas'
 import type { Cliente, IpcResult } from '@shared/types'
@@ -119,6 +126,10 @@ export default function ClientesPage(): React.JSX.Element {
   const { showToast } = useToast()
   const { emoji } = useEmojis()
 
+  // Acción rápida del CommandPalette / atajo Ctrl+Shift+C: abre el modal
+  // de creación al aterrizar en la página con `?nuevo=1`.
+  useQueryFlag('nuevo', () => setShowCreate(true))
+
   const {
     data: clientes,
     loading,
@@ -172,7 +183,12 @@ export default function ClientesPage(): React.JSX.Element {
         message:
           'Desde cada ficha puedes revisar saldo, el último trabajo y abrir el siguiente módulo útil para ese cliente.'
       }}
-      primaryAction={{ label: 'Nuevo cliente', onClick: () => setShowCreate(true), icon: Plus }}
+      primaryAction={{
+        label: 'Nuevo cliente',
+        onClick: () => setShowCreate(true),
+        icon: Plus,
+        tooltip: `Nuevo cliente (${formatPrimaryShortcut('Shift+C')})`
+      }}
       secondaryActions={[
         {
           label: 'Exportar',
@@ -736,50 +752,44 @@ function CreateClienteModal({
         className="mb-4"
       />
       <form ref={shakeRef} onSubmit={handleSubmit} className="space-y-4">
-        <Input
-          label="Nombre *"
+        <TextField
+          label="Nombre"
           value={form.nombre}
-          onChange={(e) => handleChange('nombre', e.target.value)}
+          onChange={(v) => handleChange('nombre', v)}
           error={errors.nombre}
           placeholder="Nombre completo del cliente"
           maxLength={NOMBRE_MAX}
+          required
+          autoFocus
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Teléfono"
+          <TelefonoField
             value={form.telefono}
-            onChange={(e) => handleChange('telefono', e.target.value)}
+            onChange={(v) => handleChange('telefono', v)}
             error={errors.telefono}
-            placeholder="300 123 4567"
-            inputMode="tel"
           />
-          <Input
-            label="Cédula"
+          <CedulaField
             value={form.cedula}
-            onChange={(e) => handleChange('cedula', e.target.value)}
+            onChange={(v) => handleChange('cedula', v)}
             error={errors.cedula}
-            placeholder="1234567890"
-            inputMode="numeric"
           />
         </div>
-        <Input
-          label="Correo"
-          type="email"
-          value={form.correo}
-          onChange={(e) => handleChange('correo', e.target.value)}
-          placeholder="correo@ejemplo.com"
-        />
-        <Input
+        <CorreoField value={form.correo} onChange={(v) => handleChange('correo', v)} />
+        <TextField
           label="Dirección"
           value={form.direccion}
-          onChange={(e) => handleChange('direccion', e.target.value)}
+          onChange={(v) => handleChange('direccion', v)}
           placeholder="Dirección del cliente"
+          maxLength={300}
         />
-        <Input
+        <TextField
           label="Notas"
           value={form.notas}
-          onChange={(e) => handleChange('notas', e.target.value)}
+          onChange={(v) => handleChange('notas', v)}
           placeholder="Notas adicionales"
+          maxLength={500}
+          multiline
+          rows={2}
         />
         <div className="flex gap-3 pt-2">
           <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
@@ -881,50 +891,44 @@ function EditClienteModal({
         className="mb-4"
       />
       <form ref={shakeRef} onSubmit={handleSubmit} className="space-y-4">
-        <Input
-          label="Nombre *"
+        <TextField
+          label="Nombre"
           value={form.nombre}
-          onChange={(e) => handleChange('nombre', e.target.value)}
+          onChange={(v) => handleChange('nombre', v)}
           error={errors.nombre}
           placeholder="Nombre completo del cliente"
           maxLength={NOMBRE_MAX}
+          required
+          autoFocus
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Teléfono"
+          <TelefonoField
             value={form.telefono}
-            onChange={(e) => handleChange('telefono', e.target.value)}
+            onChange={(v) => handleChange('telefono', v)}
             error={errors.telefono}
-            placeholder="300 123 4567"
-            inputMode="tel"
           />
-          <Input
-            label="Cédula"
+          <CedulaField
             value={form.cedula}
-            onChange={(e) => handleChange('cedula', e.target.value)}
+            onChange={(v) => handleChange('cedula', v)}
             error={errors.cedula}
-            placeholder="1234567890"
-            inputMode="numeric"
           />
         </div>
-        <Input
-          label="Correo"
-          type="email"
-          value={form.correo}
-          onChange={(e) => handleChange('correo', e.target.value)}
-          placeholder="correo@ejemplo.com"
-        />
-        <Input
+        <CorreoField value={form.correo} onChange={(v) => handleChange('correo', v)} />
+        <TextField
           label="Dirección"
           value={form.direccion}
-          onChange={(e) => handleChange('direccion', e.target.value)}
+          onChange={(v) => handleChange('direccion', v)}
           placeholder="Dirección del cliente"
+          maxLength={300}
         />
-        <Input
+        <TextField
           label="Notas"
           value={form.notas}
-          onChange={(e) => handleChange('notas', e.target.value)}
+          onChange={(v) => handleChange('notas', v)}
           placeholder="Notas adicionales"
+          maxLength={500}
+          multiline
+          rows={2}
         />
         <div className="flex gap-3 pt-2">
           <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
