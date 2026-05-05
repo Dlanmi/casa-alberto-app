@@ -108,7 +108,7 @@ export function UrgencyMatrix(): React.JSX.Element {
       {atrasados > 0 && (
         <button
           onClick={() => navigate('/pedidos?focus=atrasados')}
-          className="mb-4 flex w-full cursor-pointer items-center gap-3 rounded-md border border-error/25 bg-error-bg px-4 py-3 text-left transition-colors hover:bg-error/10"
+          className="mb-4 flex w-full cursor-pointer items-center gap-3 rounded-md border border-error/25 bg-error-bg px-4 py-3 text-left transition-colors hover:bg-error/10 animate-pulse-urgent"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-error/15">
             <AlertTriangle size={18} className="text-error-strong" />
@@ -155,7 +155,7 @@ export function UrgencyMatrix(): React.JSX.Element {
                 disabled={disabled}
                 aria-label={`${q.label}: ${q.count}`}
                 className={cn(
-                  'group flex min-h-37 flex-col items-start gap-3 rounded-lg border-2 p-5 text-left transition-all duration-200',
+                  'group flex min-h-37 flex-col items-start gap-3 rounded-lg border-2 p-5 text-left transition-all duration-base',
                   colorClasses[q.color],
                   !disabled && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-2',
                   disabled && 'opacity-60 cursor-default'

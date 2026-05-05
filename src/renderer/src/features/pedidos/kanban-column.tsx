@@ -107,7 +107,7 @@ export function KanbanColumn({
   return (
     <div
       className={cn(
-        'flex flex-col min-w-65 w-65 shrink-0 transition-all duration-200',
+        'flex flex-col min-w-65 w-65 shrink-0 transition-all duration-base',
         // Feedback más fuerte cuando la columna es destino inválido
         // durante un drag activo: opacidad baja + scale leve la "apaga"
         // visualmente sin romper clicks en sus cards.

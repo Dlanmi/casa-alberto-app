@@ -47,7 +47,7 @@ function BarRow({
       <div className="flex-1 h-5 rounded-sm bg-surface-muted overflow-hidden">
         <div
           className={cn(
-            'h-full rounded-sm transition-[width] duration-500',
+            'h-full rounded-sm transition-[width] duration-slower',
             tone === 'success' ? 'bg-success/20' : 'bg-error/20'
           )}
           style={{ width: `${pct}%` }}

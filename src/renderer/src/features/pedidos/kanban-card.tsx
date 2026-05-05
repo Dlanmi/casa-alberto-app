@@ -85,10 +85,19 @@ export function KanbanCard({
         'relative group w-full text-left p-4 bg-surface rounded-lg shadow-1',
         'transition-all hover:shadow-2 cursor-pointer card-hover',
         'border-2 border-transparent',
+        // Bordes de urgencia siempre activos (señalan atrasado/urgente).
         atrasado && 'border-error/40',
         urgente && !atrasado && 'border-warning/40',
+        // Animaciones de box-shadow MUTUAMENTE EXCLUSIVAS — todas usan
+        // `box-shadow` y se pisan visualmente si coexisten. Prioridad:
+        //   highlighted > recentDrop > pulse-urgent > pulse-warning
+        // El highlight de búsqueda es el más alto porque indica "esto es
+        // lo que pediste". El landed-flash dura 700ms y reemplaza al pulse
+        // mientras corre — luego pulse vuelve.
         highlighted && 'ring-4 ring-accent ring-offset-2 animate-pulse',
         recentDrop && !highlighted && 'animate-landed-flash',
+        atrasado && !highlighted && !recentDrop && 'animate-pulse-urgent',
+        urgente && !atrasado && !highlighted && !recentDrop && 'animate-pulse-warning',
         dragging && 'opacity-60 scale-95'
       )}
     >
@@ -96,7 +105,7 @@ export function KanbanCard({
           arrastrable. Subtle: opacity 0 → 50% + translateX, sin distraer. */}
       <GripVertical
         size={14}
-        className="absolute right-2 top-2 -translate-x-1 text-text-soft opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-50"
+        className="absolute right-2 top-2 -translate-x-1 text-text-soft opacity-0 transition-all duration-fast group-hover:translate-x-0 group-hover:opacity-50"
         aria-hidden="true"
       />
       {/* Header: avatar + client + number */}

@@ -54,6 +54,11 @@ type TrProps = HTMLAttributes<HTMLTableRowElement> & {
    *  incremental (cap en TABLE_STAGGER_MAX_INDEX). Útil al renderizar listas
    *  filtradas para que el cambio se sienta orquestado, no abrupto. */
   staggerIndex?: number
+  /** Cuando true, la fila usa el lenguaje de hover unificado del sistema
+   *  (`row-interactive`: cursor pointer + bg hover). Si onClick está
+   *  definido pero interactive no, mantiene compatibilidad con el comportamiento
+   *  legacy (hover bg sin cursor). */
+  interactive?: boolean
 }
 
 export function Tr({
@@ -61,6 +66,7 @@ export function Tr({
   selected,
   staggerIndex,
   style,
+  interactive,
   ...props
 }: TrProps): React.JSX.Element {
   const cappedIndex =
@@ -73,8 +79,14 @@ export function Tr({
   return (
     <tr
       className={cn(
-        'transition-colors hover:bg-surface-muted',
-        selected && 'bg-accent/5 hover:bg-accent/8',
+        // Lenguaje unificado de hover en filas: bg-hover + cursor pointer
+        // cuando es interactiva; sólo bg-hover cuando no lo es. Las clases
+        // utility viven en main.css para que la transición use tokens.
+        interactive ? 'row-interactive' : 'transition-colors hover:bg-surface-muted',
+        // Filas seleccionadas pisan el bg de hover por especificidad (`!`)
+        // — sin esto, `row-interactive:hover` reemplaza el accent y el
+        // usuario pierde feedback de "esta es la fila activa".
+        selected && 'bg-accent/5 hover:!bg-accent/10',
         cappedIndex !== undefined && 'animate-fade-in-up',
         className
       )}

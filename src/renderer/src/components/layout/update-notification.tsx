@@ -75,7 +75,7 @@ export function UpdateNotification(): React.JSX.Element | null {
                 aria-label="Progreso de descarga"
               >
                 <div
-                  className="h-full rounded-full bg-accent transition-[width] duration-300 ease-out"
+                  className="h-full rounded-full bg-accent transition-[width] duration-slow ease-out"
                   style={{ width: `${status.percent}%` }}
                 />
               </div>

@@ -310,7 +310,7 @@ export function StepResumen({
             >
               <span
                 className={cn(
-                  'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-200',
+                  'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
                   data.conDescuento ? 'left-[23px]' : 'left-[3px]'
                 )}
               />
@@ -563,7 +563,7 @@ export function StepResumen({
                       <div className="space-y-1">
                         <div className="h-2 w-full overflow-hidden rounded-full bg-border">
                           <div
-                            className="h-full rounded-full bg-success transition-all duration-300"
+                            className="h-full rounded-full bg-success transition-all duration-slow"
                             style={{ width: `${porcentajePagado}%` }}
                           />
                         </div>
@@ -618,7 +618,7 @@ export function StepResumen({
               >
                 <span
                   className={cn(
-                    'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-200',
+                    'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
                     data.tipoEntrega === 'urgente' ? 'left-[23px]' : 'left-[3px]'
                   )}
                 />

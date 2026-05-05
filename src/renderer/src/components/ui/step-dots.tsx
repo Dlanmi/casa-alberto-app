@@ -36,7 +36,7 @@ export function StepDots({ steps, current, onJump, className }: StepDotsProps): 
               // dot activo (scale + ring + colores) se sienta orquestado
               // entre pasos en vez de un salto abrupto.
               'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold',
-              'transition-[transform,background-color,border-color,color,box-shadow] duration-200 ease-out',
+              'transition-[transform,background-color,border-color,color,box-shadow] duration-base ease-out',
               done && 'border-accent bg-accent text-white shadow-1',
               active &&
                 'border-accent bg-surface text-accent-strong ring-4 ring-accent/20 scale-110',
@@ -69,7 +69,7 @@ export function StepDots({ steps, current, onJump, className }: StepDotsProps): 
               <div
                 aria-hidden="true"
                 className={cn(
-                  'mx-2 mb-6 h-0.5 flex-1 rounded-full transition-colors duration-300',
+                  'mx-2 mb-6 h-0.5 flex-1 rounded-full transition-colors duration-slow',
                   done ? 'bg-accent' : 'bg-border'
                 )}
               />

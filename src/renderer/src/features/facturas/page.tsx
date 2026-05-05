@@ -190,7 +190,7 @@ export default function FacturasPage(): React.JSX.Element {
                 {filtered.map((f, index) => (
                   <Tr
                     key={f.id}
-                    className="cursor-pointer"
+                    interactive
                     onClick={() => setSelectedFactura(f)}
                     staggerIndex={index}
                   >

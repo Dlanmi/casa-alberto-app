@@ -1,16 +1,24 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { getMotionDurationMs } from '@renderer/lib/motion'
 
-/** Duración por defecto del keyframe `animate-slide-out-right`. Se exporta
- *  para que los consumidores que activen el modo animado mantengan sincronía
- *  entre el CSS y el delay del unmount. */
-export const SLIDE_PANEL_EXIT_MS = 200
+/** Helper para obtener la duración actual de salida del panel. Lee del
+ *  CSS al momento de invocarse — uso preferido en código nuevo. */
+export function getSlidePanelExitMs(): number {
+  return getMotionDurationMs('base')
+}
+
+/** @deprecated — usa el default del hook (omitir `exitDurationMs`) o
+ *  `getSlidePanelExitMs()`. Esta constante se evalúa en module-load y
+ *  puede tomar el fallback estático si el CSS aún no está parseado. */
+export const SLIDE_PANEL_EXIT_MS = getMotionDurationMs('base')
 
 type UseSlidePanelOptions = {
   onClose: () => void
   closeRef: RefObject<HTMLButtonElement | null>
   /** Si se define (>0), el cierre se retrasa esta cantidad de ms para dejar
-   *  correr una animación de salida. Si se omite o es 0, el comportamiento
-   *  equivale al original (Escape cierra de inmediato). */
+   *  correr una animación de salida. Si se omite, el hook usa la duración
+   *  del token `--duration-base`. Pasa 0 explícitamente para deshabilitar
+   *  la animación (cierre inmediato). */
   exitDurationMs?: number
 }
 
@@ -27,21 +35,26 @@ type UseSlidePanelReturn = {
 export function useSlidePanel({
   onClose,
   closeRef,
-  exitDurationMs = 0
+  exitDurationMs
 }: UseSlidePanelOptions): UseSlidePanelReturn {
   const [closing, setClosing] = useState(false)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const closingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const requestClose = useCallback(() => {
-    if (exitDurationMs <= 0) {
+    // Si el caller pasa 0 explícitamente, deshabilita la animación. Si pasa
+    // un número >0 lo respetamos. Si omite, leemos lazy del CSS — esto
+    // resuelve el caso edge donde la duración cambia o donde el module-load
+    // del export estático devolvió fallback.
+    const ms = exitDurationMs ?? getSlidePanelExitMs()
+    if (ms <= 0) {
       onClose()
       return
     }
     if (closing) return
     setClosing(true)
     if (closingTimerRef.current) clearTimeout(closingTimerRef.current)
-    closingTimerRef.current = setTimeout(onClose, exitDurationMs)
+    closingTimerRef.current = setTimeout(onClose, ms)
   }, [closing, exitDurationMs, onClose])
 
   useEffect(() => {

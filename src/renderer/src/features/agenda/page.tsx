@@ -302,7 +302,7 @@ function WeekOverviewCell({
       aria-disabled={disabled}
       className={cn(
         'relative flex min-h-18 flex-col items-center justify-center gap-1.5 rounded-lg',
-        'border px-2 py-3 transition-all duration-150 cursor-pointer',
+        'border px-2 py-3 transition-all duration-fast cursor-pointer',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
         isSelected
           ? 'border-accent bg-accent/8 ring-2 ring-accent shadow-1'
@@ -436,7 +436,7 @@ function DayDetailPanel({
                 onClick={() => onEventClick(clase)}
                 className={cn(
                   'flex min-h-14 w-full items-center gap-4 rounded-lg border border-border',
-                  'bg-surface px-4 py-3 text-left transition-colors duration-150',
+                  'bg-surface px-4 py-3 text-left transition-colors duration-fast',
                   'hover:bg-surface-muted hover:border-accent/30 cursor-pointer',
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
                 )}
@@ -477,7 +477,7 @@ function DayDetailPanel({
                 onClick={() => onEventClick(pedido)}
                 className={cn(
                   'flex min-h-14 w-full items-center gap-4 rounded-lg border',
-                  'px-4 py-3 text-left transition-colors duration-150 cursor-pointer',
+                  'px-4 py-3 text-left transition-colors duration-fast cursor-pointer',
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
                   pedido.isAtrasada
                     ? 'border-error/60 bg-error-bg hover:bg-error-bg/80 hover:border-error'
@@ -1319,7 +1319,7 @@ export default function AgendaPage(): React.JSX.Element {
               aria-pressed={isActive}
               className={cn(
                 'inline-flex min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium',
-                'transition-colors duration-150 cursor-pointer',
+                'transition-colors duration-fast cursor-pointer',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
                 isActive
                   ? 'border-accent bg-accent text-white shadow-1'
@@ -1346,7 +1346,7 @@ export default function AgendaPage(): React.JSX.Element {
             onClick={handleClearFilters}
             className={cn(
               'inline-flex min-h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium',
-              'transition-colors duration-150 cursor-pointer',
+              'transition-colors duration-fast cursor-pointer',
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
               'border-border bg-surface text-text-muted hover:bg-surface-muted hover:text-text'
             )}
@@ -1503,7 +1503,7 @@ export default function AgendaPage(): React.JSX.Element {
                               type="button"
                               onClick={() => setPopupEvent(pedido)}
                               className={cn(
-                                'group relative flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border px-4 py-3.5 text-left transition-all duration-150',
+                                'group relative flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border px-4 py-3.5 text-left transition-all duration-fast',
                                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
                                 pedido.isAtrasada
                                   ? 'border-error/40 bg-error-bg hover:border-error/60 hover:bg-error-bg/80 shadow-1'

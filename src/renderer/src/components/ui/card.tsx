@@ -19,8 +19,10 @@ export function Card({
         padding === 'sm' && 'p-4',
         padding === 'md' && 'p-6',
         padding === 'lg' && 'p-8',
-        hoverable &&
-          'transition-[box-shadow,transform] duration-200 hover:shadow-2 hover:-translate-y-px cursor-pointer',
+        // `card-interactive` centraliza el lenguaje de hover (lift + shadow +
+        // border + active). Definido en main.css y consumido por todos los
+        // tipos de card del sistema — no duplicar.
+        hoverable && 'card-interactive',
         className
       )}
       {...props}

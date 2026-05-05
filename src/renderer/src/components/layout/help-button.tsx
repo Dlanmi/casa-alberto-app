@@ -228,7 +228,7 @@ export function HelpButton(): React.JSX.Element {
           <HelpCircle
             size={22}
             className={cn(
-              'absolute inset-0 transition-all duration-200 ease-out',
+              'absolute inset-0 transition-all duration-base ease-out',
               open ? 'opacity-0 rotate-90 scale-75' : 'opacity-100 rotate-0 scale-100'
             )}
             aria-hidden="true"
@@ -236,7 +236,7 @@ export function HelpButton(): React.JSX.Element {
           <X
             size={22}
             className={cn(
-              'absolute inset-0 transition-all duration-200 ease-out',
+              'absolute inset-0 transition-all duration-base ease-out',
               open ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-75'
             )}
             aria-hidden="true"

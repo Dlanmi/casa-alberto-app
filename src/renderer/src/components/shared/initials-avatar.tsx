@@ -61,7 +61,7 @@ export function InitialsAvatar({
     <div
       className={cn(
         'relative shrink-0',
-        interactive && 'transition-transform duration-150 group-hover:scale-105',
+        interactive && 'transition-transform duration-fast group-hover:scale-105',
         className
       )}
       aria-hidden="true"

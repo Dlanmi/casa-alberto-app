@@ -150,7 +150,7 @@ export function TipoTrabajoGrid({ onSelect, onManagePrecios }: Props): React.JSX
                   disabled={selecting !== null}
                   className={cn(
                     'group flex min-h-40 cursor-pointer flex-col justify-between rounded-lg border border-border bg-surface p-5 text-left shadow-1',
-                    'transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-3',
+                    'transition-all duration-base hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-3',
                     isSelected && 'scale-[0.97] border-accent shadow-3',
                     isOther && 'opacity-40'
                   )}

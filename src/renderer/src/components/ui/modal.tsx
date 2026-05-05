@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
+import { getMotionDurationMs } from '@renderer/lib/motion'
 
-// Duración del keyframe modal-exit + backdrop-fade-out en main.css.
-// Se mantiene en JS porque retrasamos dialog.close() para que la animación
-// se complete antes de desmontar. Si se cambia uno, cambiar el otro.
-const MODAL_EXIT_MS = 150
+// Duración del keyframe modal-exit + backdrop-fade-out (apunta al token
+// `--duration-fast` en main.css). La leemos del CSS al USAR — no en module
+// load — porque al primer import el CSS puede no estar parseado aún y
+// caeríamos al fallback estático.
 
 type ModalProps = {
   open: boolean
@@ -81,7 +82,7 @@ export function Modal({
       const timer = window.setTimeout(() => {
         dialog.classList.remove('closing')
         if (dialog.open) dialog.close()
-      }, MODAL_EXIT_MS)
+      }, getMotionDurationMs('fast'))
       return () => {
         window.clearTimeout(timer)
       }

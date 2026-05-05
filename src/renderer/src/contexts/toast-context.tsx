@@ -176,17 +176,29 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
     <ToastContext.Provider value={value}>
       {children}
       <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2" aria-live="polite">
-        {toasts.map((toast) => {
+        {toasts.map((toast, index) => {
           const Icon = iconMap[toast.tone]
           const role = toast.tone === 'error' || toast.tone === 'warning' ? 'alert' : 'status'
+          // Animación de entrada: error usa la variante con shake; el resto usa
+          // el slide spring estándar. Stagger sólo aplica a entrada (mientras
+          // hay 2+ toasts simultáneos): cada item entra con --stagger-base ms
+          // de delay respecto al anterior.
+          const enterClass =
+            toast.tone === 'error' ? 'animate-toast-error-in' : 'animate-toast-in'
+          // calc() evita hardcodear el stagger en JS — leerlo del token CSS
+          // mantiene la sincronía con el sistema motion.
+          const animationDelay = toast.exiting
+            ? undefined
+            : `calc(var(--stagger-base) * ${index})`
 
           return (
             <div
               key={toast.id}
               role={role}
+              style={animationDelay ? { animationDelay } : undefined}
               className={cn(
                 'flex items-start gap-3 px-4 py-3 rounded-lg shadow-3 min-w-0 w-[min(320px,calc(100vw-3rem))] max-w-120 border bg-surface',
-                toast.exiting ? 'animate-toast-out' : 'animate-toast-in',
+                toast.exiting ? 'animate-toast-out' : enterClass,
                 toast.tone === 'success' && 'border-success/20',
                 toast.tone === 'error' && 'border-error/20',
                 toast.tone === 'info' && 'border-info/20',

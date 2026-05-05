@@ -54,6 +54,28 @@
   --color-info-strong: #1e40af;
   --color-focus: #b45309;
 
+  /* --- Chart palette (consumida por charts/* via var()) ---
+     Paleta consistente para series múltiples (donut, top-N, etc). Cada
+     token apunta a un color del set semántico para mantener una sola fuente
+     de verdad: si cambias `--color-accent`, los charts heredan. WCAG AA
+     verificado para texto blanco encima de cada uno. */
+  --color-chart-1: var(--color-accent);
+  --color-chart-2: var(--color-info);
+  --color-chart-3: var(--color-success);
+  --color-chart-4: var(--color-warning);
+  --color-chart-5: var(--color-error);
+  --color-chart-6: var(--color-info-strong);
+
+  /* --- Heatmap (calendario mensual) ---
+     5 niveles de intensidad: 0 = sin actividad (igual al canvas), 4 = pico.
+     Escala basada en --color-success para reforzar la asociación "ingresos".
+     Cualquier ajuste de tema se propaga sin tocar el componente. */
+  --color-heatmap-0: var(--color-surface-muted);
+  --color-heatmap-1: #d1fae5;
+  --color-heatmap-2: #a7f3d0;
+  --color-heatmap-3: #34d399;
+  --color-heatmap-4: var(--color-success);
+
   /* --- Shadows — DESIGN.md multi-layer stacks (ambient occlusion) ---
      Max individual opacity <= 0.05. Cumulative depth feels embedded,
      not floating. Reference: Notion's 4-5 layer approach. */
@@ -81,6 +103,45 @@
   /* Backdrop blur del modal/dialog. Centralizado para que keyframes y el
      estado en reposo del backdrop usen el mismo valor sin duplicación. */
   --backdrop-blur: 4px;
+
+  /* --- Motion: duraciones ----------------------------------------------
+     Escala fija de duraciones — todos los keyframes y transiciones del
+     sistema consumen estos tokens. Si una interacción no encaja en la
+     escala, agregar un token nuevo (no hardcodear).
+       instant  →  feedback inmediato (clear, hint-swap)
+       fast     →  dropdowns, tooltips, salida de modales
+       base     →  hover, fade, entrada de modales (la más común)
+       slow     →  fade-in-up, toast-in, step-enter
+       slower   →  progress bars, transiciones de página
+       pulse    →  un beat de badge-pulse
+       flash    →  landed-flash, price-flash-emphasis
+       loading  →  spinners breathing y shimmer */
+  --duration-instant: 80ms;
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --duration-slower: 500ms;
+  --duration-pulse: 600ms;
+  --duration-flash: 700ms;
+  --duration-spin: 800ms;
+  --duration-warm: 1000ms;
+  --duration-loading: 1500ms;
+
+  /* --- Motion: curvas (semánticas) -------------------------------------
+     Cada curva tiene un nombre por intención, no por forma:
+       decelerate → entradas, "asentarse en su lugar"
+       accelerate → salidas, "irse rápido"
+       emphasized → hover/destaques con énfasis (ligero overshoot)
+       spring     → toast/modal con sensación natural
+       shake      → error-shake, oscilación con decay */
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0.8, 0.4, 1);
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-shake: cubic-bezier(0.36, 0.07, 0.19, 0.97);
+
+  /* Stagger entre items consecutivos del mismo tipo (toasts, KPI cards). */
+  --stagger-base: 60ms;
 
   /* --- Font Family --- */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -132,22 +193,22 @@ dialog::backdrop {
 }
 
 dialog[open] {
-  animation: modal-enter 0.2s ease-out;
+  animation: modal-enter var(--duration-base) var(--ease-decelerate);
 }
 
 dialog[open]::backdrop {
-  animation: backdrop-fade-in 0.2s ease-out;
+  animation: backdrop-fade-in var(--duration-base) var(--ease-decelerate);
 }
 
 /* Estado intermedio (Modal.tsx aplica .closing antes de cerrar para dejar
-   correr 150ms de animación). Curva acelerada — exits van más rápido que
-   entradas en el sistema Premium. */
+   correr la animación de salida). Curva acelerada — exits van más rápido
+   que entradas en el sistema Premium. */
 dialog.closing {
-  animation: modal-exit 150ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: modal-exit var(--duration-fast) var(--ease-accelerate) forwards;
 }
 
 dialog.closing::backdrop {
-  animation: backdrop-fade-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: backdrop-fade-out var(--duration-fast) var(--ease-accelerate) forwards;
 }
 
 @keyframes modal-enter {
@@ -225,7 +286,7 @@ textarea:focus-visible {
 ::-webkit-scrollbar-thumb {
   background: transparent;
   border-radius: 3px;
-  transition: background 200ms;
+  transition: background var(--duration-base);
 }
 *:hover > ::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-thumb:hover {
@@ -255,7 +316,7 @@ textarea:focus-visible {
   z-index: 1;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 200ms;
+  transition: opacity var(--duration-base);
 }
 .scroll-fade::before {
   left: 0;
@@ -282,11 +343,30 @@ textarea:focus-visible {
 /* Premium Micro-Animations                                      */
 /* ============================================================ */
 
+/* --- Utilities de duración basadas en tokens ------------------------------
+   Tailwind v4 no expone `--duration-*` del @theme como utilities `duration-*`
+   automáticamente (lo hace para colores y spacing, no para motion). Aquí
+   creamos clases utility que apuntan a los tokens — uso preferido sobre
+   `duration-150`, `duration-200`, etc. hardcoded en Tailwind. */
+.duration-instant { transition-duration: var(--duration-instant); }
+.duration-fast    { transition-duration: var(--duration-fast); }
+.duration-base    { transition-duration: var(--duration-base); }
+.duration-slow    { transition-duration: var(--duration-slow); }
+.duration-slower  { transition-duration: var(--duration-slower); }
+
+/* Easings — mismo patrón. La utility que ya existe `ease-out` en Tailwind
+   apunta a una curva por defecto; estos mapean a las curvas semánticas del
+   sistema sin colisionar con los nombres genéricos. */
+.ease-decelerate  { transition-timing-function: var(--ease-decelerate); }
+.ease-accelerate  { transition-timing-function: var(--ease-accelerate); }
+.ease-emphasized  { transition-timing-function: var(--ease-emphasized); }
+.ease-spring      { transition-timing-function: var(--ease-spring); }
+
 /* -- Buttons: subtle press effect -- */
 button:not(:disabled):active,
 [role='button']:not(:disabled):active {
   transform: scale(0.98);
-  transition: transform 80ms ease-out;
+  transition: transform var(--duration-instant) var(--ease-decelerate);
 }
 
 /* -- All interactive elements: smooth transitions (specific props to avoid jank) -- */
@@ -297,21 +377,55 @@ input,
 select,
 textarea {
   transition:
-    color 150ms ease-out,
-    background-color 150ms ease-out,
-    border-color 150ms ease-out,
-    box-shadow 150ms ease-out,
-    opacity 150ms ease-out;
+    color var(--duration-fast) var(--ease-decelerate),
+    background-color var(--duration-fast) var(--ease-decelerate),
+    border-color var(--duration-fast) var(--ease-decelerate),
+    box-shadow var(--duration-fast) var(--ease-decelerate),
+    opacity var(--duration-fast) var(--ease-decelerate);
 }
 
-/* -- Cards: lift on hover -- */
+/* -- Cards: lift on hover (legacy — usar .card-interactive en código nuevo) -- */
 .card-hover {
   transition:
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    box-shadow var(--duration-base) var(--ease-emphasized),
+    transform var(--duration-base) var(--ease-emphasized);
 }
 .card-hover:hover {
   transform: translateY(-1px);
+}
+
+/* --- Card interactive: lenguaje unificado de hover -----------------------
+   Usar en cualquier card/tile clickable (kanban, cliente cards, KPI cards,
+   chart cards con detalle, contratos). Reemplaza:
+     - card-hover legacy (sólo transform)
+     - hovers ad-hoc en componentes individuales
+   El active reduce duración a `instant` para que el feedback de click sea
+   inmediato. */
+.card-interactive {
+  cursor: pointer;
+  transition:
+    box-shadow var(--duration-base) var(--ease-emphasized),
+    transform var(--duration-base) var(--ease-emphasized),
+    border-color var(--duration-base) var(--ease-emphasized);
+}
+.card-interactive:hover {
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+  border-color: var(--color-border-strong);
+}
+.card-interactive:active {
+  transform: translateY(0);
+  transition-duration: var(--duration-instant);
+}
+
+/* Variante para filas de tabla — sólo background, sin lift (las filas no
+   pueden levantar visualmente sin romper la cuadrícula). */
+.row-interactive {
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-decelerate);
+}
+.row-interactive:hover {
+  background-color: var(--color-surface-muted);
 }
 
 /* -- Slide-in panels (from right) -- */
@@ -327,7 +441,7 @@ textarea {
 }
 
 .animate-slide-in-right {
-  animation: slide-in-right 0.25s ease-out;
+  animation: slide-in-right var(--duration-slow) var(--ease-decelerate);
 }
 
 /* Slide-out simétrico al slide-in, con curva de salida acelerada y
@@ -345,7 +459,7 @@ textarea {
 }
 
 .animate-slide-out-right {
-  animation: slide-out-right 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: slide-out-right var(--duration-base) var(--ease-accelerate) forwards;
   pointer-events: none;
 }
 
@@ -364,7 +478,7 @@ textarea {
 .animate-fade-in-up {
   /* fill-mode: backwards mantiene el estado del 'from' durante animation-delay,
      útil cuando se aplica con stagger via inline style. Sin delay no afecta. */
-  animation: fade-in-up 0.3s ease-out backwards;
+  animation: fade-in-up var(--duration-slow) var(--ease-decelerate) backwards;
 }
 
 /* -- Toast slide in from right -- */
@@ -380,7 +494,9 @@ textarea {
 }
 
 .animate-toast-in {
-  animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  /* fill-mode: backwards mantiene el estado del 'from' durante animation-delay
+     (necesario para el stagger entre toasts apilados). */
+  animation: toast-in var(--duration-slow) var(--ease-spring) backwards;
 }
 
 /* Toast exit: salida acelerada (curva ease-in) hacia la derecha. forwards
@@ -397,8 +513,33 @@ textarea {
 }
 
 .animate-toast-out {
-  animation: toast-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: toast-out var(--duration-base) var(--ease-accelerate) forwards;
   pointer-events: none;
+}
+
+/* Variante de entrada para toasts con tono error: slide-in seguido de un
+   shake horizontal corto (oscilación que decae). Comunica "esto necesita
+   atención" sin gritar — la oscilación es ±4px, no los ±6px del error-shake
+   de formularios. */
+@keyframes toast-error-in {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  60% {
+    transform: translateX(-4px);
+    opacity: 1;
+  }
+  80% {
+    transform: translateX(2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-toast-error-in {
+  animation: toast-error-in var(--duration-slow) var(--ease-spring) backwards;
 }
 
 /* -- Pulse for badges/alerts -- */
@@ -413,7 +554,40 @@ textarea {
 }
 
 .animate-badge-pulse {
-  animation: badge-pulse 0.6s ease-in-out 1;
+  animation: badge-pulse var(--duration-pulse) var(--ease-emphasized) 1;
+}
+
+/* -- Pulse de urgencia (cards atrasadas/urgentes, badges críticos) --
+   Anillo de box-shadow que se expande y desvanece. NO usa scale ni color
+   de fondo para no competir con hover ni con el contenido. Como es
+   box-shadow, no fuerza re-paint del layout vecino. Loop infinito —
+   prefers-reduced-motion lo desactiva globalmente. */
+@keyframes pulse-urgent {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-error) 60%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+
+@keyframes pulse-warning {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-warning) 60%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+
+.animate-pulse-urgent {
+  animation: pulse-urgent var(--duration-loading) var(--ease-emphasized) infinite;
+}
+
+.animate-pulse-warning {
+  animation: pulse-warning var(--duration-loading) var(--ease-emphasized) infinite;
 }
 
 /* -- Skeleton loading shimmer -- */
@@ -434,7 +608,7 @@ textarea {
     var(--color-neutral-100) 75%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer var(--duration-loading) var(--ease-emphasized) infinite;
 }
 
 /* -- Skeleton loading shapes -- */
@@ -446,7 +620,7 @@ textarea {
     var(--color-neutral-100) 75%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer var(--duration-loading) var(--ease-emphasized) infinite;
   border-radius: var(--radius-md);
 }
 
@@ -462,7 +636,7 @@ textarea {
 }
 
 .animate-price-flash {
-  animation: price-flash 1s ease-out;
+  animation: price-flash var(--duration-warm) var(--ease-decelerate);
 }
 
 /* Price flash con énfasis (scale leve) para totales prominentes (size="lg").
@@ -483,12 +657,12 @@ textarea {
 }
 
 .animate-price-flash-emphasis {
-  animation: price-flash-emphasis 0.7s ease-out;
+  animation: price-flash-emphasis var(--duration-flash) var(--ease-decelerate);
 }
 
 /* -- Smooth page transitions -- */
 main > * {
-  animation: fade-in-up 0.2s ease-out;
+  animation: fade-in-up var(--duration-base) var(--ease-decelerate);
 }
 
 /* -- Step transitions (wizard cotizador, onboarding) --
@@ -517,11 +691,11 @@ main > * {
 }
 
 .animate-step-enter-forward {
-  animation: step-enter-from-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: step-enter-from-right var(--duration-base) var(--ease-spring);
 }
 
 .animate-step-enter-backward {
-  animation: step-enter-from-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: step-enter-from-left var(--duration-base) var(--ease-spring);
 }
 
 /* -- Kanban: card recién aterrizada en columna destino --
@@ -540,7 +714,7 @@ main > * {
 }
 
 .animate-landed-flash {
-  animation: landed-flash 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: landed-flash var(--duration-flash) var(--ease-spring);
 }
 
 /* -- Badge: entrada cuando aparece de cero --
@@ -557,7 +731,7 @@ main > * {
 }
 
 .animate-badge-enter {
-  animation: badge-enter 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: badge-enter var(--duration-base) var(--ease-spring);
 }
 
 /* -- Scale pop: para hero/icon en empty states. backwards mantiene el
@@ -574,7 +748,7 @@ main > * {
 }
 
 .animate-scale-pop {
-  animation: scale-pop 350ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation: scale-pop var(--duration-slow) var(--ease-spring) backwards;
 }
 
 /* -- Spinner: smoother rotation -- */
@@ -588,7 +762,7 @@ main > * {
 }
 
 .animate-spin {
-  animation: spin-smooth 0.8s linear infinite;
+  animation: spin-smooth var(--duration-spin) linear infinite;
 }
 
 /* Spinner con "respiración" para tallas grandes (PageLoader). Combina la
@@ -610,7 +784,7 @@ main > * {
 }
 
 .animate-spin-breath {
-  animation: spin-breath 0.8s linear infinite;
+  animation: spin-breath var(--duration-spin) linear infinite;
 }
 
 /* Download bob: micro-elevación cíclica (translateY 0 → -2px → 0). Reemplaza
@@ -627,7 +801,7 @@ main > * {
 }
 
 .animate-download-bob {
-  animation: download-bob 1.5s ease-in-out infinite;
+  animation: download-bob var(--duration-loading) var(--ease-emphasized) infinite;
 }
 
 /* Hint swap: cambio de contenido en GuidanceHint (al pasar de step en el
@@ -645,7 +819,7 @@ main > * {
 }
 
 .animate-hint-swap {
-  animation: hint-swap 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: hint-swap var(--duration-fast) var(--ease-spring);
 }
 
 /* Dropdown enter — popovers que crecen desde el borde superior del trigger
@@ -663,7 +837,7 @@ main > * {
 }
 
 .animate-dropdown-enter {
-  animation: dropdown-enter 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: dropdown-enter var(--duration-fast) var(--ease-spring);
   transform-origin: top center;
 }
 
@@ -681,7 +855,7 @@ main > * {
 }
 
 .animate-clear-btn-enter {
-  animation: clear-btn-enter 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: clear-btn-enter var(--duration-instant) var(--ease-spring);
 }
 
 /* Error shake: se dispara al intentar submit con errores. Movimiento horizontal
@@ -707,7 +881,7 @@ main > * {
 }
 
 .animate-error-shake {
-  animation: error-shake 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  animation: error-shake var(--duration-slow) var(--ease-shake);
 }
 
 /* Submit success: micro-pulse al confirmar un guardado exitoso. Único caso
@@ -726,7 +900,7 @@ main > * {
 }
 
 .animate-submit-success {
-  animation: submit-success 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: submit-success var(--duration-base) var(--ease-spring);
 }
 
 /* Tooltip enter — variante por dirección de origen para preservar el
@@ -778,21 +952,21 @@ main > * {
 }
 
 .animate-tooltip-from-bottom {
-  animation: tooltip-enter-from-bottom 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: tooltip-enter-from-bottom var(--duration-fast) var(--ease-spring);
 }
 .animate-tooltip-from-top {
-  animation: tooltip-enter-from-top 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: tooltip-enter-from-top var(--duration-fast) var(--ease-spring);
 }
 .animate-tooltip-from-right {
-  animation: tooltip-enter-from-right 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: tooltip-enter-from-right var(--duration-fast) var(--ease-spring);
 }
 .animate-tooltip-from-left {
-  animation: tooltip-enter-from-left 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: tooltip-enter-from-left var(--duration-fast) var(--ease-spring);
 }
 
 /* -- Progress bar: smooth width transitions -- */
 .progress-bar {
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width var(--duration-slower) var(--ease-emphasized);
 }
 
 @media (prefers-reduced-motion: reduce) {

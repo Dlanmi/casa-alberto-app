@@ -57,7 +57,7 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
               >
                 <span
                   className={cn(
-                    'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-200',
+                    'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
                     data.conPaspartu ? 'left-[23px]' : 'left-[3px]'
                   )}
                 />
@@ -140,7 +140,7 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
                     >
                       <span
                         className={cn(
-                          'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-200',
+                          'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
                           data.conSuplemento ? 'left-[23px]' : 'left-[3px]'
                         )}
                       />
@@ -171,7 +171,7 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
             >
               <span
                 className={cn(
-                  'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-200',
+                  'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
                   data.conVidrio ? 'left-[23px]' : 'left-[3px]'
                 )}
               />
