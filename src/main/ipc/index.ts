@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { DB } from '../db'
-import type { IpcResult } from '../../shared/types'
+import type { CrearPedidoDirectoInput, IpcResult } from '../../shared/types'
 import { validarFilePathInput } from '../lib/validar-filepath'
 import { validarId } from '../lib/validar-id'
 import { validarEnum } from '../lib/validar-enum'
@@ -87,8 +87,11 @@ import {
   actualizarFechaEntrega,
   actualizarTipoEntrega,
   cambiarEstadoPedido,
+  cobrarYEntregar,
+  type CobrarYEntregarInput,
   crearPedidoConfirmadoConFactura,
   crearPedidoDesdeCotizacion,
+  crearPedidoDirecto,
   editarPedidoComercial,
   type EditarPedidoComercialInput,
   listarPedidos,
@@ -407,6 +410,9 @@ export function registerIpcHandlers(db: DB): void {
   ipcMain.handle('pedidos:crearConfirmado', (_e, input) =>
     wrap(crearPedidoConfirmadoConFactura)(db, input)
   )
+  ipcMain.handle('pedidos:crearDirecto', (_e, input: CrearPedidoDirectoInput) =>
+    wrap(crearPedidoDirecto)(db, input)
+  )
   ipcMain.handle('pedidos:cambiarEstado', (_e, id: number, estado) =>
     wrap(cambiarEstadoPedido)(
       db,
@@ -422,6 +428,9 @@ export function registerIpcHandlers(db: DB): void {
   )
   ipcMain.handle('pedidos:editarComercial', (_e, input: EditarPedidoComercialInput) =>
     wrap(editarPedidoComercial)(db, input)
+  )
+  ipcMain.handle('pedidos:cobrarYEntregar', (_e, input: CobrarYEntregarInput) =>
+    wrap(cobrarYEntregar)(db, input)
   )
   ipcMain.handle('pedidos:alertas:atrasados', () => wrap(pedidosAtrasados)(db))
   ipcMain.handle('pedidos:alertas:entregaProxima', (_e, dias?: number) =>

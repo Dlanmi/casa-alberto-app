@@ -7,6 +7,8 @@ import type {
   ConfiguracionSetPayload,
   CrearPedidoConfirmadoData,
   CrearPedidoConfirmadoResult,
+  CrearPedidoDirectoInput,
+  CrearPedidoDirectoResult,
   Factura,
   FacturaConPagos,
   FacturaListarFiltros,
@@ -173,6 +175,8 @@ const api = {
       invoke<IpcResult<Pedido>>('pedidos:crear', datos, cotizacion),
     crearConfirmado: (data: CrearPedidoConfirmadoData) =>
       invoke<IpcResult<CrearPedidoConfirmadoResult>>('pedidos:crearConfirmado', data),
+    crearDirecto: (data: CrearPedidoDirectoInput) =>
+      invoke<IpcResult<CrearPedidoDirectoResult>>('pedidos:crearDirecto', data),
     cambiarEstado: (id: number, estado: Pedido['estado']) =>
       invoke<IpcResult<Pedido>>('pedidos:cambiarEstado', id, estado),
     actualizarFechaEntrega: (id: number, fecha: string | null) =>
@@ -185,6 +189,13 @@ const api = {
       descuentoMotivo?: string | null
       costoEstimadoTotal?: number | null
     }) => invoke('pedidos:editarComercial', input),
+    cobrarYEntregar: (input: {
+      pedidoId: number
+      monto: number
+      metodoPago: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque'
+      fecha: string
+      notas?: string | null
+    }) => invoke('pedidos:cobrarYEntregar', input),
     resumenEstado: () => invoke('pedidos:resumenEstado'),
     matrizUrgencia: (diasUrgencia?: number) =>
       invoke<IpcResult<MatrizUrgencia>>('pedidos:matrizUrgencia', diasUrgencia),

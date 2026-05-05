@@ -11,8 +11,10 @@ import { clientes, facturas, muestrasMarcos, pagos, pedidoItems, pedidos, precio
 import { cotizarEnmarcacionEstandar } from './cotizador'
 import {
   cambiarEstadoPedido,
+  cobrarYEntregar,
   crearPedidoConfirmadoConFactura,
   crearPedidoDesdeCotizacion,
+  crearPedidoDirecto,
   editarPedidoComercial,
   listarPedidos,
   obtenerSaldosPorPedido,
@@ -1049,6 +1051,227 @@ describe.runIf(nativeAbiAvailable)('Modelo comercial · edge cases', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Quick-pay (cobrar saldo + mover a entregado en una sola transacción)
+// ---------------------------------------------------------------------------
+describe.runIf(nativeAbiAvailable)('cobrarYEntregar · quick-pay atómico', () => {
+  let db: DB
+  let clienteId: number
+  let muestraMarcoId: number
+
+  beforeEach(() => {
+    db = createTestDb().db
+    clienteId = db.insert(clientes).values({ nombre: 'Cliente QP' }).returning().get().id
+    muestraMarcoId = db
+      .insert(muestrasMarcos)
+      .values({ referencia: 'QP-001', colillaCm: 30, precioMetro: 30000, costoMetroEstimado: 18000 })
+      .returning()
+      .get().id
+    db.insert(preciosVidrios)
+      .values({
+        tipo: 'claro_2mm',
+        nombre: 'Vidrio claro 2mm',
+        espesorMm: 2,
+        precioM2: 100000,
+        costoM2Estimado: 60000
+      })
+      .run()
+  })
+
+  function crearPedidoListoConSaldo(abono: number): {
+    pedidoId: number
+    facturaId: number
+    saldo: number
+    total: number
+  } {
+    const cot = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro_2mm'
+    })
+    const result = crearPedidoConfirmadoConFactura(db, {
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        descripcion: 'Pedido para QP',
+        anchoCm: 30,
+        altoCm: 40,
+        muestraMarcoId,
+        tipoVidrio: 'claro_2mm',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-04-01'
+      },
+      cotizacion: cot,
+      facturaFecha: '2026-04-01',
+      abono:
+        abono > 0
+          ? { monto: abono, metodoPago: 'efectivo', fecha: '2026-04-01' }
+          : null
+    })
+    cambiarEstadoPedido(db, result.pedido.id, 'en_proceso')
+    cambiarEstadoPedido(db, result.pedido.id, 'listo')
+    return {
+      pedidoId: result.pedido.id,
+      facturaId: result.factura.id,
+      saldo: result.factura.total - abono,
+      total: result.factura.total
+    }
+  }
+
+  it('cobra saldo completo y mueve a entregado en una sola transacción', () => {
+    const { pedidoId, saldo } = crearPedidoListoConSaldo(20000)
+
+    const result = cobrarYEntregar(db, {
+      pedidoId,
+      monto: saldo,
+      metodoPago: 'efectivo',
+      fecha: '2026-04-15'
+    })
+
+    expect(result.pedido.estado).toBe('entregado')
+    expect(result.pago.monto).toBe(saldo)
+    expect(result.pago.metodoPago).toBe('efectivo')
+    expect(result.factura.estado).toBe('pagada')
+    expect(result.saldoFinal).toBe(0)
+    expect(result.facturaPagada).toBe(true)
+
+    // Verifica que el movimiento financiero también se creó
+    const movs = db
+      .select()
+      .from(movimientosFinancieros)
+      .where(
+        and(
+          eq(movimientosFinancieros.tipo, 'ingreso'),
+          eq(movimientosFinancieros.referenciaTipo, 'pago')
+        )
+      )
+      .all()
+    // 1 movimiento del abono inicial + 1 de cobrarYEntregar
+    expect(movs).toHaveLength(2)
+  })
+
+  it('rechaza si el pedido NO está en estado listo', () => {
+    const { pedidoId, saldo } = crearPedidoListoConSaldo(0)
+    cambiarEstadoPedido(db, pedidoId, 'entregado') // ya está entregado
+
+    expect(() =>
+      cobrarYEntregar(db, {
+        pedidoId,
+        monto: saldo,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-15'
+      })
+    ).toThrow(/estado "listo"/i)
+  })
+
+  it('rechaza si el monto es menor al saldo (cobro parcial no entrega)', () => {
+    const { pedidoId, saldo } = crearPedidoListoConSaldo(0)
+
+    expect(() =>
+      cobrarYEntregar(db, {
+        pedidoId,
+        monto: saldo - 1000,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-15'
+      })
+    ).toThrow(/cobrar el saldo completo/i)
+  })
+
+  it('rechaza si el monto excede el saldo', () => {
+    const { pedidoId, saldo } = crearPedidoListoConSaldo(0)
+
+    expect(() =>
+      cobrarYEntregar(db, {
+        pedidoId,
+        monto: saldo + 10000,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-15'
+      })
+    ).toThrow(/excede el saldo pendiente/i)
+  })
+
+  it('rechaza monto <= 0', () => {
+    expect(() =>
+      cobrarYEntregar(db, {
+        pedidoId: 1,
+        monto: 0,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-15'
+      })
+    ).toThrow(/mayor a 0/i)
+  })
+
+  it('rechaza método de pago inválido', () => {
+    const { pedidoId, saldo } = crearPedidoListoConSaldo(0)
+
+    expect(() =>
+      cobrarYEntregar(db, {
+        pedidoId,
+        monto: saldo,
+        // @ts-expect-error — probamos validación runtime
+        metodoPago: 'bitcoin',
+        fecha: '2026-04-15'
+      })
+    ).toThrow()
+  })
+
+  it('rechaza si no hay factura activa (factura anulada)', () => {
+    const { pedidoId, saldo, facturaId } = crearPedidoListoConSaldo(0)
+    db.update(facturas).set({ estado: 'anulada' }).where(eq(facturas.id, facturaId)).run()
+
+    expect(() =>
+      cobrarYEntregar(db, {
+        pedidoId,
+        monto: saldo,
+        metodoPago: 'efectivo',
+        fecha: '2026-04-15'
+      })
+    ).toThrow(/factura activa/i)
+  })
+
+  it('rollback completo si algo falla a mitad: ni pago ni estado se persisten', () => {
+    const { pedidoId } = crearPedidoListoConSaldo(0)
+
+    expect(() =>
+      cobrarYEntregar(db, {
+        pedidoId,
+        monto: 9_999_999_999, // excede saldo → throw
+        metodoPago: 'efectivo',
+        fecha: '2026-04-15'
+      })
+    ).toThrow()
+
+    // Pedido sigue en 'listo'
+    const pedido = db.select().from(pedidos).where(eq(pedidos.id, pedidoId)).get()
+    expect(pedido?.estado).toBe('listo')
+
+    // Solo está el pago del abono inicial (0 en este caso, así que ninguno)
+    const pagosCount = db
+      .select({ n: sql<number>`count(*)` })
+      .from(pagos)
+      .get()
+    expect(pagosCount?.n).toBe(0)
+  })
+
+  it('crea movimiento financiero con la categoría correcta según tipo de trabajo', () => {
+    const { pedidoId, saldo } = crearPedidoListoConSaldo(0)
+    cobrarYEntregar(db, {
+      pedidoId,
+      monto: saldo,
+      metodoPago: 'transferencia',
+      fecha: '2026-04-15'
+    })
+    const mov = db
+      .select()
+      .from(movimientosFinancieros)
+      .where(eq(movimientosFinancieros.referenciaTipo, 'pago'))
+      .get()
+    expect(mov?.categoria).toBe('enmarcacion')
+    expect(mov?.tipo).toBe('ingreso')
+  })
+})
+
 describe.runIf(nativeAbiAvailable)(
   'listarPedidos — búsqueda case-insensitive (CommandPalette)',
   () => {
@@ -1116,5 +1339,239 @@ describe.runIf(nativeAbiAvailable)(
   }
 )
 
+// ===========================================================================
+// crearPedidoDirecto — feature pedido sin pasar por cotizador
+// ===========================================================================
+
+describe.runIf(nativeAbiAvailable)('crearPedidoDirecto', () => {
+  let db: DB
+
+  beforeEach(() => {
+    db = createTestDb().db
+  })
+
+  function inputBase(overrides: {
+    cliente?: { tipo: 'existente'; id: number } | { tipo: 'nuevo'; data: { nombre: string; telefono?: string } }
+    items?: Array<{ tipoItem: 'marco' | 'vidrio' | 'otro'; descripcion: string; cantidad: number; precioUnitario: number; costoUnitarioEstimado?: number | null }>
+    estadoInicial?: 'cotizado' | 'confirmado' | 'en_proceso' | 'listo' | 'entregado'
+    fechaIngreso?: string
+    fechaEntrega?: string | null
+    abono?: { monto: number; metodoPago: 'efectivo' | 'transferencia'; fecha: string } | null
+    precioTotalOverride?: number | null
+  } = {}) {
+    return {
+      cliente: overrides.cliente ?? { tipo: 'nuevo' as const, data: { nombre: 'María García', telefono: '3001234567' } },
+      pedido: {
+        tipoTrabajo: 'enmarcacion_estandar' as const,
+        descripcion: 'Marco directo prueba',
+        anchoCm: 30,
+        altoCm: 40,
+        fechaIngreso: overrides.fechaIngreso ?? '2026-04-15',
+        fechaEntrega: overrides.fechaEntrega ?? '2026-04-25',
+        tipoEntrega: 'estandar' as const,
+        estadoInicial: overrides.estadoInicial ?? 'confirmado',
+        notas: null
+      },
+      items: overrides.items ?? [
+        { tipoItem: 'marco' as const, descripcion: 'Marco roble', cantidad: 1, precioUnitario: 50000, costoUnitarioEstimado: 30000 },
+        { tipoItem: 'vidrio' as const, descripcion: 'Vidrio claro 30x40', cantidad: 1, precioUnitario: 12000, costoUnitarioEstimado: 6000 }
+      ],
+      precioTotalOverride: overrides.precioTotalOverride ?? null,
+      factura: { fecha: overrides.fechaIngreso ?? '2026-04-15' },
+      abono: overrides.abono === undefined ? null : overrides.abono,
+      generarPDF: false
+    }
+  }
+
+  it('crea pedido confirmado + factura + items con cliente nuevo', () => {
+    const result = crearPedidoDirecto(db, inputBase())
+    expect(result.pedido.estado).toBe('confirmado')
+    expect(result.pedido.precioTotal).toBe(62000)
+    expect(result.pedido.subtotal).toBe(62000)
+    expect(result.pedido.descuentoMonto).toBe(0)
+    expect(result.factura.estado).toBe('pendiente')
+    expect(result.factura.total).toBe(62000)
+    expect(result.pago).toBeNull()
+    expect(result.saldo).toBe(62000)
+
+    const items = db.select().from(pedidoItems).where(eq(pedidoItems.pedidoId, result.pedido.id)).all()
+    expect(items).toHaveLength(2)
+  })
+
+  it('cliente nuevo se inserta y se vincula al pedido', () => {
+    const result = crearPedidoDirecto(db, inputBase())
+    const cliente = db.select().from(clientes).where(eq(clientes.id, result.pedido.clienteId)).get()
+    expect(cliente?.nombre).toBe('María García')
+    expect(cliente?.telefono).toBe('3001234567')
+  })
+
+  it('acepta cliente existente por id', () => {
+    const cliente = db.insert(clientes).values({ nombre: 'Cliente Existente' }).returning().get()
+    const result = crearPedidoDirecto(db, inputBase({ cliente: { tipo: 'existente', id: cliente.id } }))
+    expect(result.pedido.clienteId).toBe(cliente.id)
+  })
+
+  it('rechaza cliente existente con id inválido', () => {
+    expect(() =>
+      crearPedidoDirecto(db, inputBase({ cliente: { tipo: 'existente', id: 99999 } }))
+    ).toThrow(/no existe/i)
+  })
+
+  it('override de total NO materializa descuento (modo B)', () => {
+    const result = crearPedidoDirecto(db, inputBase({ precioTotalOverride: 50000 }))
+    // Suma items = 62000, override = 50000.
+    // precioTotal = 50000 (override), descuentoMonto = 0 (NO descuento), subtotal = 62000 (suma real).
+    expect(result.pedido.precioTotal).toBe(50000)
+    expect(result.pedido.descuentoMonto).toBe(0)
+    expect(result.pedido.subtotal).toBe(62000)
+    expect(result.factura.total).toBe(50000)
+  })
+
+  it('abono parcial deja factura pendiente con saldo correcto', () => {
+    const result = crearPedidoDirecto(
+      db,
+      inputBase({
+        abono: { monto: 30000, metodoPago: 'efectivo', fecha: '2026-04-15' }
+      })
+    )
+    expect(result.pago?.monto).toBe(30000)
+    expect(result.factura.estado).toBe('pendiente')
+    expect(result.saldo).toBe(32000)
+    const mov = db.select().from(movimientosFinancieros).where(eq(movimientosFinancieros.referenciaTipo, 'pago')).all()
+    expect(mov).toHaveLength(1)
+    expect(mov[0]!.monto).toBe(30000)
+  })
+
+  it('abono total marca factura como pagada', () => {
+    const result = crearPedidoDirecto(
+      db,
+      inputBase({
+        abono: { monto: 62000, metodoPago: 'transferencia', fecha: '2026-04-15' }
+      })
+    )
+    expect(result.factura.estado).toBe('pagada')
+    expect(result.saldo).toBe(0)
+  })
+
+  it('regalo (precio total = 0) marca factura como pagada sin movimiento', () => {
+    const result = crearPedidoDirecto(
+      db,
+      inputBase({
+        items: [{ tipoItem: 'otro', descripcion: 'Regalo', cantidad: 1, precioUnitario: 0 }],
+        precioTotalOverride: 0
+      })
+    )
+    expect(result.factura.estado).toBe('pagada')
+    expect(result.saldo).toBe(0)
+    const mov = db.select().from(movimientosFinancieros).all()
+    expect(mov).toHaveLength(0)
+  })
+
+  it('caso retroactivo: estado entregado + fecha pasada + pago con fecha pasada', () => {
+    const result = crearPedidoDirecto(
+      db,
+      inputBase({
+        estadoInicial: 'entregado',
+        fechaIngreso: '2025-03-01',
+        fechaEntrega: '2025-03-15',
+        abono: { monto: 62000, metodoPago: 'efectivo', fecha: '2025-03-15' }
+      })
+    )
+    expect(result.pedido.estado).toBe('entregado')
+    expect(result.factura.estado).toBe('pagada')
+    // updatedAt debe reflejar la fecha histórica, NO la fecha actual.
+    expect(result.pedido.updatedAt).toMatch(/^2025-03-01/)
+    // Movimiento financiero registra la fecha del pago (histórica).
+    const mov = db.select().from(movimientosFinancieros).get()
+    expect(mov?.fecha).toBe('2025-03-15')
+  })
+
+  it('rechaza fecha de pago futura (posterior a hoy)', () => {
+    // Construimos una fecha 30 días en el futuro relativa a hoy.
+    const futura = new Date()
+    futura.setDate(futura.getDate() + 30)
+    const fechaFutura = `${futura.getFullYear()}-${String(futura.getMonth() + 1).padStart(2, '0')}-${String(futura.getDate()).padStart(2, '0')}`
+    expect(() =>
+      crearPedidoDirecto(
+        db,
+        inputBase({
+          abono: { monto: 62000, metodoPago: 'efectivo', fecha: fechaFutura }
+        })
+      )
+    ).toThrow(/posterior a hoy/i)
+  })
+
+  it('rechaza items array vacío', () => {
+    expect(() => crearPedidoDirecto(db, inputBase({ items: [] }))).toThrow(/al menos un item/i)
+  })
+
+  it('rechaza item con cantidad <= 0', () => {
+    expect(() =>
+      crearPedidoDirecto(
+        db,
+        inputBase({
+          items: [{ tipoItem: 'otro', descripcion: 'X', cantidad: 0, precioUnitario: 1000 }]
+        })
+      )
+    ).toThrow(/cantidad/i)
+  })
+
+  it('rechaza estadoInicial=cancelado', () => {
+    expect(() =>
+      crearPedidoDirecto(db, inputBase({ estadoInicial: 'cancelado' as never }))
+    ).toThrow(/cancelado/i)
+  })
+
+  it('rechaza abono mayor al total', () => {
+    expect(() =>
+      crearPedidoDirecto(
+        db,
+        inputBase({ abono: { monto: 999999, metodoPago: 'efectivo', fecha: '2026-04-15' } })
+      )
+    ).toThrow(/excede/i)
+  })
+
+  it('items sin costo dejan estadoRentabilidad="incompleta"', () => {
+    const result = crearPedidoDirecto(
+      db,
+      inputBase({
+        items: [
+          { tipoItem: 'otro', descripcion: 'Trabajo libre', cantidad: 1, precioUnitario: 100000 }
+        ]
+      })
+    )
+    expect(result.pedido.estadoRentabilidad).toBe('incompleta')
+    expect(result.pedido.costoEstimadoTotal).toBeNull()
+  })
+
+  it('items con costo calculan margen y estadoRentabilidad concretos', () => {
+    const result = crearPedidoDirecto(db, inputBase())
+    // costo total = 30000 + 6000 = 36000; precio = 62000; margen = 26000 (~42%)
+    expect(result.pedido.costoEstimadoTotal).toBe(36000)
+    expect(result.pedido.margenEstimado).toBe(26000)
+    expect(result.pedido.estadoRentabilidad).not.toBe('incompleta')
+  })
+
+  it('rollback completo si algún insert falla', () => {
+    // Forzamos error pasando cliente nuevo con cédula que ya existe.
+    const cliente = db
+      .insert(clientes)
+      .values({ nombre: 'Existente', cedula: '12345678' })
+      .returning()
+      .get()
+    expect(cliente.id).toBeGreaterThan(0)
+
+    expect(() =>
+      crearPedidoDirecto(
+        db,
+        inputBase({ cliente: { tipo: 'nuevo', data: { nombre: 'Otro', cedula: '12345678' } } as never })
+      )
+    ).toThrow()
+
+    // Verifica que no quedó pedido huérfano
+    const pedidosCount = db.select().from(pedidos).all().length
+    expect(pedidosCount).toBe(0)
+  })
+})
 
 

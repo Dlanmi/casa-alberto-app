@@ -20,6 +20,9 @@ import type {
   EstadoFactura,
   EstadoPedido,
   MetodoPago,
+  PedidoItemMetadata,
+  TipoEntrega,
+  TipoItemPedido,
   TipoTrabajo,
   facturas,
   historialCambios,
@@ -311,4 +314,85 @@ export type EntregaDelDia = {
   fechaEntrega: string
   tipoTrabajo: TipoTrabajo
   estado: EstadoPedido
+}
+
+// ---------------------------------------------------------------------------
+// Pedido directo — feature para registrar pedidos sin pasar por el cotizador.
+// Casos: precio fijo en el momento, retroactivo, precios históricos.
+// El backend (`crearPedidoDirecto`) NO valida contra listas de precios actuales
+// — confía en que el dueño introduce los precios correctos manualmente.
+// ---------------------------------------------------------------------------
+
+export type ItemPedidoDirecto = {
+  /** Tipo de item del enum del schema, o 'otro' para descripción libre. */
+  tipoItem: TipoItemPedido | 'otro'
+  /** Descripción legible — siempre requerida. */
+  descripcion: string
+  /** SKU/referencia si vino de una lista de precios. Opcional. */
+  referencia?: string | null
+  cantidad: number
+  precioUnitario: number
+  /** Si se eligió desde lista de precios, vendrá poblado. Si es libre, null. */
+  costoUnitarioEstimado?: number | null
+  /** Metadata estructurada cuando viene de lista (medidas, área, etc.). */
+  metadata?: PedidoItemMetadata | null
+}
+
+export type DatosClienteParaPedidoDirecto =
+  | { tipo: 'existente'; id: number }
+  | {
+      tipo: 'nuevo'
+      data: {
+        nombre: string
+        telefono?: string | null
+        cedula?: string | null
+        correo?: string | null
+        direccion?: string | null
+        notas?: string | null
+        esMenor?: boolean
+      }
+    }
+
+export type CrearPedidoDirectoInput = {
+  cliente: DatosClienteParaPedidoDirecto
+  pedido: {
+    tipoTrabajo: TipoTrabajo
+    descripcion?: string | null
+    anchoCm?: number | null
+    altoCm?: number | null
+    /** ISO YYYY-MM-DD. Puede ser fecha pasada (caso retroactivo). */
+    fechaIngreso: string
+    fechaEntrega?: string | null
+    tipoEntrega: TipoEntrega
+    /** Estado al que se aterriza el pedido. Default `confirmado`. Para casos
+     *  retroactivos puede ser `entregado` directamente. */
+    estadoInicial: EstadoPedido
+    notas?: string | null
+  }
+  /** Mínimo 1 item. */
+  items: ItemPedidoDirecto[]
+  /** Si se omite, usa la suma de items. Si se pasa y difiere, el backend
+   *  guarda el override directo SIN materializar descuento (decisión P16:
+   *  precio histórico ≠ descuento). */
+  precioTotalOverride?: number | null
+  factura: {
+    fecha: string
+    notas?: string | null
+  }
+  /** Pago inicial opcional. Si se omite, factura queda 100% pendiente. */
+  abono?: {
+    monto: number
+    metodoPago: MetodoPago
+    fecha: string
+    notas?: string | null
+  } | null
+  /** Si true, después del create se llama a pdf:generarFactura. */
+  generarPDF: boolean
+}
+
+export type CrearPedidoDirectoResult = {
+  pedido: Pedido
+  factura: Factura
+  pago: Pago | null
+  saldo: number
 }

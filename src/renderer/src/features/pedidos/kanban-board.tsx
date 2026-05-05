@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
+import { Banknote } from 'lucide-react'
 import type { EstadoPedido, Pedido } from '@shared/types'
 import { TRANSICIONES_VALIDAS } from '@shared/pedido-transitions'
 import { cn } from '@renderer/lib/cn'
@@ -19,8 +20,14 @@ type KanbanBoardProps = {
   // Map global pedidoId → saldo pendiente. El board lo pasa a las columnas
   // para que cada card pueda mostrar el badge rojo "Debe $XXX".
   saldosMap?: Map<number, number>
+  // Map paralelo con info completa de la factura (total + pagado). Necesario
+  // para construir el contexto del modal QuickPay sin pegarle a otro IPC.
+  saldosInfoMap?: Map<number, { total: number; pagado: number }>
   onCardClick: (pedido: Pedido) => void
   onChangeEstado: (pedidoId: number, nuevoEstado: EstadoPedido) => void
+  // Quick-pay: abre modal de cobrar abono (sin cambiar estado) cuando se
+  // suelta una card con saldo en la drop zone flotante.
+  onCobrarAbono?: (pedido: Pedido, saldoPendiente: number, totalFactura: number) => void
   highlightedId?: number | null
 }
 
@@ -28,8 +35,10 @@ export function KanbanBoard({
   pedidos,
   clienteMap,
   saldosMap,
+  saldosInfoMap,
   onCardClick,
   onChangeEstado,
+  onCobrarAbono,
   highlightedId = null
 }: KanbanBoardProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -110,7 +119,37 @@ export function KanbanBoard({
     {} as Record<EstadoPedido, Pedido[]>
   )
 
+  // Drop zone flotante "Cobrar abono": solo visible cuando se está
+  // arrastrando una card con saldo pendiente Y la página tiene un handler
+  // para procesar el cobro. La zona acepta drop, lee el pedidoId del
+  // dataTransfer y llama al callback con el contexto necesario.
+  const dragSaldo =
+    dragState !== null ? (saldosMap?.get(dragState.pedidoId) ?? 0) : 0
+  const dragInfo =
+    dragState !== null ? saldosInfoMap?.get(dragState.pedidoId) : undefined
+  const dragPedido =
+    dragState !== null ? pedidos.find((p) => p.id === dragState.pedidoId) : null
+  const mostrarDropZoneCobro =
+    !!onCobrarAbono && dragState !== null && dragSaldo > 0 && !!dragInfo && !!dragPedido
+
+  const [dropZoneActive, setDropZoneActive] = useState(false)
+  const handleDropZoneOver = (e: React.DragEvent): void => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropZoneActive(true)
+  }
+  const handleDropZoneLeave = (): void => setDropZoneActive(false)
+  const handleDropZoneDrop = (e: React.DragEvent): void => {
+    e.preventDefault()
+    setDropZoneActive(false)
+    if (!onCobrarAbono || !dragPedido || !dragInfo) return
+    const pedidoId = Number(e.dataTransfer.getData('text/plain'))
+    if (pedidoId !== dragPedido.id) return
+    onCobrarAbono(dragPedido, dragSaldo, dragInfo.total)
+  }
+
   return (
+    <div className="relative">
     <div
       ref={scrollRef}
       className={cn(
@@ -147,6 +186,40 @@ export function KanbanBoard({
           />
         )
       })}
+    </div>
+
+    {/* Drop zone flotante "Cobrar abono". Aparece solo durante drag de
+        cards con saldo > 0. Posicionada absoluta abajo del board para
+        no empujar contenido cuando aparece/desaparece. */}
+    {mostrarDropZoneCobro && (
+      <div
+        className={cn(
+          'absolute bottom-2 left-1/2 z-30 -translate-x-1/2 transition-all duration-base',
+          'pointer-events-auto'
+        )}
+        onDragOver={handleDropZoneOver}
+        onDragLeave={handleDropZoneLeave}
+        onDrop={handleDropZoneDrop}
+      >
+        <div
+          className={cn(
+            'flex items-center gap-3 rounded-full border-2 border-dashed px-6 py-3 text-sm font-semibold shadow-2 transition-all',
+            dropZoneActive
+              ? 'border-success bg-success-bg text-success-strong scale-105'
+              : 'border-warning/60 bg-warning-bg text-warning-strong'
+          )}
+        >
+          <Banknote
+            size={20}
+            className={cn(
+              'shrink-0',
+              dropZoneActive ? 'text-success-strong' : 'text-warning-strong'
+            )}
+          />
+          {dropZoneActive ? 'Suelta aquí para cobrar' : 'Soltar aquí para cobrar abono'}
+        </div>
+      </div>
+    )}
     </div>
   )
 }

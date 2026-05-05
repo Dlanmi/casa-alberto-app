@@ -14,12 +14,18 @@ import {
 } from 'drizzle-orm'
 import { buildContainsPattern } from '../sql-helpers'
 import type { DB } from '../index'
-import type { EntregaDelDia, PedidoSinAbonoConSaldo } from '@shared/types'
+import type {
+  CrearPedidoDirectoInput,
+  CrearPedidoDirectoResult,
+  EntregaDelDia,
+  PedidoSinAbonoConSaldo
+} from '@shared/types'
 import { generarConsecutivo } from '../consecutivos'
 import {
   clientes,
   configuracion,
   devoluciones,
+  ESTADOS_PEDIDO,
   facturas,
   historialCambios,
   METODOS_PAGO,
@@ -27,11 +33,14 @@ import {
   pagos,
   pedidoItems,
   pedidos,
+  TIPOS_ENTREGA,
+  TIPOS_TRABAJO,
   type EstadoPedido,
   type MetodoPago,
   type TipoEntrega,
   type TipoTrabajo
 } from '../schema'
+import { crearCliente } from './clientes'
 import {
   cotizarAcolchado,
   cotizarAdherido,
@@ -435,6 +444,339 @@ export function crearPedidoDesdeCotizacion(
 function categoriaDesdePedido(tipoTrabajo: TipoTrabajo) {
   if (tipoTrabajo === 'restauracion') return 'restauracion'
   return 'enmarcacion'
+}
+
+// ===========================================================================
+// crearPedidoDirecto — feature "pedido sin pasar por cotizador"
+//
+// Permite registrar un pedido completo (cliente + items + factura + pago
+// opcional) en una sola transacción atómica, SIN validar precios contra las
+// listas actuales (a diferencia de `crearPedidoConfirmadoConFactura` que
+// re-autoriza vía `cotizacionAutorizada`).
+//
+// Casos de uso (P1 de la spec):
+//   - Pedido rápido del momento donde el dueño ya sabe el precio.
+//   - Registro retroactivo de pedidos pasados (incluso `entregado`).
+//   - Pedidos con precios "históricos" que no calzan con la lista actual.
+//
+// Decisión P16 (modo B): el override de precio total NO se materializa como
+// descuento. `descuentoMonto = 0` siempre. Los items mantienen sus precios
+// reales; `precioTotal` se guarda directo. Esto refleja la realidad del
+// negocio (precio histórico ≠ descuento) y mantiene los reportes de
+// descuentos limpios.
+// ===========================================================================
+
+const ITEMS_OBLIGATORIOS_MIN = 1
+
+export function crearPedidoDirecto(
+  db: DB,
+  input: CrearPedidoDirectoInput
+): CrearPedidoDirectoResult {
+  // ---- 1. Validaciones síncronas (antes de abrir transacción) ----
+  validarFechaISO(input.pedido.fechaIngreso, 'YYYY-MM-DD', 'fechaIngreso')
+  if (input.pedido.fechaEntrega) {
+    validarFechaISO(input.pedido.fechaEntrega, 'YYYY-MM-DD', 'fechaEntrega')
+    if (input.pedido.fechaEntrega < input.pedido.fechaIngreso) {
+      throw new Error('La fecha de entrega no puede ser anterior a la fecha de ingreso')
+    }
+  }
+  validarFechaISO(input.factura.fecha, 'YYYY-MM-DD', 'facturaFecha')
+  validarEnum(input.pedido.tipoTrabajo, TIPOS_TRABAJO, 'tipoTrabajo')
+  validarEnum(input.pedido.tipoEntrega, TIPOS_ENTREGA, 'tipoEntrega')
+  validarEnum(input.pedido.estadoInicial, ESTADOS_PEDIDO, 'estadoInicial')
+  if (input.pedido.estadoInicial === 'cancelado') {
+    throw new Error('No se puede crear un pedido directamente en estado cancelado')
+  }
+
+  if (!Array.isArray(input.items) || input.items.length < ITEMS_OBLIGATORIOS_MIN) {
+    throw new Error('El pedido debe tener al menos un item')
+  }
+  for (const [i, item] of input.items.entries()) {
+    if (!item.descripcion || !item.descripcion.trim()) {
+      throw new Error(`Item #${i + 1}: descripción requerida`)
+    }
+    if (!Number.isFinite(item.cantidad) || item.cantidad <= 0) {
+      throw new Error(`Item #${i + 1}: cantidad debe ser mayor a 0`)
+    }
+    if (!Number.isFinite(item.precioUnitario) || item.precioUnitario < 0) {
+      throw new Error(`Item #${i + 1}: precio unitario inválido`)
+    }
+    if (
+      item.costoUnitarioEstimado != null &&
+      (!Number.isFinite(item.costoUnitarioEstimado) || item.costoUnitarioEstimado < 0)
+    ) {
+      throw new Error(`Item #${i + 1}: costo estimado inválido`)
+    }
+  }
+
+  // ---- 2. Cálculos derivados ----
+  const subtotalItems = input.items.reduce((s, it) => s + it.cantidad * it.precioUnitario, 0)
+  const precioFinal =
+    input.precioTotalOverride != null && Number.isFinite(input.precioTotalOverride)
+      ? input.precioTotalOverride
+      : subtotalItems
+
+  if (precioFinal < 0) {
+    throw new Error('El precio total no puede ser negativo')
+  }
+
+  // costoEstimadoTotal: si TODOS los items tienen costo, sumamos. Si alguno
+  // viene en `null`, marcamos `null` (rentabilidad = 'incompleta').
+  const todosTienenCosto = input.items.every(
+    (it) => typeof it.costoUnitarioEstimado === 'number'
+  )
+  const costoEstimadoTotal = todosTienenCosto
+    ? input.items.reduce((s, it) => s + it.cantidad * (it.costoUnitarioEstimado ?? 0), 0)
+    : null
+
+  // ---- 3. Validación de abono (antes de abrir tx) ----
+  const abono = input.abono?.monto ?? 0
+  if (input.abono) {
+    if (!Number.isFinite(abono) || abono < 0) {
+      throw new Error('El abono debe ser un número válido mayor o igual a 0')
+    }
+    if (abono > precioFinal) {
+      throw new Error(`El abono excede el total del pedido (${precioFinal})`)
+    }
+    if (abono > 0) {
+      validarEnum(input.abono.metodoPago, METODOS_PAGO, 'metodoPago')
+      validarFechaISO(input.abono.fecha, 'YYYY-MM-DD', 'fechaPago')
+      // Una fecha de pago en el futuro no tiene sentido — el cobro
+      // todavía no ha ocurrido. Reportes de finanzas contarían ingresos
+      // que no existen. Comparación lexicográfica funciona porque ambas
+      // son ISO `YYYY-MM-DD`.
+      const hoy = new Date()
+      const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
+      if (input.abono.fecha > hoyISO) {
+        throw new Error('La fecha del pago no puede ser posterior a hoy')
+      }
+    }
+  }
+
+  // Re-evaluar margen con la lógica compartida del cotizador (mismas reglas).
+  const evaluacion = evaluarPedido(db, precioFinal, 0, costoEstimadoTotal)
+
+  // ---- 4. Transacción atómica ----
+  return db.transaction((tx) => {
+    const txDb = tx as unknown as DB
+
+    // 4a. Resolver cliente: existente o crear nuevo.
+    let clienteId: number
+    if (input.cliente.tipo === 'existente') {
+      const existe = txDb
+        .select({ id: clientes.id })
+        .from(clientes)
+        .where(eq(clientes.id, input.cliente.id))
+        .get()
+      if (!existe) throw new Error(`El cliente ${input.cliente.id} no existe`)
+      clienteId = input.cliente.id
+    } else {
+      const nuevo = crearCliente(txDb, input.cliente.data)
+      clienteId = nuevo.id
+    }
+
+    // 4b. Insertar pedido en estado 'cotizado' (consistente con el flujo
+    //     del wizard — todas las transiciones pasan por aquí).
+    const numero = generarConsecutivo(txDb, 'pedido')
+    const pedidoCreado = tx
+      .insert(pedidos)
+      .values({
+        numero,
+        clienteId,
+        tipoTrabajo: input.pedido.tipoTrabajo,
+        descripcion: input.pedido.descripcion ?? null,
+        anchoCm: input.pedido.anchoCm ?? null,
+        altoCm: input.pedido.altoCm ?? null,
+        // En pedido directo el papá define el precio final por item — los
+        // materiales (5-10%) NO se calculan automáticamente. Mínimo 5 para
+        // satisfacer el CHECK constraint del schema.
+        porcentajeMateriales: 5,
+        subtotal: subtotalItems,
+        totalMateriales: 0,
+        brutoCotizado: subtotalItems,
+        precioLista: precioFinal,
+        descuentoMonto: 0,
+        descuentoMotivo: null,
+        costoEstimadoTotal,
+        margenEstimado: evaluacion.margenEstimado,
+        margenEstimadoPct: evaluacion.margenEstimadoPct,
+        estadoRentabilidad: evaluacion.estadoRentabilidad,
+        precioTotal: precioFinal,
+        estado: 'cotizado',
+        tipoEntrega: input.pedido.tipoEntrega,
+        fechaIngreso: input.pedido.fechaIngreso,
+        fechaEntrega: input.pedido.fechaEntrega ?? null,
+        notas: input.pedido.notas ?? null
+      })
+      .returning()
+      .get()
+
+    // 4c. Insertar items.
+    for (const item of input.items) {
+      const subtotalItem = item.cantidad * item.precioUnitario
+      const subtotalCosto =
+        item.costoUnitarioEstimado != null
+          ? item.cantidad * item.costoUnitarioEstimado
+          : null
+      // Mapeo: si el caller manda 'otro', guardamos 'otro' en el enum.
+      // Ese valor ya está en TIPOS_ITEM_PEDIDO por compatibilidad histórica.
+      tx.insert(pedidoItems)
+        .values({
+          pedidoId: pedidoCreado.id,
+          tipoItem: item.tipoItem === 'otro' ? 'otro' : item.tipoItem,
+          descripcion: item.descripcion.trim(),
+          referencia: item.referencia ?? null,
+          cantidad: item.cantidad,
+          precioUnitario: item.precioUnitario,
+          costoUnitarioEstimado: item.costoUnitarioEstimado ?? null,
+          subtotal: subtotalItem,
+          subtotalCostoEstimado: subtotalCosto,
+          metadata: item.metadata ?? null
+        })
+        .run()
+    }
+
+    // 4d. Aplicar transiciones de estado hasta `estadoInicial`.
+    // Ej. si estadoInicial='entregado', recorremos cotizado → confirmado →
+    // en_proceso → listo → entregado, validando cada paso e insertando
+    // historial. Para casos retroactivos, usamos `fechaIngreso` como
+    // timestamp del historial (no `now()`) para que las fechas reflejen
+    // cuándo ocurrió realmente el cambio.
+    const estadoFinal = input.pedido.estadoInicial
+    let estadoActual: EstadoPedido = 'cotizado'
+    if (estadoFinal !== 'cotizado') {
+      const camino = construirCaminoTransiciones('cotizado', estadoFinal)
+      const fechaHistorial = input.pedido.fechaIngreso
+      for (const siguiente of camino) {
+        tx.insert(historialCambios)
+          .values({
+            tabla: 'pedidos',
+            registroId: pedidoCreado.id,
+            campo: 'estado',
+            valorAnterior: estadoActual,
+            valorNuevo: siguiente,
+            fecha: sql`(datetime(${fechaHistorial}))`
+          })
+          .run()
+        estadoActual = siguiente
+      }
+      // En retroactivos, `updatedAt` debe reflejar la fecha histórica del
+      // pedido (consistente con `historialCambios`). Sin esto, un pedido
+      // creado para 2025-03-01 aparecía como "modificado hoy" en reportes
+      // y filtros por última actualización.
+      tx.update(pedidos)
+        .set({
+          estado: estadoFinal,
+          updatedAt: sql`(datetime(${fechaHistorial}))`
+        })
+        .where(eq(pedidos.id, pedidoCreado.id))
+        .run()
+    }
+
+    // Re-leemos el pedido para obtener el estado actualizado y todos los
+    // campos auto-calculados que quedaron en la fila.
+    const pedido = txDb
+      .select()
+      .from(pedidos)
+      .where(eq(pedidos.id, pedidoCreado.id))
+      .get()!
+
+    // 4e. Insertar factura.
+    const factura = tx
+      .insert(facturas)
+      .values({
+        numero: generarConsecutivo(txDb, 'factura'),
+        pedidoId: pedido.id,
+        clienteId: pedido.clienteId,
+        fecha: input.factura.fecha,
+        total: precioFinal,
+        fechaEntrega: pedido.fechaEntrega ?? null,
+        notas: input.factura.notas ?? null
+      })
+      .returning()
+      .get()
+
+    let pago: typeof pagos.$inferSelect | null = null
+    let saldo = factura.total
+
+    // 4f. Caso especial: si total = 0 (regalo), factura → pagada inmediato.
+    if (precioFinal === 0) {
+      tx.update(facturas)
+        .set({ estado: 'pagada', updatedAt: sql`(datetime('now'))` })
+        .where(eq(facturas.id, factura.id))
+        .run()
+      factura.estado = 'pagada'
+      saldo = 0
+    } else if (input.abono && abono > 0) {
+      // 4g. Insertar pago + movimiento financiero.
+      pago = tx
+        .insert(pagos)
+        .values({
+          facturaId: factura.id,
+          monto: abono,
+          metodoPago: input.abono.metodoPago,
+          fecha: input.abono.fecha,
+          notas: input.abono.notas ?? null
+        })
+        .returning()
+        .get()
+
+      tx.insert(movimientosFinancieros)
+        .values({
+          tipo: 'ingreso',
+          categoria: categoriaDesdePedido(pedido.tipoTrabajo as TipoTrabajo),
+          descripcion: `Pago factura ${factura.numero}`,
+          monto: abono,
+          fecha: input.abono.fecha,
+          referenciaTipo: 'pago',
+          referenciaId: pago.id
+        })
+        .run()
+
+      saldo = factura.total - abono
+      if (saldo <= 0) {
+        tx.update(facturas)
+          .set({ estado: 'pagada', updatedAt: sql`(datetime('now'))` })
+          .where(eq(facturas.id, factura.id))
+          .run()
+        factura.estado = 'pagada'
+      }
+    }
+
+    return { pedido, factura, pago, saldo }
+  })
+}
+
+/**
+ * Construye un camino válido de transiciones desde `desde` hasta `hasta` usando
+ * `TRANSICIONES_VALIDAS`. Para los estados normales (cotizado → confirmado →
+ * en_proceso → listo → entregado) hay un único camino lineal. Para casos
+ * especiales (cancelado, sin_reclamar) se busca el primer camino válido.
+ */
+function construirCaminoTransiciones(
+  desde: EstadoPedido,
+  hasta: EstadoPedido
+): EstadoPedido[] {
+  if (desde === hasta) return []
+  // BFS simple con cap de profundidad — el grafo de transiciones es chico.
+  const cola: { estado: EstadoPedido; camino: EstadoPedido[] }[] = [
+    { estado: desde, camino: [] }
+  ]
+  const visitados = new Set<EstadoPedido>([desde])
+  while (cola.length > 0) {
+    const { estado, camino } = cola.shift()!
+    const siguientes = TRANSICIONES_VALIDAS[estado] ?? []
+    for (const sig of siguientes) {
+      if (visitados.has(sig)) continue
+      const nuevoCamino = [...camino, sig]
+      if (sig === hasta) return nuevoCamino
+      visitados.add(sig)
+      cola.push({ estado: sig, camino: nuevoCamino })
+    }
+  }
+  throw new Error(
+    `No existe camino válido de transiciones de "${desde}" a "${hasta}"`
+  )
 }
 
 export function crearPedidoConfirmadoConFactura(
@@ -1013,6 +1355,173 @@ export function editarPedidoComercial(
       .run()
 
     return { pedido: pedidoActualizado, facturaActualizada, devolucionGenerada }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Quick-pay: cobrar saldo pendiente y entregar en una sola operación atómica
+// ---------------------------------------------------------------------------
+
+export type CobrarYEntregarInput = {
+  pedidoId: number
+  monto: number
+  metodoPago: MetodoPago
+  fecha: string
+  notas?: string | null
+}
+
+export type CobrarYEntregarResult = {
+  pedido: typeof pedidos.$inferSelect
+  pago: typeof pagos.$inferSelect
+  factura: typeof facturas.$inferSelect
+  saldoFinal: number
+  facturaPagada: boolean
+}
+
+/**
+ * Quick-pay: registra el pago del saldo pendiente Y mueve el pedido a
+ * estado 'entregado' en una sola transacción atómica. Pensado para el
+ * flujo "cliente paga + recoge" del kanban (drag a Entregado).
+ *
+ * Reglas:
+ *   - Pedido debe estar en estado 'listo' (la transición a entregado solo
+ *     es válida desde ahí — TRANSICIONES_VALIDAS lo enforce)
+ *   - Debe tener exactamente UNA factura activa (no anulada)
+ *   - El monto debe cubrir el saldo pendiente exacto. Si el cliente solo
+ *     puede dejar abono parcial, debe usar el endpoint `registrarPago`
+ *     normal en lugar de este (la card NO debe pasar a entregado)
+ *   - Crea un movimiento_financiero de ingreso con la categoría correcta
+ *     según el tipo de trabajo (enmarcacion / restauracion)
+ *   - Si la transacción falla en cualquier paso, rollback completo
+ *
+ * @throws si pedido no existe, no está en 'listo', no tiene factura activa,
+ *         monto inválido o transición rechazada
+ */
+export function cobrarYEntregar(db: DB, input: CobrarYEntregarInput): CobrarYEntregarResult {
+  if (!Number.isFinite(input.monto) || input.monto <= 0) {
+    throw new Error('El monto del cobro debe ser mayor a 0')
+  }
+  validarEnum(input.metodoPago, METODOS_PAGO, 'metodoPago')
+  validarFechaISO(input.fecha, 'YYYY-MM-DD', 'fecha')
+
+  return db.transaction((tx) => {
+    const pedido = tx.select().from(pedidos).where(eq(pedidos.id, input.pedidoId)).get()
+    if (!pedido) throw new Error(`Pedido ${input.pedidoId} no encontrado`)
+    if (pedido.estado !== 'listo') {
+      throw new Error(
+        `Solo se puede cobrar y entregar pedidos en estado "listo". Este está en "${pedido.estado}".`
+      )
+    }
+
+    const facturaActiva = tx
+      .select()
+      .from(facturas)
+      .where(and(eq(facturas.pedidoId, pedido.id), not(eq(facturas.estado, 'anulada'))))
+      .get()
+    if (!facturaActiva) {
+      throw new Error(
+        'Este pedido no tiene factura activa. Genera la factura antes de cobrar.'
+      )
+    }
+
+    // Calcular saldo actual (factura.total - pagos previos + devoluciones)
+    const totPagos = tx
+      .select({ sum: sql<number>`coalesce(sum(${pagos.monto}), 0)` })
+      .from(pagos)
+      .where(eq(pagos.facturaId, facturaActiva.id))
+      .get()
+    const totDev = tx
+      .select({ sum: sql<number>`coalesce(sum(${devoluciones.monto}), 0)` })
+      .from(devoluciones)
+      .where(eq(devoluciones.facturaId, facturaActiva.id))
+      .get()
+    const saldoActual =
+      facturaActiva.total - (totPagos?.sum ?? 0) + (totDev?.sum ?? 0)
+
+    if (input.monto > saldoActual) {
+      throw new Error(
+        `El monto (${input.monto}) excede el saldo pendiente (${saldoActual})`
+      )
+    }
+    // Decisión de UX: este endpoint exige cobro completo. Si el cliente
+    // paga parcial, el frontend debe usar `registrarPago` y NO cambiar
+    // estado (el pedido sigue en 'listo').
+    if (input.monto < saldoActual) {
+      throw new Error(
+        `Para entregar el pedido debes cobrar el saldo completo (${saldoActual}). ` +
+          `Si solo recibes un abono parcial, usa "Cobrar abono" en lugar de "Cobrar y entregar".`
+      )
+    }
+
+    // 1. Insertar pago
+    const pago = tx
+      .insert(pagos)
+      .values({
+        facturaId: facturaActiva.id,
+        monto: input.monto,
+        metodoPago: input.metodoPago,
+        fecha: input.fecha,
+        notas: input.notas ?? null
+      })
+      .returning()
+      .get()
+
+    // 2. Movimiento financiero (ingreso)
+    tx.insert(movimientosFinancieros)
+      .values({
+        tipo: 'ingreso',
+        categoria: categoriaDesdePedido(pedido.tipoTrabajo as TipoTrabajo),
+        descripcion: `Pago factura ${facturaActiva.numero} (cobrar+entregar)`,
+        monto: input.monto,
+        fecha: input.fecha,
+        referenciaTipo: 'pago',
+        referenciaId: pago.id
+      })
+      .run()
+
+    // 3. Marcar factura como pagada (saldoFinal = 0 garantizado por la
+    //    validación de cobro completo arriba)
+    const facturaActualizada = tx
+      .update(facturas)
+      .set({ estado: 'pagada', updatedAt: sql`(datetime('now'))` })
+      .where(eq(facturas.id, facturaActiva.id))
+      .returning()
+      .get()
+
+    // 4. Cambiar estado del pedido a 'entregado'. Validamos la transición
+    //    explícitamente — `TRANSICIONES_VALIDAS` ya garantiza que listo→entregado
+    //    es válido, pero re-checamos por defensa. NO usamos `cambiarEstadoPedido`
+    //    aquí para evitar transacciones anidadas; replicamos su lógica:
+    const permitidos = TRANSICIONES_VALIDAS[pedido.estado] ?? []
+    if (!permitidos.includes('entregado')) {
+      throw new Error(`No se puede pasar de "${pedido.estado}" a "entregado"`)
+    }
+    const pedidoActualizado = tx
+      .update(pedidos)
+      .set({ estado: 'entregado', updatedAt: sql`(datetime('now'))` })
+      .where(eq(pedidos.id, pedido.id))
+      .returning()
+      .get()
+
+    // 5. Historial
+    tx.insert(historialCambios)
+      .values({
+        tabla: 'pedidos',
+        registroId: pedido.id,
+        campo: 'estado',
+        valorAnterior: pedido.estado,
+        valorNuevo: 'entregado',
+        fecha: sql`(datetime('now'))`
+      })
+      .run()
+
+    return {
+      pedido: pedidoActualizado,
+      pago,
+      factura: facturaActualizada,
+      saldoFinal: 0,
+      facturaPagada: true
+    }
   })
 }
 

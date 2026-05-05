@@ -13,6 +13,9 @@ import DashboardPage from '@renderer/features/dashboard/page'
 const AgendaPage = lazy(() => import('@renderer/features/agenda/page'))
 const CotizadorPage = lazy(() => import('@renderer/features/cotizador/page'))
 const PedidosPage = lazy(() => import('@renderer/features/pedidos/page'))
+const NuevoPedidoDirectoPage = lazy(
+  () => import('@renderer/features/pedidos/nuevo-directo-page')
+)
 const FacturasPage = lazy(() => import('@renderer/features/facturas/page'))
 const ClientesPage = lazy(() => import('@renderer/features/clientes/page'))
 const ClasesPage = lazy(() => import('@renderer/features/clases/page'))
@@ -37,6 +40,7 @@ const router = createHashRouter([
       { path: 'agenda', element: lazyRoute(<AgendaPage />) },
       { path: 'cotizador', element: lazyRoute(<CotizadorPage />) },
       { path: 'pedidos', element: lazyRoute(<PedidosPage />) },
+      { path: 'pedidos/nuevo-directo', element: lazyRoute(<NuevoPedidoDirectoPage />) },
       { path: 'pedidos/:id', element: lazyRoute(<PedidosPage />) },
       { path: 'facturas', element: lazyRoute(<FacturasPage />) },
       { path: 'facturas/:id', element: lazyRoute(<FacturasPage />) },

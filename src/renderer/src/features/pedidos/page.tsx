@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { LayoutGrid, List, ClipboardList, Calculator, Archive } from 'lucide-react'
+import { LayoutGrid, List, ClipboardList, Calculator, Archive, Plus } from 'lucide-react'
 import { OperationalBoard } from '@renderer/components/layout/page-frame'
 import { SearchInput } from '@renderer/components/ui/search-input'
 import { useIpc } from '@renderer/hooks/use-ipc'
@@ -15,6 +15,7 @@ import { extractPedidoIds, type PedidoAlertaRow } from '@renderer/lib/pedidos-al
 import { KanbanBoard } from './kanban-board'
 import { PedidoListView } from './pedido-list-view'
 import { PedidoDetailPanel } from './pedido-detail-panel'
+import { QuickPayModal, type QuickPayMode } from './quick-pay-modal'
 import type { Pedido, EstadoPedido, IpcResult, Cliente } from '@shared/types'
 
 type SaldoPedido = { pedidoId: number; total: number; pagado: number; saldo: number }
@@ -49,6 +50,15 @@ export default function PedidosPage(): React.JSX.Element {
   const [selected, setSelected] = useState<Pedido | null>(null)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [search, setSearch] = useState('')
+  // Estado del modal QuickPay: cuando arrastras una card con saldo a la
+  // columna "Entregado", o sueltas en la drop zone "Cobrar abono", se
+  // abre este modal con el contexto del pedido y el modo correspondiente.
+  const [quickPayCtx, setQuickPayCtx] = useState<{
+    pedido: Pedido
+    saldoPendiente: number
+    totalFactura: number
+    modo: QuickPayMode
+  } | null>(null)
   // Toggle "Ver archivados". Por defecto oculta entregados de hace
   // más de 30 días para no inflar el kanban con histórico; papá puede
   // habilitarlo cuando necesita revisar o reimprimir facturas viejas.
@@ -234,19 +244,22 @@ export default function PedidosPage(): React.JSX.Element {
       const oldPedido = pedidos?.find((p) => p.id === pedidoId)
       if (!oldPedido) return
 
-      // Bloqueo duro: no permitir mover a "entregado" si la factura
-      // todavía tiene saldo pendiente. Evita que papá entregue un cuadro
-      // sin haber terminado de cobrarlo. Si no hay factura aún, saldo es
-      // `undefined` y no bloqueamos (ese caso es escalamiento normal).
+      // Quick-pay: si el pedido va a "entregado" y todavía tiene saldo
+      // pendiente, en vez de bloquear con un error toast, abrimos el modal
+      // de cobrar+entregar para que el dueño resuelva los dos pasos en uno.
+      // Si no hay saldo (factura ya pagada o sin factura), seguimos con el
+      // flujo normal de cambiar estado.
       if (nuevoEstado === 'entregado') {
         const saldoPendiente = saldosMap.get(pedidoId)
-        if (saldoPendiente !== undefined && saldoPendiente > 0) {
-          showToast({
-            tone: 'error',
-            title: 'No se puede entregar sin cobrar el saldo',
-            message: `Falta cobrar $${saldoPendiente.toLocaleString('es-CO')} del pedido ${oldPedido.numero}. Registra el abono antes de marcar entregado.`
+        const totalInfo = saldosInfoMap.get(pedidoId)
+        if (saldoPendiente !== undefined && saldoPendiente > 0 && totalInfo) {
+          setQuickPayCtx({
+            pedido: oldPedido,
+            saldoPendiente,
+            totalFactura: totalInfo.total,
+            modo: 'cobrar_y_entregar'
           })
-          return
+          return // El modal se encarga del resto
         }
       }
 
@@ -404,6 +417,16 @@ export default function PedidosPage(): React.JSX.Element {
         icon: Calculator,
         variant: 'primary'
       }}
+      secondaryActions={[
+        {
+          label: 'Nuevo pedido directo',
+          onClick: () => navigate('/pedidos/nuevo-directo'),
+          icon: Plus,
+          variant: 'outline',
+          tooltip:
+            'Para precios fijos del momento o pedidos pasados (sin pasar por el cotizador)'
+        }
+      ]}
       filters={
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -488,7 +511,7 @@ export default function PedidosPage(): React.JSX.Element {
           fondo para que el foco visual se quede en el panel. transition-
           opacity para que el cambio se sienta orquestado, no de golpe. */}
       <div
-        className={cn('transition-opacity duration-200', selected ? 'opacity-50' : 'opacity-100')}
+        className={cn('transition-opacity duration-base', selected ? 'opacity-50' : 'opacity-100')}
       >
         {(pedidos ?? []).length === 0 ? (
           <EmptyState
@@ -504,8 +527,17 @@ export default function PedidosPage(): React.JSX.Element {
             pedidos={filteredPedidos}
             clienteMap={clienteMap}
             saldosMap={saldosMap}
+            saldosInfoMap={saldosInfoMap}
             onCardClick={setSelected}
             onChangeEstado={handleChangeEstado}
+            onCobrarAbono={(pedido, saldoPendiente, totalFactura) =>
+              setQuickPayCtx({
+                pedido,
+                saldoPendiente,
+                totalFactura,
+                modo: 'solo_cobrar'
+              })
+            }
             highlightedId={highlightedId}
           />
         ) : (
@@ -518,6 +550,24 @@ export default function PedidosPage(): React.JSX.Element {
           />
         )}
       </div>
+
+      {quickPayCtx && (
+        <QuickPayModal
+          pedido={quickPayCtx.pedido}
+          cliente={
+            (clientes ?? []).find((c) => c.id === quickPayCtx.pedido.clienteId) ?? null
+          }
+          saldoPendiente={quickPayCtx.saldoPendiente}
+          totalFactura={quickPayCtx.totalFactura}
+          modo={quickPayCtx.modo}
+          onClose={() => setQuickPayCtx(null)}
+          onSuccess={() => {
+            setQuickPayCtx(null)
+            refetch()
+            refetchSaldos()
+          }}
+        />
+      )}
 
       {selected && (
         <PedidoDetailPanel
