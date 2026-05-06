@@ -54,7 +54,7 @@ export function AgregarTrabajoModal({
     <Modal
       open={open}
       onClose={handleClose}
-      size="lg"
+      size="full"
       title={
         trabajoEditando
           ? `Editar trabajo #${trabajoEditando.idLocal.slice(0, 4)}`

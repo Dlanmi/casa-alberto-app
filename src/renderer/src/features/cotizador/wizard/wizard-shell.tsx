@@ -457,33 +457,46 @@ export function WizardShell({
     // h-full + min-h-0 hace que el wizard ocupe toda la altura de <main>
     // sin desbordar — el scroll lo maneja la row 2. Así <main> deja de
     // scrollear este wizard y se evita el doble scroll container.
-    <div className="grid grid-rows-[auto_1fr] h-full min-h-0">
-      <div className="flex items-center justify-between pb-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setShowExitConfirm(true)}>
-            <ArrowLeft size={20} />
-          </Button>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-soft">
-              Flujo activo
-            </p>
-            <p className="text-sm font-medium text-text">
-              Completa cada decisión antes de avanzar.
-            </p>
+    <div
+      className={cn(
+        'grid grid-rows-[auto_1fr] min-h-0',
+        // En modo página completa, el wizard ocupa todo el alto del <main>;
+        // en modo embed, hereda la altura del modal padre (que ya tiene
+        // max-h-[92vh] overflow-y-auto). Sin h-full, el modal scrollea de
+        // forma natural en lugar de forzar al wizard a un alto fijo.
+        isEmbed ? 'min-h-[60vh]' : 'h-full'
+      )}
+    >
+      {/* Header propio del wizard — solo se muestra en modo página completa.
+          En modo embed el modal padre ya provee título y botón X. */}
+      {!isEmbed && (
+        <div className="flex items-center justify-between pb-6">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => setShowExitConfirm(true)}>
+              <ArrowLeft size={20} />
+            </Button>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-soft">
+                Flujo activo
+              </p>
+              <p className="text-sm font-medium text-text">
+                Completa cada decisión antes de avanzar.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <AutoSaveIndicator status={autoSaveStatus} lastSavedAt={lastSavedAt} />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowExitConfirm(true)}
+              aria-label="Cerrar cotización"
+            >
+              <X size={20} />
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <AutoSaveIndicator status={autoSaveStatus} lastSavedAt={lastSavedAt} />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowExitConfirm(true)}
-            aria-label="Cerrar cotización"
-          >
-            <X size={20} />
-          </Button>
-        </div>
-      </div>
+      )}
 
       {/* Row 2 del grid: único scroll container del wizard. min-h-0 es vital
           para que 1fr respete el overflow en descendientes. El flex interno
@@ -634,16 +647,20 @@ export function WizardShell({
               pantallas normales se muestra la barra compacta de arriba.
               Recibe la evaluacionComercial completa para que el descuento y
               el margen se actualicen al instante cuando el usuario lo
-              configura en el paso de resumen. */}
-          <div className="w-72 shrink-0 hidden lg:block">
-            <PrecioPanel
-              items={cotizacion?.items ?? []}
-              subtotal={cotizacion?.subtotal ?? 0}
-              totalMateriales={cotizacion?.totalMateriales ?? 0}
-              evaluacion={evaluacionComercial}
-              porcentajeMateriales={data.porcentajeMateriales}
-            />
-          </div>
+              configura en el paso de resumen.
+              En modo embed se oculta: el modal del padre limita el ancho y
+              el StepResumenEmbed ya muestra el desglose completo al final. */}
+          {!isEmbed && (
+            <div className="w-72 shrink-0 hidden lg:block">
+              <PrecioPanel
+                items={cotizacion?.items ?? []}
+                subtotal={cotizacion?.subtotal ?? 0}
+                totalMateriales={cotizacion?.totalMateriales ?? 0}
+                evaluacion={evaluacionComercial}
+                porcentajeMateriales={data.porcentajeMateriales}
+              />
+            </div>
+          )}
         </div>
       </div>
 

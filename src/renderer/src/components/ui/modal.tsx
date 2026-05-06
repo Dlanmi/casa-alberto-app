@@ -14,7 +14,7 @@ type ModalProps = {
   title?: string
   children: ReactNode
   className?: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
   initialFocusRef?: RefObject<HTMLElement | null>
   /**
    * Callback opcional que se ejecuta ANTES de cerrar. Si retorna `false`, el
@@ -137,10 +137,18 @@ export function Modal({
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       className={cn(
         'rounded-xl shadow-4 bg-surface p-0 border border-border',
-        'max-h-[85vh] overflow-y-auto',
+        // Modales chicos/medianos limitan a 85vh; los grandes (xl/full) usan
+        // 92vh para que el contenido tenga espacio sin scroll innecesario.
+        size === 'xl' || size === 'full'
+          ? 'max-h-[92vh] overflow-y-auto'
+          : 'max-h-[85vh] overflow-y-auto',
         size === 'sm' && 'w-100 max-w-[90vw]',
         size === 'md' && 'w-140 max-w-[90vw]',
         size === 'lg' && 'w-180 max-w-[90vw]',
+        size === 'xl' && 'w-[min(56rem,95vw)]',
+        // 'full': casi todo el viewport, ideal para sub-flujos como el wizard
+        // multi-trabajo donde el contenido necesita espacio para 2 columnas.
+        size === 'full' && 'w-[95vw] max-w-[95vw]',
         className
       )}
       onClick={handleBackdropClick}
