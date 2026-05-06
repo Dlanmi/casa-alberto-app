@@ -412,19 +412,26 @@ export default function PedidosPage(): React.JSX.Element {
             : 'Esta vista ya recorta el trabajo para que no tengas que buscar manualmente qué atender.'
       }}
       primaryAction={{
-        label: 'Nueva cotización',
-        onClick: () => navigate('/cotizador'),
+        label: 'Nuevo pedido',
+        onClick: () => navigate('/cotizador/pedido'),
         icon: Calculator,
-        variant: 'primary'
+        variant: 'primary',
+        tooltip: 'Cliente con uno o varios trabajos cotizados (medidas, marco, vidrio…)'
       }}
       secondaryActions={[
         {
-          label: 'Nuevo pedido directo',
+          label: 'Cotización rápida',
+          onClick: () => navigate('/cotizador'),
+          icon: Calculator,
+          variant: 'outline',
+          tooltip: 'Cotizar un solo trabajo sin crear pedido todavía'
+        },
+        {
+          label: 'Pedido directo',
           onClick: () => navigate('/pedidos/nuevo-directo'),
           icon: Plus,
           variant: 'outline',
-          tooltip:
-            'Para precios fijos del momento o pedidos pasados (sin pasar por el cotizador)'
+          tooltip: 'Para precios fijos del momento o pedidos pasados (sin cotización)'
         }
       ]}
       filters={

@@ -353,17 +353,36 @@ function renderFormatoTermico(doc: PDFKit.PDFDocument, data: FacturaData, negoci
   doc.fontSize(8).text('-'.repeat(42), { align: 'center', width: usable })
   doc.moveDown(0.1)
 
-  // Items — formato vertical: descripcion arriba, cant × unit y subtotal abajo
+  // Items — formato vertical: descripcion arriba, cant × unit y subtotal abajo.
+  // Si el pedido tiene varios trabajos, sub-headers compactos por grupo.
   doc.fontSize(7).font('Helvetica')
-  for (const item of data.items) {
-    doc.font('Helvetica-Bold').text(item.descripcion, margin, doc.y, { width: usable })
-    doc.font('Helvetica')
-    const left = item.precioUnitario
-      ? `${item.cantidad} × ${formatCOP(item.precioUnitario)}`
-      : `${item.cantidad}`
-    doc.text(left, margin, doc.y, { width: usable, continued: true })
-    doc.text(formatCOP(item.subtotal), margin, doc.y, { width: usable, align: 'right' })
-    doc.moveDown(0.1)
+  const gruposTerm = agruparItemsPorTrabajo(data.items)
+  const esMultiTerm = gruposTerm.filter((g) => g.trabajoId !== null).length > 1
+  for (const grupo of gruposTerm) {
+    if (esMultiTerm && grupo.trabajoId !== null) {
+      const tipoLabel = grupo.tipoTrabajo
+        ? (TIPO_TRABAJO_LABEL_PDF[grupo.tipoTrabajo] ?? grupo.tipoTrabajo)
+        : ''
+      doc
+        .fontSize(7)
+        .font('Helvetica-Bold')
+        .fillColor('#57534e')
+        .text(`-- Trabajo ${grupo.trabajoId} · ${tipoLabel} --`, margin, doc.y, {
+          width: usable,
+          align: 'center'
+        })
+      doc.fillColor('black').font('Helvetica')
+    }
+    for (const item of grupo.items) {
+      doc.font('Helvetica-Bold').text(item.descripcion, margin, doc.y, { width: usable })
+      doc.font('Helvetica')
+      const left = item.precioUnitario
+        ? `${item.cantidad} × ${formatCOP(item.precioUnitario)}`
+        : `${item.cantidad}`
+      doc.text(left, margin, doc.y, { width: usable, continued: true })
+      doc.text(formatCOP(item.subtotal), margin, doc.y, { width: usable, align: 'right' })
+      doc.moveDown(0.1)
+    }
   }
 
   doc.fontSize(8).text('-'.repeat(42), { align: 'center', width: usable })

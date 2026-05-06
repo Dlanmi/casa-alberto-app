@@ -149,13 +149,24 @@ export function PedidoDetailPanel({
       const clienteRes = (await window.api.clientes.obtener(pedido.clienteId)) as IpcResult<Cliente>
       const cliente = clienteRes.ok ? clienteRes.data : null
 
+      // v2.2.0+: propagamos metadata.trabajoId al PDF para que items de un
+      // pedido multi-trabajo se agrupen visualmente. Pedidos viejos sin
+      // metadata se renderizan como lista plana (comportamiento histórico).
       const pdfItems =
-        pedidoRes.data.items?.map((it) => ({
-          descripcion: it.descripcion ?? 'Item',
-          cantidad: it.cantidad,
-          precioUnitario: it.precioUnitario ?? it.subtotal,
-          subtotal: it.subtotal
-        })) ?? []
+        pedidoRes.data.items?.map((it) => {
+          const md = (it as { metadata?: { trabajoId?: number; tipoTrabajoOrigen?: string; medidas?: { anchoCm: number; altoCm: number } } | null }).metadata ?? null
+          return {
+            descripcion: it.descripcion ?? 'Item',
+            cantidad: it.cantidad,
+            precioUnitario: it.precioUnitario ?? it.subtotal,
+            subtotal: it.subtotal,
+            ...(md?.trabajoId != null ? { trabajoId: md.trabajoId } : {}),
+            ...(md?.tipoTrabajoOrigen
+              ? { tipoTrabajoOrigen: md.tipoTrabajoOrigen as never }
+              : {}),
+            ...(md?.medidas ? { medidasTrabajo: md.medidas } : {})
+          }
+        }) ?? []
 
       const pdfPagos: { fecha: string; monto: number; metodo: 'efectivo' | 'transferencia' | 'tarjeta' | 'cheque' }[] = []
       const numero = facturaActiva

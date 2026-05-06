@@ -42,7 +42,7 @@ import {
 import {
   METODOS_PAGO,
   TIPOS_ENTREGA,
-  TIPOS_TRABAJO,
+  TIPOS_TRABAJO_CONCRETO,
   type Cliente,
   type CrearPedidoDirectoInput,
   type ItemPedidoDirecto,
@@ -430,7 +430,10 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
               label="Tipo de trabajo"
               value={tipoTrabajo}
               onChange={(e) => setTipoTrabajo(e.target.value as TipoTrabajo)}
-              options={TIPOS_TRABAJO.map((t) => ({ value: t, label: TIPO_TRABAJO_LABEL[t] }))}
+              options={TIPOS_TRABAJO_CONCRETO.map((t) => ({
+                value: t,
+                label: TIPO_TRABAJO_LABEL[t]
+              }))}
             />
             <Select
               label="Estado inicial"
@@ -938,7 +941,9 @@ function ItemRow({ index, item, onUpdate, onRemove, canRemove }: ItemRowProps): 
             })
             setPickerMarcoOpen(false)
           }}
-          compacto
+          // Sin `compacto`: el Modal ya provee scroll (max-h-[85vh]) y el
+          // grid no necesita su propio overflow. Con doble scroll (modal +
+          // grid) se sentía "scroll infinito" al llegar al final del grid.
         />
       </Modal>
     </div>
