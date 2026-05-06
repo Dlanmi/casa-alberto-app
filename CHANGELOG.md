@@ -10,6 +10,56 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.2.0] — Pedido con varios trabajos en una sola visita
+
+Cuando un cliente llega con varios cuadros distintos (uno con marco simple,
+otro con paspartú, una restauración, etc.), antes había que crearle un
+pedido por cada trabajo. Ahora se cotizan todos juntos en el mismo flujo
+y queda una sola factura con la lista de trabajos agrupados.
+
+### Nuevo: flujo de pedido multi-trabajo
+
+- **Entrada desde el cotizador**: en la pantalla del cotizador aparece un
+  banner destacado "¿Cliente con varios trabajos?". Click → nuevo flujo.
+- **Cliente al inicio**: primero se elige el cliente (existente o nuevo),
+  para que el historial quede visible mientras se cotiza.
+- **Trabajos uno por uno**: botón "Agregar trabajo" abre un modal con el
+  wizard completo de cotización (mismas medidas, marco, paspartú, vidrio,
+  materiales que el flujo individual). Cada trabajo confirmado entra a
+  una lista visible con su precio.
+- **Tipos mezclados**: en un mismo pedido pueden coexistir trabajos de
+  tipos distintos (enmarcación + restauración + retablo, por ejemplo).
+- **Editar / eliminar**: cada trabajo en la lista tiene botones para
+  re-abrir el modal y modificarlo, o quitarlo del pedido.
+- **Total y pago**: descuento global opcional sobre el subtotal de todos
+  los trabajos, abono opcional (efectivo/transferencia), urgencia, notas
+  y fecha de entrega — todo a nivel pedido, no por trabajo.
+- **Auto-save**: si el papá cierra la app sin terminar, al volver recupera
+  el cliente y los trabajos cotizados sin perder el progreso.
+
+### Búsqueda de marco enlazada en pedido directo
+
+En "Nuevo pedido directo" (atajo del kanban), cuando un item es tipo "marco"
+ahora se ofrece un botón "Elegir del catálogo". Al seleccionar una muestra,
+se autopopulan descripción, referencia, precio/m y costo estimado. El modo
+libre (escribir todo a mano) sigue disponible para muestras que aún no
+están en el catálogo.
+
+### Factura PDF agrupada por trabajo
+
+Para pedidos con varios trabajos, la factura PDF ahora muestra cada
+trabajo como un sub-header con su tipo y medidas, seguido de sus items
+(marco, vidrio, paspartú, materiales). Los pedidos viejos (un solo
+trabajo) siguen viéndose igual que antes.
+
+### Para el dueño
+
+Un cliente que antes generaba 3 pedidos separados ahora genera 1 solo
+con 3 trabajos y 1 factura. Los reportes del kanban, finanzas y el
+historial siguen funcionando igual: los pedidos viejos se muestran como
+siempre, y los pedidos nuevos con tipos mezclados aparecen en una
+categoría nueva "Pedido mixto" cuando el filtro lo amerita.
+
 ## [2.1.1] — Hardening: tres bugs de seguridad reportados por auditoría
 
 Patch que cierra tres caminos de fallo identificados en revisión de código
