@@ -10,6 +10,41 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.1.1] — Hardening: tres bugs de seguridad reportados por auditoría
+
+Patch que cierra tres caminos de fallo identificados en revisión de código
+del release 2.1.0. Los tres son de severidad media y solo alcanzables con
+acceso al renderer (perfil local manipulado o renderer comprometido), pero
+el modelo de amenazas del proyecto trata ese límite como no confiable, así
+que se cierran de forma defensiva.
+
+### Arreglado
+
+- **CommandPalette no se rompe si el historial reciente queda corrupto.**
+  Antes, un valor inesperado en el almacenamiento local del historial podía
+  dejar la pantalla en blanco al abrir la búsqueda global (Ctrl+K). Ahora
+  los valores no reconocidos se descartan silenciosamente y la búsqueda
+  abre normalmente, incluso si el archivo de preferencias quedó dañado.
+- **Los pedidos y facturas no aceptan totales imposibles.** Antes, un
+  cálculo que se desbordara (por ejemplo cantidades muy grandes) podía
+  guardar valores infinitos en la base de datos, ensuciando reportes,
+  PDFs y balances. Ahora cada multiplicación y suma de plata se vuelve
+  a validar antes de guardarse: si el resultado no es un número finito
+  válido, la operación se rechaza con un mensaje claro y la transacción
+  se aborta sin tocar la base de datos.
+- **El heatmap mensual de finanzas no puede colgar la app.** Antes, una
+  llamada con un mes inválido (por ejemplo "0000-01") podía hacer que la
+  app intentara generar décadas de días en memoria y se cerrara. Ahora
+  se valida que el año esté dentro de un rango razonable y se aborta
+  inmediatamente con un error legible.
+
+### Para el dueño
+
+No hay cambios visibles en el uso normal. Los flujos de cotización,
+pedidos, facturas, clases y finanzas funcionan exactamente igual. El
+único caso donde se notará la diferencia es si el archivo de preferencias
+estaba dañado: ahora la app abre sin mostrar pantalla en blanco.
+
 ## [2.0.1] — Arreglo: actualización desde versiones anteriores no rompe la app
 
 Patch que cierra el error de instalación reportado al actualizar de 1.7.4
