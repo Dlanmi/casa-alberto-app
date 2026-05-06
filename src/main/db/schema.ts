@@ -22,9 +22,21 @@ export const TIPOS_TRABAJO = [
   'bastidor',
   'tapa',
   'restauracion',
-  'vidrio_espejo'
+  'vidrio_espejo',
+  // 'mixto' marca un pedido con varios trabajos de tipos distintos en una
+  // sola visita (ej. cliente trae un cuadro estándar + una restauración).
+  // Los items individuales conservan su tipoTrabajoOrigen en metadata.
+  'mixto'
 ] as const
 export type TipoTrabajo = (typeof TIPOS_TRABAJO)[number]
+
+// Tipos válidos para `metadata.tipoTrabajoOrigen` en items de pedidos
+// 'mixto'. Excluye 'mixto' mismo — un trabajo dentro de un pedido mixto
+// siempre tiene un tipo concreto.
+export const TIPOS_TRABAJO_CONCRETO = TIPOS_TRABAJO.filter(
+  (t) => t !== 'mixto'
+) as readonly Exclude<TipoTrabajo, 'mixto'>[]
+export type TipoTrabajoConcreto = Exclude<TipoTrabajo, 'mixto'>
 
 export const ESTADOS_PEDIDO = [
   'cotizado',
@@ -407,6 +419,9 @@ export const pedidos = sqliteTable(
 )
 
 export type PedidoItemMetadata = {
+  // Campos del cotizador (geometría calculada). Presentes en items que vienen
+  // de un cálculo automático (marco, vidrio, paspartú); ausentes en items
+  // de descuento o restauración manual.
   perimetroCm?: number
   colillaCm?: number
   metros?: number
@@ -415,6 +430,20 @@ export type PedidoItemMetadata = {
   areaM2?: number
   anchoExteriorCm?: number
   altoExteriorCm?: number
+
+  // Campos del flujo multi-trabajo (v2.2.0). Permiten reconstruir el "trabajo"
+  // (cuadro individual) al que pertenece cada item dentro de un pedido mixto.
+  // Items de descuento global no llevan trabajoId — se aplican al pedido
+  // entero. Los pedidos pre-v2.2.0 no tienen estos campos; los queries
+  // que agrupan deben tratarlos como "trabajo único".
+  trabajoId?: number
+  tipoTrabajoOrigen?: TipoTrabajoConcreto
+  medidas?: { anchoCm: number; altoCm: number }
+  muestraMarcoId?: number
+  tipoVidrio?: string
+  anchoPaspartuCm?: number
+  tipoPaspartu?: 'pintado' | 'acrilico'
+
   [key: string]: unknown
 }
 

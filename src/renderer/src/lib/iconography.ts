@@ -26,6 +26,7 @@ import {
   Users,
   Scissors,
   Ruler,
+  PackagePlus,
   type LucideIcon
 } from 'lucide-react'
 import type { TipoTrabajo } from '@shared/types'
@@ -40,7 +41,8 @@ export const TIPO_TRABAJO_ICON: Record<TipoTrabajo, LucideIcon> = {
   bastidor: Grid3x3,
   tapa: Package,
   restauracion: Sparkles,
-  vidrio_espejo: PaintBucket
+  vidrio_espejo: PaintBucket,
+  mixto: PackagePlus
 }
 
 // -- Categorías financieras --------------------------------------------

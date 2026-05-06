@@ -144,7 +144,8 @@ export const TIPO_TRABAJO_LABEL: Record<TipoTrabajo, string> = {
   bastidor: 'Bastidor',
   tapa: 'Tapa',
   restauracion: 'Restauración',
-  vidrio_espejo: 'Vidrio / Espejo'
+  vidrio_espejo: 'Vidrio / Espejo',
+  mixto: 'Pedido mixto'
 }
 
 export const TIPO_ENTREGA_LABEL: Record<TipoEntrega, string> = {

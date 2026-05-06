@@ -23,6 +23,7 @@ import type {
   PedidoItemMetadata,
   TipoEntrega,
   TipoItemPedido,
+  TipoTrabajoConcreto,
   TipoTrabajo,
   facturas,
   historialCambios,
@@ -56,14 +57,18 @@ import type {
 import type {
   CrearPedidoConfirmadoData,
   CrearPedidoConfirmadoResult,
+  CrearPedidoMultiTrabajoInput,
+  CrearPedidoMultiTrabajoResult,
   MatrizUrgencia,
-  NuevoPedidoDatos
+  NuevoPedidoDatos,
+  TrabajoCotizado
 } from '../main/db/queries/pedidos'
 import type { NuevaFactura, NuevoPago, NuevaDevolucion } from '../main/db/queries/facturas'
 
 // Re-exportamos los enums (son const arrays puras — válido en renderer).
 export {
   TIPOS_TRABAJO,
+  TIPOS_TRABAJO_CONCRETO,
   ESTADOS_PEDIDO,
   TIPOS_ENTREGA,
   TIPOS_ITEM_PEDIDO,
@@ -87,6 +92,7 @@ export {
 
 export type {
   TipoTrabajo,
+  TipoTrabajoConcreto,
   EstadoPedido,
   TipoEntrega,
   TipoItemPedido,
@@ -241,6 +247,17 @@ export type PdfItem = {
   cantidad: number
   precioUnitario: number
   subtotal: number
+  /** Cuando el pedido es multi-trabajo (v2.2.0+), cada item lleva el id del
+   *  trabajo al que pertenece (1, 2, 3...). El generador del PDF agrupa
+   *  visualmente items con el mismo trabajoId bajo un sub-header. Items
+   *  sin trabajoId (ej. descuento global) se renderizan al final sin grupo. */
+  trabajoId?: number
+  /** Tipo concreto del trabajo originario, para mostrar el sub-header. */
+  tipoTrabajoOrigen?: TipoTrabajoConcreto
+  /** Medidas del trabajo (para el sub-header del grupo). Solo el primer
+   *  item de cada grupo necesita poblarlo, pero por consistencia se pasa
+   *  en todos. */
+  medidasTrabajo?: { anchoCm: number; altoCm: number }
 }
 
 export type PdfPago = {
@@ -283,6 +300,9 @@ export type {
   NuevoPrecioVidrio,
   CrearPedidoConfirmadoData,
   CrearPedidoConfirmadoResult,
+  CrearPedidoMultiTrabajoInput,
+  CrearPedidoMultiTrabajoResult,
+  TrabajoCotizado,
   NuevoPedidoDatos,
   NuevaFactura,
   NuevoPago,

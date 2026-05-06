@@ -18,7 +18,8 @@ export const EMOJI_TIPO_TRABAJO: Record<TipoTrabajo, string> = {
   bastidor: '🖌️',
   tapa: '📐',
   restauracion: '🔧',
-  vidrio_espejo: '🪟'
+  vidrio_espejo: '🪟',
+  mixto: '🧰'
 }
 
 export const EMOJI_CATEGORIA_FINANZAS: Record<CategoriaMovimiento, string> = {
