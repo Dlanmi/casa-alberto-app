@@ -15,13 +15,15 @@ import {
   crearPedidoConfirmadoConFactura,
   crearPedidoDesdeCotizacion,
   crearPedidoDirecto,
+  crearPedidoMultiTrabajo,
   editarPedidoComercial,
   listarPedidos,
   obtenerSaldosPorPedido,
   pedidosAgenda,
   pedidosSinAbonoConSaldo,
   pedidosSinReclamar,
-  reclasificarPedidos
+  reclasificarPedidos,
+  type TrabajoCotizado
 } from './pedidos'
 import { devoluciones, movimientosFinancieros } from '../schema'
 
@@ -1673,6 +1675,276 @@ describe.runIf(nativeAbiAvailable)('crearPedidoDirecto', () => {
         })
       )
     ).toThrow(/no es un número finito válido/i)
+  })
+})
+
+// ===========================================================================
+// crearPedidoMultiTrabajo — pedido con varios trabajos en una sola visita
+// ===========================================================================
+describe.runIf(nativeAbiAvailable)('crearPedidoMultiTrabajo', () => {
+  let db: DB
+  let clienteId: number
+  let muestraMarcoId: number
+
+  beforeEach(() => {
+    db = createTestDb().db
+    clienteId = db
+      .insert(clientes)
+      .values({ nombre: 'Cliente Multi-Trabajo' })
+      .returning()
+      .get().id
+    muestraMarcoId = db
+      .insert(muestrasMarcos)
+      .values({
+        referencia: 'MT-001',
+        colillaCm: 20,
+        precioMetro: 10000
+      })
+      .returning()
+      .get().id
+    db.insert(preciosVidrios)
+      .values({
+        tipo: 'claro',
+        nombre: 'Vidrio claro 2mm',
+        espesorMm: 2,
+        precioM2: 100000,
+        costoM2Estimado: 62000
+      })
+      .run()
+  })
+
+  function cotizarTrabajo(anchoCm: number, altoCm: number): TrabajoCotizado {
+    const cotizacion = cotizarEnmarcacionEstandar(db, {
+      anchoCm,
+      altoCm,
+      muestraMarcoId,
+      tipoVidrio: 'claro'
+    })
+    return {
+      tipoTrabajo: 'enmarcacion_estandar',
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        anchoCm,
+        altoCm,
+        muestraMarcoId,
+        tipoVidrio: 'claro',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-05-06'
+      },
+      cotizacion
+    }
+  }
+
+  function inputBase(overrides: Partial<{
+    trabajos: TrabajoCotizado[]
+    descuento: { monto: number; motivo?: string } | null
+    abono: { monto: number; metodoPago: 'efectivo' | 'transferencia'; fecha: string } | null
+  }> = {}) {
+    return {
+      cliente: { tipo: 'existente' as const, id: clienteId },
+      trabajos: overrides.trabajos ?? [cotizarTrabajo(50, 70), cotizarTrabajo(30, 40)],
+      pedido: {
+        fechaIngreso: '2026-05-06',
+        fechaEntrega: '2026-05-13',
+        tipoEntrega: 'estandar' as const,
+        notas: null
+      },
+      descuento: overrides.descuento === undefined ? null : overrides.descuento,
+      factura: { fecha: '2026-05-06' },
+      abono: overrides.abono === undefined ? null : overrides.abono,
+      generarPDF: false
+    }
+  }
+
+  it('crea un pedido con 2 trabajos del mismo tipo y agrupa items por trabajoId', () => {
+    const result = crearPedidoMultiTrabajo(db, inputBase())
+    expect(result.pedido.estado).toBe('confirmado')
+    expect(result.pedido.tipoTrabajo).toBe('enmarcacion_estandar') // tipo único, no 'mixto'
+    expect(result.trabajoIds).toEqual([1, 2])
+
+    const items = db
+      .select()
+      .from(pedidoItems)
+      .where(eq(pedidoItems.pedidoId, result.pedido.id))
+      .all()
+    // Cada trabajo aporta varios items (marco, vidrio, materiales). Verifico
+    // que cada item tenga trabajoId en su metadata.
+    const trabajoIdsEnItems = new Set(
+      items
+        .map((it) => (it.metadata as { trabajoId?: number } | null)?.trabajoId)
+        .filter((id) => id !== undefined)
+    )
+    expect(trabajoIdsEnItems).toEqual(new Set([1, 2]))
+  })
+
+  it("marca el pedido como 'mixto' cuando los trabajos son de tipos distintos", () => {
+    // Trabajo 1: enmarcación. Trabajo 2: restauración manual.
+    const trabajoEnm = cotizarTrabajo(40, 60)
+    const trabajoRest: TrabajoCotizado = {
+      tipoTrabajo: 'restauracion',
+      datos: {
+        clienteId,
+        tipoTrabajo: 'restauracion',
+        descripcion: 'Restauración cuadro antiguo',
+        precioManual: 80000,
+        costoManualEstimado: 30000,
+        fechaIngreso: '2026-05-06'
+      },
+      cotizacion: {
+        items: [
+          {
+            tipoItem: 'restauracion',
+            descripcion: 'Restauración cuadro antiguo',
+            cantidad: 1,
+            precioUnitario: 80000,
+            costoUnitarioEstimado: 30000,
+            subtotal: 80000,
+            subtotalCostoEstimado: 30000
+          }
+        ],
+        subtotal: 80000,
+        totalMateriales: 0,
+        brutoCotizado: 80000,
+        precioLista: 80000,
+        precioTotal: 80000,
+        costoEstimadoTotal: 30000,
+        margenEstimado: 50000,
+        margenEstimadoPct: 6250,
+        estadoRentabilidad: 'saludable'
+      }
+    }
+
+    const result = crearPedidoMultiTrabajo(
+      db,
+      inputBase({ trabajos: [trabajoEnm, trabajoRest] })
+    )
+    expect(result.pedido.tipoTrabajo).toBe('mixto')
+    expect(result.trabajoIds).toEqual([1, 2])
+
+    // El total = suma de los dos precios de lista.
+    const total = trabajoEnm.cotizacion.precioLista + 80000
+    expect(result.pedido.precioTotal).toBe(total)
+    expect(result.factura.total).toBe(total)
+  })
+
+  it('aplica descuento global solo al total, no se duplica por trabajo', () => {
+    const t1 = cotizarTrabajo(50, 70)
+    const t2 = cotizarTrabajo(30, 40)
+    const subtotal = t1.cotizacion.precioLista + t2.cotizacion.precioLista
+    const result = crearPedidoMultiTrabajo(
+      db,
+      inputBase({
+        trabajos: [t1, t2],
+        descuento: { monto: 5000, motivo: 'Cliente frecuente' }
+      })
+    )
+    expect(result.pedido.descuentoMonto).toBe(5000)
+    expect(result.pedido.precioTotal).toBe(subtotal - 5000)
+    expect(result.factura.total).toBe(subtotal - 5000)
+
+    // El item de descuento existe y NO tiene trabajoId en su metadata.
+    const items = db
+      .select()
+      .from(pedidoItems)
+      .where(
+        and(eq(pedidoItems.pedidoId, result.pedido.id), eq(pedidoItems.tipoItem, 'descuento'))
+      )
+      .all()
+    expect(items).toHaveLength(1)
+    expect(items[0]!.subtotal).toBe(-5000)
+    expect(items[0]!.metadata).toBeNull()
+  })
+
+  it('crea pago + movimiento financiero cuando hay abono', () => {
+    const t1 = cotizarTrabajo(50, 70)
+    const t2 = cotizarTrabajo(30, 40)
+    const subtotal = t1.cotizacion.precioLista + t2.cotizacion.precioLista
+    const result = crearPedidoMultiTrabajo(
+      db,
+      inputBase({
+        trabajos: [t1, t2],
+        abono: { monto: 30000, metodoPago: 'efectivo', fecha: '2026-05-06' }
+      })
+    )
+    expect(result.pago).not.toBeNull()
+    expect(result.pago!.monto).toBe(30000)
+    expect(result.saldo).toBe(subtotal - 30000)
+
+    const movs = db
+      .select()
+      .from(movimientosFinancieros)
+      .where(eq(movimientosFinancieros.referenciaTipo, 'pago'))
+      .all()
+    expect(movs).toHaveLength(1)
+    expect(movs[0]!.monto).toBe(30000)
+  })
+
+  it('rechaza cotización manipulada aunque venga via IPC (mismo guard que single)', () => {
+    const trabajo = cotizarTrabajo(50, 70)
+    const trabajoManipulado: TrabajoCotizado = {
+      ...trabajo,
+      cotizacion: { ...trabajo.cotizacion, precioTotal: 1 }
+    }
+    expect(() =>
+      crearPedidoMultiTrabajo(db, inputBase({ trabajos: [trabajoManipulado] }))
+    ).toThrow(/listas de precios actuales/i)
+
+    expect(db.select({ n: sql<number>`count(*)` }).from(pedidos).get()?.n).toBe(0)
+  })
+
+  it('rechaza descuento mayor al subtotal', () => {
+    const t = cotizarTrabajo(30, 40)
+    expect(() =>
+      crearPedidoMultiTrabajo(
+        db,
+        inputBase({ trabajos: [t], descuento: { monto: 9999999 } })
+      )
+    ).toThrow(/excede el subtotal/i)
+  })
+
+  it('rechaza abono mayor al total tras descuento', () => {
+    const t = cotizarTrabajo(30, 40)
+    expect(() =>
+      crearPedidoMultiTrabajo(
+        db,
+        inputBase({
+          trabajos: [t],
+          abono: { monto: 9999999, metodoPago: 'efectivo', fecha: '2026-05-06' }
+        })
+      )
+    ).toThrow(/excede el total/i)
+  })
+
+  it('rechaza pedido sin trabajos', () => {
+    expect(() => crearPedidoMultiTrabajo(db, inputBase({ trabajos: [] }))).toThrow(
+      /al menos un trabajo/i
+    )
+  })
+
+  it("rechaza tipoTrabajo='mixto' como tipo de un trabajo (solo tipos concretos)", () => {
+    const t = cotizarTrabajo(30, 40)
+    const tInvalido = { ...t, tipoTrabajo: 'mixto' as never }
+    expect(() => crearPedidoMultiTrabajo(db, inputBase({ trabajos: [tInvalido] }))).toThrow(
+      /tipoTrabajo/i
+    )
+  })
+
+  it('rollback completo si una validación falla en medio de la transacción', () => {
+    // Cliente con cédula duplicada en el segundo trabajo (forzamos error).
+    db.insert(clientes).values({ nombre: 'Existente', cedula: '999' }).run()
+    const t = cotizarTrabajo(30, 40)
+    expect(() =>
+      crearPedidoMultiTrabajo(db, {
+        ...inputBase({ trabajos: [t] }),
+        cliente: { tipo: 'nuevo', data: { nombre: 'Otro', cedula: '999' } }
+      })
+    ).toThrow()
+
+    // No debería haber pedido nuevo (solo el cliente original ya existente).
+    expect(db.select({ n: sql<number>`count(*)` }).from(pedidos).get()?.n).toBe(0)
+    expect(db.select({ n: sql<number>`count(*)` }).from(pedidoItems).get()?.n).toBe(0)
+    expect(db.select({ n: sql<number>`count(*)` }).from(facturas).get()?.n).toBe(0)
   })
 })
 

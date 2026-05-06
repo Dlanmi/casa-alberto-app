@@ -9,6 +9,8 @@ import type {
   CrearPedidoConfirmadoResult,
   CrearPedidoDirectoInput,
   CrearPedidoDirectoResult,
+  CrearPedidoMultiTrabajoInput,
+  CrearPedidoMultiTrabajoResult,
   Factura,
   FacturaConPagos,
   FacturaListarFiltros,
@@ -182,6 +184,8 @@ const api = {
       invoke<IpcResult<CrearPedidoConfirmadoResult>>('pedidos:crearConfirmado', data),
     crearDirecto: (data: CrearPedidoDirectoInput) =>
       invoke<IpcResult<CrearPedidoDirectoResult>>('pedidos:crearDirecto', data),
+    crearMultiTrabajo: (data: CrearPedidoMultiTrabajoInput) =>
+      invoke<IpcResult<CrearPedidoMultiTrabajoResult>>('pedidos:crearMultiTrabajo', data),
     cambiarEstado: (id: number, estado: Pedido['estado']) =>
       invoke<IpcResult<Pedido>>('pedidos:cambiarEstado', id, estado),
     actualizarFechaEntrega: (id: number, fecha: string | null) =>

@@ -92,6 +92,7 @@ import {
   crearPedidoConfirmadoConFactura,
   crearPedidoDesdeCotizacion,
   crearPedidoDirecto,
+  crearPedidoMultiTrabajo,
   editarPedidoComercial,
   type EditarPedidoComercialInput,
   listarPedidos,
@@ -417,6 +418,9 @@ export function registerIpcHandlers(db: DB): void {
   )
   ipcMain.handle('pedidos:crearDirecto', (_e, input: CrearPedidoDirectoInput) =>
     wrap(crearPedidoDirecto)(db, input)
+  )
+  ipcMain.handle('pedidos:crearMultiTrabajo', (_e, input) =>
+    wrap(crearPedidoMultiTrabajo)(db, input)
   )
   ipcMain.handle('pedidos:cambiarEstado', (_e, id: number, estado) =>
     wrap(cambiarEstadoPedido)(

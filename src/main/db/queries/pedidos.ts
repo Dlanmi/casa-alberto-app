@@ -35,8 +35,10 @@ import {
   pedidos,
   TIPOS_ENTREGA,
   TIPOS_TRABAJO,
+  TIPOS_TRABAJO_CONCRETO,
   type EstadoPedido,
   type MetodoPago,
+  type PedidoItemMetadata,
   type TipoEntrega,
   type TipoTrabajo
 } from '../schema'
@@ -116,6 +118,66 @@ export type CrearPedidoConfirmadoResult = {
   factura: typeof facturas.$inferSelect
   pago: typeof pagos.$inferSelect | null
   saldo: number
+}
+
+// ---------------------------------------------------------------------------
+// Multi-trabajo (v2.2.0): un pedido con N trabajos de tipos potencialmente
+// distintos en una sola visita. El cliente trae varios cuadros y se factura
+// todo junto. Cada trabajo conserva su cotización y, al persistirlo, sus
+// items se aplanan en `pedido_items` con `metadata.trabajoId` para poder
+// reconstruir la agrupación visual al leer el pedido.
+// ---------------------------------------------------------------------------
+
+export type TrabajoCotizado = {
+  /** Tipo concreto — nunca 'mixto'; ese es solo del pedido contenedor. */
+  tipoTrabajo: Exclude<TipoTrabajo, 'mixto'>
+  /** Datos del trabajo necesarios para validar la cotización contra el
+   *  cotizador del backend (mismo flujo que `cotizacionAutorizada`). */
+  datos: NuevoPedidoDatos
+  /** Cotización ya calculada en el frontend; el backend la re-deriva y
+   *  compara para impedir manipulación de precios vía IPC. */
+  cotizacion: ResultadoCotizacion
+}
+
+export type CrearPedidoMultiTrabajoInput = {
+  /** Reusa el shape de cliente del pedido directo: existente (id) o nuevo (data). */
+  cliente: CrearPedidoDirectoInput['cliente']
+  /** Mínimo 1 trabajo. Si solo hay 1, el pedido NO queda como 'mixto' — usa
+   *  el tipoTrabajo del único trabajo (compatibilidad con reportes). */
+  trabajos: TrabajoCotizado[]
+  pedido: {
+    fechaIngreso: string
+    fechaEntrega?: string | null
+    tipoEntrega: TipoEntrega
+    notas?: string | null
+  }
+  /** Descuento global aplicado al total del pedido (decisión de producto:
+   *  un solo descuento al pedido entero, no por trabajo). */
+  descuento?: {
+    monto: number
+    motivo?: string | null
+  } | null
+  factura: {
+    fecha: string
+    notas?: string | null
+  }
+  abono?: {
+    monto: number
+    metodoPago: MetodoPago
+    fecha: string
+    notas?: string | null
+  } | null
+  generarPDF: boolean
+}
+
+export type CrearPedidoMultiTrabajoResult = {
+  pedido: typeof pedidos.$inferSelect
+  factura: typeof facturas.$inferSelect
+  pago: typeof pagos.$inferSelect | null
+  saldo: number
+  /** trabajoId por trabajo — útil para que el frontend pueda highlight uno
+   *  específico tras crear el pedido. Empieza en 1. */
+  trabajoIds: number[]
 }
 
 function validarFechasPedido(datos: NuevoPedidoDatos): void {
@@ -925,6 +987,314 @@ export function crearPedidoConfirmadoConFactura(
     }
 
     return { pedido, factura, pago, saldo }
+  })
+}
+
+/**
+ * Crea un pedido con N trabajos en una sola transacción atómica. Soporta
+ * tipos de trabajo distintos en el mismo pedido (caso real: cliente que
+ * llega con un cuadro estándar y una restauración). Cada trabajo aporta
+ * sus items aplanados a `pedido_items` con `metadata.trabajoId` para que
+ * la UI y el PDF puedan agruparlos visualmente.
+ *
+ * El descuento es global al total del pedido (decisión de producto P19).
+ * El abono también es a nivel pedido — todo o nada, no por trabajo.
+ *
+ * Estado inicial: 'confirmado' (skipea cotizado, igual que crearPedidoDirecto
+ * cuando estadoInicial === 'confirmado'). Multi-trabajo asume que el cliente
+ * ya aprobó al ver el desglose en pantalla.
+ */
+export function crearPedidoMultiTrabajo(
+  db: DB,
+  input: CrearPedidoMultiTrabajoInput
+): CrearPedidoMultiTrabajoResult {
+  // ---- 1. Validaciones síncronas (antes de abrir transacción) ----
+  validarFechaISO(input.pedido.fechaIngreso, 'YYYY-MM-DD', 'fechaIngreso')
+  if (input.pedido.fechaEntrega) {
+    validarFechaISO(input.pedido.fechaEntrega, 'YYYY-MM-DD', 'fechaEntrega')
+    if (input.pedido.fechaEntrega < input.pedido.fechaIngreso) {
+      throw new Error('La fecha de entrega no puede ser anterior a la fecha de ingreso')
+    }
+  }
+  validarFechaISO(input.factura.fecha, 'YYYY-MM-DD', 'facturaFecha')
+  validarEnum(input.pedido.tipoEntrega, TIPOS_ENTREGA, 'tipoEntrega')
+
+  if (!Array.isArray(input.trabajos) || input.trabajos.length < 1) {
+    throw new Error('El pedido debe tener al menos un trabajo')
+  }
+
+  // ---- 2. Validar y autorizar cada cotización (mismo guard que el flujo
+  //         de cotización individual: re-deriva la cotización desde los
+  //         datos y compara, impide manipulación de precios vía IPC).
+  const trabajosValidados = input.trabajos.map((trabajo, idx) => {
+    validarEnum(
+      trabajo.tipoTrabajo,
+      TIPOS_TRABAJO_CONCRETO,
+      `Trabajo #${idx + 1}: tipoTrabajo`
+    )
+    if (trabajo.datos.tipoTrabajo !== trabajo.tipoTrabajo) {
+      throw new Error(
+        `Trabajo #${idx + 1}: tipoTrabajo del trabajo (${trabajo.tipoTrabajo}) no coincide con datos.tipoTrabajo (${trabajo.datos.tipoTrabajo})`
+      )
+    }
+    const cotizacion = cotizacionAutorizada(db, trabajo.datos, trabajo.cotizacion)
+    validarMonto(cotizacion.precioLista, {
+      campo: `Trabajo #${idx + 1}: precio de lista`,
+      min: 0
+    })
+    return { ...trabajo, cotizacion }
+  })
+
+  // ---- 3. Calcular agregados del pedido ----
+  const subtotalTrabajos = validarMonto(
+    trabajosValidados.reduce((s, t) => s + t.cotizacion.precioLista, 0),
+    { campo: 'Subtotal del pedido', min: 0 }
+  )
+  const descuento = input.descuento ?? null
+  const descuentoMonto = descuento?.monto ?? 0
+  validarMonto(descuentoMonto, { campo: 'Descuento', min: 0 })
+  if (descuentoMonto > subtotalTrabajos) {
+    throw new Error(
+      `El descuento (${descuentoMonto}) excede el subtotal del pedido (${subtotalTrabajos})`
+    )
+  }
+  const totalFinal = validarMonto(subtotalTrabajos - descuentoMonto, {
+    campo: 'Total del pedido',
+    min: 0
+  })
+
+  // ---- 4. Validar abono ----
+  const abono = input.abono?.monto ?? 0
+  validarMonto(abono, { campo: 'Abono', min: 0 })
+  if (abono > totalFinal) {
+    throw new Error(`El abono excede el total del pedido (${totalFinal})`)
+  }
+  if (input.abono && abono > 0) {
+    validarEnum(input.abono.metodoPago, METODOS_PAGO, 'metodoPago')
+    validarFechaISO(input.abono.fecha, 'YYYY-MM-DD', 'fechaPago')
+  }
+
+  // ---- 5. Decidir tipoTrabajo del pedido contenedor ----
+  const tiposUnicos = Array.from(new Set(trabajosValidados.map((t) => t.tipoTrabajo)))
+  const tipoTrabajoPedido: TipoTrabajo =
+    tiposUnicos.length === 1 ? tiposUnicos[0]! : 'mixto'
+
+  // ---- 6. Costo y evaluación del pedido completo ----
+  // Si CUALQUIER trabajo no tiene costo, costoEstimadoTotal queda null
+  // (rentabilidad = 'incompleta'), igual que en crearPedidoDirecto.
+  const costos = trabajosValidados.map((t) => t.cotizacion.costoEstimadoTotal)
+  const todosTienenCosto = costos.every((c) => c !== null && c !== undefined)
+  const costoEstimadoTotal = todosTienenCosto
+    ? validarMonto(
+        costos.reduce((s, c) => s + (c ?? 0), 0),
+        { campo: 'Costo estimado total', min: 0 }
+      )
+    : null
+  const evaluacion = evaluarPedido(db, subtotalTrabajos, descuentoMonto, costoEstimadoTotal)
+
+  // ---- 7. Transacción atómica ----
+  return db.transaction((tx) => {
+    const txDb = tx as unknown as DB
+
+    // 7a. Resolver cliente: existente o nuevo.
+    let clienteId: number
+    if (input.cliente.tipo === 'existente') {
+      const existe = txDb
+        .select({ id: clientes.id })
+        .from(clientes)
+        .where(eq(clientes.id, input.cliente.id))
+        .get()
+      if (!existe) throw new Error(`El cliente ${input.cliente.id} no existe`)
+      clienteId = input.cliente.id
+    } else {
+      const nuevo = crearCliente(txDb, input.cliente.data)
+      clienteId = nuevo.id
+    }
+
+    // 7b. Insertar pedido contenedor. Para 1 trabajo, copiamos sus campos
+    //     al encabezado (compatible con queries pre-mixto). Para varios,
+    //     dejamos null y la info vive en metadata por item.
+    const trabajoUnico = trabajosValidados.length === 1 ? trabajosValidados[0]! : null
+    const numero = generarConsecutivo(txDb, 'pedido')
+    const pedidoCreado = tx
+      .insert(pedidos)
+      .values({
+        numero,
+        clienteId,
+        tipoTrabajo: tipoTrabajoPedido,
+        descripcion:
+          trabajosValidados.length > 1
+            ? `${trabajosValidados.length} trabajos`
+            : (trabajoUnico?.datos.descripcion ?? null),
+        anchoCm: trabajoUnico?.datos.anchoCm ?? null,
+        altoCm: trabajoUnico?.datos.altoCm ?? null,
+        anchoPaspartuCm: trabajoUnico?.datos.anchoPaspartuCm ?? null,
+        tipoPaspartu: trabajoUnico?.datos.tipoPaspartu ?? null,
+        tipoVidrio: trabajoUnico?.datos.tipoVidrio ?? null,
+        porcentajeMateriales: trabajoUnico?.datos.porcentajeMateriales ?? 10,
+        subtotal: trabajosValidados.reduce((s, t) => s + t.cotizacion.subtotal, 0),
+        totalMateriales: trabajosValidados.reduce(
+          (s, t) => s + t.cotizacion.totalMateriales,
+          0
+        ),
+        brutoCotizado: trabajosValidados.reduce((s, t) => s + t.cotizacion.brutoCotizado, 0),
+        precioLista: subtotalTrabajos,
+        descuentoMonto,
+        descuentoMotivo: descuento?.motivo?.trim() || null,
+        costoEstimadoTotal,
+        margenEstimado: evaluacion.margenEstimado,
+        margenEstimadoPct: evaluacion.margenEstimadoPct,
+        estadoRentabilidad: evaluacion.estadoRentabilidad,
+        precioTotal: totalFinal,
+        estado: 'confirmado',
+        tipoEntrega: input.pedido.tipoEntrega,
+        fechaIngreso: input.pedido.fechaIngreso,
+        fechaEntrega: input.pedido.fechaEntrega ?? null,
+        notas: input.pedido.notas ?? null
+      })
+      .returning()
+      .get()
+
+    // 7c. Insertar items por trabajo, anotando metadata.trabajoId.
+    const trabajoIds: number[] = []
+    trabajosValidados.forEach((trabajo, idx) => {
+      const trabajoId = idx + 1
+      trabajoIds.push(trabajoId)
+      const metadataTrabajo: PedidoItemMetadata = {
+        trabajoId,
+        tipoTrabajoOrigen: trabajo.tipoTrabajo
+      }
+      if (trabajo.datos.anchoCm != null && trabajo.datos.altoCm != null) {
+        metadataTrabajo.medidas = {
+          anchoCm: trabajo.datos.anchoCm,
+          altoCm: trabajo.datos.altoCm
+        }
+      }
+      if (trabajo.datos.muestraMarcoId != null) {
+        metadataTrabajo.muestraMarcoId = trabajo.datos.muestraMarcoId
+      }
+      if (trabajo.datos.tipoVidrio) metadataTrabajo.tipoVidrio = trabajo.datos.tipoVidrio
+      if (trabajo.datos.anchoPaspartuCm != null) {
+        metadataTrabajo.anchoPaspartuCm = trabajo.datos.anchoPaspartuCm
+      }
+      if (trabajo.datos.tipoPaspartu) metadataTrabajo.tipoPaspartu = trabajo.datos.tipoPaspartu
+
+      for (const item of trabajo.cotizacion.items) {
+        const baseMetadata = (item.metadata ?? {}) as PedidoItemMetadata
+        tx.insert(pedidoItems)
+          .values({
+            pedidoId: pedidoCreado.id,
+            tipoItem: item.tipoItem,
+            descripcion: item.descripcion ?? null,
+            referencia: item.referencia ?? null,
+            cantidad: item.cantidad,
+            precioUnitario: item.precioUnitario ?? null,
+            costoUnitarioEstimado: item.costoUnitarioEstimado ?? null,
+            subtotal: item.subtotal,
+            subtotalCostoEstimado: item.subtotalCostoEstimado ?? null,
+            metadata: { ...baseMetadata, ...metadataTrabajo }
+          })
+          .run()
+      }
+    })
+
+    // 7d. Item de descuento global (si > 0). Sin trabajoId — es del pedido
+    //     entero, no de un trabajo específico.
+    if (descuentoMonto > 0) {
+      tx.insert(pedidoItems)
+        .values({
+          pedidoId: pedidoCreado.id,
+          tipoItem: 'descuento',
+          descripcion: descuento?.motivo?.trim() || 'Descuento manual',
+          cantidad: 1,
+          precioUnitario: null,
+          costoUnitarioEstimado: null,
+          subtotal: -descuentoMonto,
+          subtotalCostoEstimado: null,
+          metadata: null
+        })
+        .run()
+    }
+
+    // 7e. Historial: cotizado → confirmado.
+    tx.insert(historialCambios)
+      .values({
+        tabla: 'pedidos',
+        registroId: pedidoCreado.id,
+        campo: 'estado',
+        valorAnterior: 'cotizado',
+        valorNuevo: 'confirmado',
+        fecha: sql`(datetime('now'))`
+      })
+      .run()
+
+    // 7f. Insertar factura.
+    const factura = tx
+      .insert(facturas)
+      .values({
+        numero: generarConsecutivo(txDb, 'factura'),
+        pedidoId: pedidoCreado.id,
+        clienteId,
+        fecha: input.factura.fecha,
+        total: totalFinal,
+        fechaEntrega: input.pedido.fechaEntrega ?? null,
+        notas: input.factura.notas ?? null
+      })
+      .returning()
+      .get()
+
+    let pago: typeof pagos.$inferSelect | null = null
+    let saldo = factura.total
+
+    // 7g. Regalo (totalFinal=0): factura pagada inmediato sin movimiento.
+    if (totalFinal === 0) {
+      tx.update(facturas)
+        .set({ estado: 'pagada', updatedAt: sql`(datetime('now'))` })
+        .where(eq(facturas.id, factura.id))
+        .run()
+      factura.estado = 'pagada'
+      saldo = 0
+    } else if (input.abono && abono > 0) {
+      // 7h. Pago + movimiento financiero.
+      pago = tx
+        .insert(pagos)
+        .values({
+          facturaId: factura.id,
+          monto: abono,
+          metodoPago: input.abono.metodoPago,
+          fecha: input.abono.fecha,
+          notas: input.abono.notas ?? null
+        })
+        .returning()
+        .get()
+
+      // Categoría: para pedidos mixtos usamos 'enmarcacion' (caso típico).
+      // Si en el futuro se quiere desagregar el ingreso por tipo de trabajo,
+      // habría que crear N movimientos proporcionales — fuera de scope hoy.
+      tx.insert(movimientosFinancieros)
+        .values({
+          tipo: 'ingreso',
+          categoria:
+            tipoTrabajoPedido === 'restauracion' ? 'restauracion' : 'enmarcacion',
+          descripcion: `Pago factura ${factura.numero}`,
+          monto: abono,
+          fecha: input.abono.fecha,
+          referenciaTipo: 'pago',
+          referenciaId: pago.id
+        })
+        .run()
+
+      saldo = factura.total - abono
+      if (saldo <= 0) {
+        tx.update(facturas)
+          .set({ estado: 'pagada', updatedAt: sql`(datetime('now'))` })
+          .where(eq(facturas.id, factura.id))
+          .run()
+        factura.estado = 'pagada'
+      }
+    }
+
+    return { pedido: pedidoCreado, factura, pago, saldo, trabajoIds }
   })
 }
 
