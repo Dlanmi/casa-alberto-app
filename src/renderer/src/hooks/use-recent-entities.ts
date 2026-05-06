@@ -3,8 +3,19 @@ import { useLocation } from 'react-router-dom'
 
 // Tipos de entidad reconocidos en el historial reciente del CommandPalette.
 // Solo agregamos tipos cuya página detalle es deep-linkable. Si en el futuro
-// se agrega una ruta `/clases/:id`, basta con extender este union.
-export type RecentEntityKind = 'cliente' | 'pedido' | 'factura' | 'contrato'
+// se agrega una ruta `/clases/:id`, basta con extender este array — el
+// union, el type guard, los Record<RecentEntityKind, ...> y los tests se
+// derivan automáticamente.
+export const RECENT_ENTITY_KINDS = ['cliente', 'pedido', 'factura', 'contrato'] as const
+export type RecentEntityKind = (typeof RECENT_ENTITY_KINDS)[number]
+
+// Type guard runtime — protege contra payloads corruptos en localStorage
+// (kind arbitrario que pase el typeof === 'string'). Sin este guard, el
+// CommandPalette intenta renderizar `<Icon />` con Icon=undefined y la UI
+// queda blanca. Patrón análogo a `validarEnum()` en src/main/lib.
+export function isRecentEntityKind(value: unknown): value is RecentEntityKind {
+  return typeof value === 'string' && (RECENT_ENTITY_KINDS as readonly string[]).includes(value)
+}
 
 export type RecentEntity = {
   kind: RecentEntityKind
@@ -61,7 +72,9 @@ function leerStorage(): RecentEntity[] {
         (e): e is RecentEntity =>
           e &&
           typeof e === 'object' &&
-          typeof e.kind === 'string' &&
+          // Whitelist contra el union — un kind arbitrario rompe el render
+          // del palette al indexar ICONO_POR_KIND con clave inexistente.
+          isRecentEntityKind(e.kind) &&
           typeof e.id === 'number' &&
           // Filtra IDs no-positivos: no existen entidades con id<=0 en la DB.
           // Ver detectarRuta — también valida ahí.
@@ -121,6 +134,13 @@ export function getRecentEntitiesSnapshot(): RecentEntity[] {
 }
 
 function agregarStore(entity: Omit<RecentEntity, 'visitedAt'>): void {
+  // Defensa: TypeScript ya restringe el caller, pero un cast en runtime
+  // (o un futuro caller dinámico) podría colar un kind fuera del union.
+  // Descartamos silenciosamente para no contaminar la cache.
+  if (!isRecentEntityKind(entity.kind)) {
+    console.warn(`[recientes] descartando entry con kind no soportado: ${String(entity.kind)}`)
+    return
+  }
   const filtrados = cache.filter((e) => !(e.kind === entity.kind && e.id === entity.id))
   const nuevo: RecentEntity = { ...entity, visitedAt: new Date().toISOString() }
   const next = [nuevo, ...filtrados].slice(0, MAX_ENTRIES)
@@ -136,6 +156,14 @@ export function __resetRecentEntitiesForTests(): void {
   } catch {
     // ignorar
   }
+  notify()
+}
+
+// Rehidrata la cache leyendo desde localStorage — solo para tests. Permite
+// sembrar payloads (válidos o envenenados) en localStorage y verificar el
+// comportamiento del parser sin tener que recargar el módulo.
+export function __rehydrateRecentEntitiesForTests(): void {
+  cache = leerStorage()
   notify()
 }
 

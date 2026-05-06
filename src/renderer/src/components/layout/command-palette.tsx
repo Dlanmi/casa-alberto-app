@@ -177,6 +177,12 @@ export function CommandPalette({
                 </div>
                 {grupo.items.map((result) => {
                   const Icon = result.icono
+                  // Guarda paranoica: si un provider devuelve un item sin
+                  // icono (ej. kind corrupto que se coló), no rompemos el
+                  // render — descartamos el item silenciosamente. El store
+                  // y el provider ya filtran este caso; esto es la última
+                  // capa de defense-in-depth contra el bug del informe.
+                  if (!Icon) return null
                   const optionId = `command-palette-option-${result.id}`
                   const isSelected = visualIndex === selected
                   const myIndex = visualIndex

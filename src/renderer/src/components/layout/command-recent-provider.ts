@@ -11,7 +11,11 @@
 // el usuario navega a una página detalle.
 import { ClipboardList, FileSignature, Receipt, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { RecentEntity, RecentEntityKind } from '@renderer/hooks/use-recent-entities'
+import {
+  isRecentEntityKind,
+  type RecentEntity,
+  type RecentEntityKind
+} from '@renderer/hooks/use-recent-entities'
 import type { CommandProvider, CommandResult } from './command-providers'
 
 const ICONO_POR_KIND: Record<RecentEntityKind, LucideIcon> = {
@@ -42,7 +46,13 @@ export function createRecientesProvider(
       // (que sí buscan en backend) son la respuesta correcta.
       if (q.length > 0) return []
       const recientes = obtenerRecientes()
-      return recientes.slice(0, MAX_VISIBLES).map<CommandResult>((r) => ({
+      // Defense-in-depth: aunque el store ya filtra kinds inválidos al leer
+      // localStorage, blindamos también el provider para protegernos de
+      // getters externos (tests, futuros consumers) que pasen entries no
+      // validadas. Sin este filter, ICONO_POR_KIND[kind] = undefined y el
+      // palette crashea al renderizar `<Icon />`.
+      const validas = recientes.filter((r) => isRecentEntityKind(r.kind))
+      return validas.slice(0, MAX_VISIBLES).map<CommandResult>((r) => ({
         id: `reciente:${r.kind}:${r.id}`,
         kind: 'navigation',
         seccion: 'Recientes',

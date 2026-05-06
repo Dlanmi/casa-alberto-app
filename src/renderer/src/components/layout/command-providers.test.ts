@@ -107,4 +107,22 @@ describe('CommandPalette providers', () => {
     expect(invocado).toBe(true)
     expect(navegadoA).toBeNull()
   })
+
+  it('recientes ignora entries con kind no soportado (defense-in-depth)', async () => {
+    // Simula un getter que devuelve mezcla de entries válidas e inválidas
+    // (ej. un consumer externo que no pase por el store validado).
+    const recientesEnvenenadas = [
+      { kind: 'evil', id: 1, titulo: 'boom', visitedAt: '2026-04-01T10:00:00Z' },
+      { kind: 'cliente', id: 2, titulo: 'Ana', visitedAt: '2026-04-01T10:00:00Z' },
+      { kind: 'unknown', id: 3, titulo: 'rogue', visitedAt: '2026-04-01T10:00:00Z' }
+    ] as unknown as RecentEntity[]
+    const provider = createRecientesProvider(() => recientesEnvenenadas)
+    const resultados = await ejecutarProviders([provider], '')
+    expect(resultados).toHaveLength(1)
+    expect(resultados[0]?.titulo).toBe('Ana')
+    // Crítico: el icono debe ser un componente válido, NO undefined. Si esto
+    // se rompe, el CommandPalette crashea al renderizar `<Icon />`.
+    expect(resultados[0]?.icono).toBeDefined()
+    expect(resultados[0]?.icono).not.toBeNull()
+  })
 })
