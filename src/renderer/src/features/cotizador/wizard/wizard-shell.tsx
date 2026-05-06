@@ -17,6 +17,7 @@ import { StepMarco } from './step-marco'
 import { StepOpciones } from './step-opciones'
 import { StepMateriales } from './step-materiales'
 import { StepResumen } from './step-resumen'
+import { StepResumenEmbed } from './step-resumen-embed'
 import { PageLoader } from '@renderer/components/ui/spinner'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import {
@@ -115,19 +116,43 @@ const STEPS = [
 
 type WizardStepKey = (typeof STEPS)[number]['key'] | 'precio' | 'vidrio_tipo'
 
+// Resultado del wizard en modo embed: tipo de trabajo concreto + datos
+// suficientes para que el padre construya el TrabajoCotizado del IPC
+// `pedidos:crearMultiTrabajo`. Se usa solo cuando modo='embed'.
+export type TrabajoConfirmadoEmbed = {
+  tipoTrabajo: Exclude<TipoTrabajo, 'mixto'>
+  data: WizardData
+  cotizacion: ResultadoCotizacion
+}
+
 type WizardShellProps = {
   tipoTrabajo: TipoTrabajo
   onBack: () => void
   cliente: Cliente | null
   onClienteChange: (cliente: Cliente | null) => void
+  /** Modo de operación:
+   * - 'pedido-completo' (default): el wizard crea el pedido al confirmar
+   *   en el último paso (flujo histórico, cotizador clásico).
+   * - 'embed': el último paso es un resumen simple y el padre recibe el
+   *   `TrabajoConfirmadoEmbed` via `onConfirmarEmbed`. Sin cliente picker,
+   *   sin descuento, sin abono — esos viven en el wizard padre. */
+  modo?: 'pedido-completo' | 'embed'
+  /** Callback obligatorio si modo='embed'. */
+  onConfirmarEmbed?: (trabajo: TrabajoConfirmadoEmbed) => void
+  /** Datos pre-cargados para edición de un trabajo existente. Solo modo embed. */
+  initialData?: Partial<WizardData>
 }
 
 export function WizardShell({
   tipoTrabajo,
   onBack,
   cliente,
-  onClienteChange
+  onClienteChange,
+  modo = 'pedido-completo',
+  onConfirmarEmbed,
+  initialData
 }: WizardShellProps): React.JSX.Element {
+  const isEmbed = modo === 'embed'
   const [step, setStep] = useState(0)
   // Dirección del último cambio de paso, para escoger el keyframe de
   // entrada (right→ avance, ←left retroceso). Se aplica al wrapper
@@ -135,8 +160,12 @@ export function WizardShell({
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
   // SPEC-001 — al montar, intentamos recuperar un draft previo para no perder
   // trabajo si el usuario cerró la app sin terminar. Se namespacea por tipoTrabajo.
+  // En modo embed NO se autosave: cada trabajo es efímero hasta que se
+  // confirma en el padre. El padre tiene su propio autosave del pedido.
   const draftKey = `cotizador:${tipoTrabajo}`
   const [data, setData] = useState<WizardData>(() => {
+    if (initialData) return { ...INITIAL_DATA, ...initialData }
+    if (isEmbed) return INITIAL_DATA
     const draft = loadAutoSaveDraft<WizardData>(draftKey)
     return draft?.data ?? INITIAL_DATA
   })
@@ -150,15 +179,19 @@ export function WizardShell({
     data,
     intervalMs: 30000,
     debounceMs: 1500,
+    // En modo embed, el wizard padre maneja su propio autosave del pedido
+    // completo — `isDirty` retorna false para que `useAutoSave` no guarde
+    // nada y no contamine los drafts de cotización rápida.
     isDirty: (d) =>
-      d.anchoCm > 0 ||
+      !isEmbed &&
+      (d.anchoCm > 0 ||
       d.altoCm > 0 ||
       d.muestraMarcoId !== null ||
       d.precioManual > 0 ||
       d.descripcionManual.length > 0 ||
       d.conDescuento ||
       d.descuentoNum > 0 ||
-      d.notas.length > 0
+      d.notas.length > 0)
   })
 
   const { data: marcos, loading: marcosLoading } = useIpc<MuestraMarcoConProveedor[]>(
@@ -529,7 +562,7 @@ export function WizardShell({
                 {currentStep?.key === 'materiales' && (
                   <StepMateriales data={data} onChange={updateData} />
                 )}
-                {currentStep?.key === 'resumen' && (
+                {currentStep?.key === 'resumen' && !isEmbed && (
                   <StepResumen
                     data={data}
                     onChange={updateData}
@@ -538,6 +571,23 @@ export function WizardShell({
                     tipoTrabajo={tipoTrabajo}
                     cliente={cliente}
                     onClienteChange={onClienteChange}
+                  />
+                )}
+                {currentStep?.key === 'resumen' && isEmbed && (
+                  <StepResumenEmbed
+                    data={data}
+                    cotizacion={cotizacion}
+                    tipoTrabajo={tipoTrabajo}
+                    onCancelar={onBack}
+                    onConfirmar={() => {
+                      if (!cotizacion) return
+                      if (tipoTrabajo === 'mixto') return
+                      onConfirmarEmbed?.({
+                        tipoTrabajo,
+                        data,
+                        cotizacion
+                      })
+                    }}
                   />
                 )}
               </div>
