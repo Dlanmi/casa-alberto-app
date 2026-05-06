@@ -12,6 +12,7 @@ import DashboardPage from '@renderer/features/dashboard/page'
 // dominante en el tiempo hasta primer render en producción.
 const AgendaPage = lazy(() => import('@renderer/features/agenda/page'))
 const CotizadorPage = lazy(() => import('@renderer/features/cotizador/page'))
+const MultiTrabajoPage = lazy(() => import('@renderer/features/cotizador/multi-trabajo/page'))
 const PedidosPage = lazy(() => import('@renderer/features/pedidos/page'))
 const NuevoPedidoDirectoPage = lazy(
   () => import('@renderer/features/pedidos/nuevo-directo-page')
@@ -39,6 +40,7 @@ const router = createHashRouter([
       { index: true, element: <DashboardPage /> },
       { path: 'agenda', element: lazyRoute(<AgendaPage />) },
       { path: 'cotizador', element: lazyRoute(<CotizadorPage />) },
+      { path: 'cotizador/pedido', element: lazyRoute(<MultiTrabajoPage />) },
       { path: 'pedidos', element: lazyRoute(<PedidosPage />) },
       { path: 'pedidos/nuevo-directo', element: lazyRoute(<NuevoPedidoDirectoPage />) },
       { path: 'pedidos/:id', element: lazyRoute(<PedidosPage />) },
