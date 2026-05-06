@@ -15,6 +15,7 @@ import {
 } from '../schema'
 import { validarEnum } from '../../lib/validar-enum'
 import { validarFechaISO } from '../../lib/validar-fecha'
+import { validarMonto } from '../../lib/validar-monto'
 
 export type NuevaFactura = {
   pedidoId: number
@@ -31,9 +32,9 @@ export function crearFactura(db: DB, data: NuevaFactura) {
     if (data.fechaEntrega) {
       validarFechaISO(data.fechaEntrega, 'YYYY-MM-DD', 'fechaEntrega')
     }
-    if (!Number.isFinite(data.total) || data.total <= 0) {
-      throw new Error('El total de la factura debe ser mayor a 0')
-    }
+    // Defense in depth: rechaza Infinity/NaN además de no-positivos. Mismo
+    // patrón aplicado en crearPedidoDirecto (informe 318aa85).
+    validarMonto(data.total, { campo: 'Total de la factura', min: Number.MIN_VALUE })
 
     // SPEC-007 — Prevenir facturas duplicadas por pedido. Si ya existe una
     // factura activa (no anulada), devolvemos un error con el número para
@@ -149,9 +150,7 @@ export type NuevoPago = {
 
 export function registrarPago(db: DB, data: NuevoPago) {
   return db.transaction((tx) => {
-    if (!Number.isFinite(data.monto) || data.monto <= 0) {
-      throw new Error('El monto del pago debe ser mayor a 0')
-    }
+    validarMonto(data.monto, { campo: 'Monto del pago', min: Number.MIN_VALUE })
     validarEnum(data.metodoPago, METODOS_PAGO, 'metodoPago')
     validarFechaISO(data.fecha, 'YYYY-MM-DD', 'fecha')
 
@@ -164,7 +163,9 @@ export function registrarPago(db: DB, data: NuevoPago) {
     const pedido = tx.select().from(pedidos).where(eq(pedidos.id, factura.pedidoId)).get()
     if (!pedido) throw new Error(`Pedido ${factura.pedidoId} no encontrado`)
 
-    // Validar que el monto no exceda el saldo pendiente
+    // Validar que el monto no exceda el saldo pendiente. Si una factura
+    // existente tuviera total no-finito (de un commit previo a este fix),
+    // aquí se aborta antes de seguir corrompiendo balances.
     const currentPagos = tx
       .select({ sum: sql<number>`coalesce(sum(${pagos.monto}), 0)` })
       .from(pagos)
@@ -175,7 +176,10 @@ export function registrarPago(db: DB, data: NuevoPago) {
       .from(devoluciones)
       .where(eq(devoluciones.facturaId, data.facturaId))
       .get()
-    const saldoActual = factura.total - (currentPagos?.sum ?? 0) + (currentDev?.sum ?? 0)
+    const saldoActual = validarMonto(
+      factura.total - (currentPagos?.sum ?? 0) + (currentDev?.sum ?? 0),
+      { campo: 'Saldo actual de la factura', min: 0 }
+    )
     if (data.monto > saldoActual) {
       throw new Error(`El monto excede el saldo pendiente de ${saldoActual}`)
     }
@@ -204,7 +208,9 @@ export function registrarPago(db: DB, data: NuevoPago) {
       })
       .run()
 
-    // Recalcular estado de la factura
+    // Recalcular estado de la factura. validarMonto sobre el saldo derivado
+    // garantiza que un total/pagos no-finitos en la DB no propaguen estados
+    // incorrectos ('pagada' cuando saldo=NaN, etc.).
     const totalPagos = tx
       .select({ sum: sql<number>`coalesce(sum(${pagos.monto}), 0)` })
       .from(pagos)
@@ -215,7 +221,10 @@ export function registrarPago(db: DB, data: NuevoPago) {
       .from(devoluciones)
       .where(eq(devoluciones.facturaId, data.facturaId))
       .get()
-    const saldo = factura.total - (totalPagos?.sum ?? 0) + (totalDev?.sum ?? 0)
+    const saldo = validarMonto(
+      factura.total - (totalPagos?.sum ?? 0) + (totalDev?.sum ?? 0),
+      { campo: 'Saldo recalculado de la factura', min: 0 }
+    )
     const nuevoEstado: EstadoFactura = saldo <= 0 ? 'pagada' : factura.estado
 
     if (nuevoEstado !== factura.estado) {
@@ -238,9 +247,7 @@ export type NuevaDevolucion = {
 
 export function registrarDevolucion(db: DB, data: NuevaDevolucion) {
   return db.transaction((tx) => {
-    if (!Number.isFinite(data.monto) || data.monto <= 0) {
-      throw new Error('El monto de la devolución debe ser mayor a 0')
-    }
+    validarMonto(data.monto, { campo: 'Monto de la devolución', min: Number.MIN_VALUE })
     if (!data.motivo || data.motivo.trim() === '') {
       throw new Error('La devolución requiere un motivo')
     }
@@ -263,7 +270,10 @@ export function registrarDevolucion(db: DB, data: NuevaDevolucion) {
       .from(devoluciones)
       .where(eq(devoluciones.facturaId, data.facturaId))
       .get()
-    const cobradoNeto = (prevPagos?.sum ?? 0) - (prevDev?.sum ?? 0)
+    const cobradoNeto = validarMonto(
+      (prevPagos?.sum ?? 0) - (prevDev?.sum ?? 0),
+      { campo: 'Cobrado neto de la factura', min: 0 }
+    )
     if (data.monto > cobradoNeto) {
       throw new Error(
         `La devolución (${data.monto}) excede lo cobrado al cliente (${cobradoNeto}).`

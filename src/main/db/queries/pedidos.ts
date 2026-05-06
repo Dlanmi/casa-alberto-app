@@ -57,6 +57,7 @@ import { calcularEvaluacionComercial } from '@shared/comercial'
 import { redondearPrecioFinal } from '@shared/redondeo'
 import { validarFechaISO } from '../../lib/validar-fecha'
 import { validarEnum } from '../../lib/validar-enum'
+import { validarMonto } from '../../lib/validar-monto'
 
 export { TRANSICIONES_VALIDAS }
 
@@ -351,6 +352,18 @@ function insertarPedidoDesdeCotizacion(
   const descuentoMonto = descuento?.monto ?? 0
   const precioLista = cotizacion.precioLista
   const evaluacion = evaluarPedido(db, precioLista, descuentoMonto, cotizacion.costoEstimadoTotal)
+  // Defense in depth (informe 318aa85): el cotizador no valida sus outputs
+  // y la evaluacion comercial puede propagar Infinity. Validamos cada monto
+  // antes del insert para que la DB no reciba valores no-finitos.
+  validarMonto(cotizacion.subtotal, { campo: 'Subtotal del pedido', min: 0 })
+  validarMonto(cotizacion.totalMateriales, { campo: 'Total de materiales', min: 0 })
+  validarMonto(cotizacion.brutoCotizado, { campo: 'Bruto cotizado', min: 0 })
+  validarMonto(precioLista, { campo: 'Precio de lista', min: 0 })
+  validarMonto(evaluacion.descuentoMonto, { campo: 'Descuento', min: 0 })
+  validarMonto(evaluacion.precioFinal, { campo: 'Precio total', min: 0 })
+  if (cotizacion.costoEstimadoTotal != null) {
+    validarMonto(cotizacion.costoEstimadoTotal, { campo: 'Costo estimado total', min: 0 })
+  }
   const numero = generarConsecutivo(db, 'pedido')
   const motivo = descuento?.motivo?.trim() || null
   const pedido = db
@@ -495,30 +508,38 @@ export function crearPedidoDirecto(
     if (!item.descripcion || !item.descripcion.trim()) {
       throw new Error(`Item #${i + 1}: descripción requerida`)
     }
-    if (!Number.isFinite(item.cantidad) || item.cantidad <= 0) {
-      throw new Error(`Item #${i + 1}: cantidad debe ser mayor a 0`)
-    }
-    if (!Number.isFinite(item.precioUnitario) || item.precioUnitario < 0) {
-      throw new Error(`Item #${i + 1}: precio unitario inválido`)
-    }
-    if (
-      item.costoUnitarioEstimado != null &&
-      (!Number.isFinite(item.costoUnitarioEstimado) || item.costoUnitarioEstimado < 0)
-    ) {
-      throw new Error(`Item #${i + 1}: costo estimado inválido`)
+    // validarMonto rechaza Infinity/NaN/no-números — protege contra payloads
+    // de IPC corruptos que pasen el typing de TypeScript (ver informe 318aa85).
+    validarMonto(item.cantidad, {
+      campo: `Item #${i + 1}: cantidad`,
+      // > 0 estricto: validarMonto valida `>= min`, así que 0.0001 actúa como
+      // "estrictamente mayor a 0" para cantidades fraccionarias permitidas.
+      min: Number.MIN_VALUE
+    })
+    validarMonto(item.precioUnitario, {
+      campo: `Item #${i + 1}: precio unitario`,
+      min: 0
+    })
+    if (item.costoUnitarioEstimado != null) {
+      validarMonto(item.costoUnitarioEstimado, {
+        campo: `Item #${i + 1}: costo estimado`,
+        min: 0
+      })
     }
   }
 
   // ---- 2. Cálculos derivados ----
-  const subtotalItems = input.items.reduce((s, it) => s + it.cantidad * it.precioUnitario, 0)
-  const precioFinal =
-    input.precioTotalOverride != null && Number.isFinite(input.precioTotalOverride)
-      ? input.precioTotalOverride
-      : subtotalItems
-
-  if (precioFinal < 0) {
-    throw new Error('El precio total no puede ser negativo')
-  }
+  // Cada producto/suma se re-valida con validarMonto. Inputs finitos pueden
+  // multiplicarse a Infinity (1e308 * 1e308) o sumarse a Infinity sin que los
+  // chequeos individuales lo detecten — ese es el bug del informe 318aa85.
+  const subtotalItems = validarMonto(
+    input.items.reduce((s, it) => s + it.cantidad * it.precioUnitario, 0),
+    { campo: 'Subtotal de items', min: 0 }
+  )
+  const precioFinal = validarMonto(
+    input.precioTotalOverride != null ? input.precioTotalOverride : subtotalItems,
+    { campo: 'Precio total', min: 0 }
+  )
 
   // costoEstimadoTotal: si TODOS los items tienen costo, sumamos. Si alguno
   // viene en `null`, marcamos `null` (rentabilidad = 'incompleta').
@@ -526,15 +547,16 @@ export function crearPedidoDirecto(
     (it) => typeof it.costoUnitarioEstimado === 'number'
   )
   const costoEstimadoTotal = todosTienenCosto
-    ? input.items.reduce((s, it) => s + it.cantidad * (it.costoUnitarioEstimado ?? 0), 0)
+    ? validarMonto(
+        input.items.reduce((s, it) => s + it.cantidad * (it.costoUnitarioEstimado ?? 0), 0),
+        { campo: 'Costo estimado total', min: 0 }
+      )
     : null
 
   // ---- 3. Validación de abono (antes de abrir tx) ----
   const abono = input.abono?.monto ?? 0
   if (input.abono) {
-    if (!Number.isFinite(abono) || abono < 0) {
-      throw new Error('El abono debe ser un número válido mayor o igual a 0')
-    }
+    validarMonto(abono, { campo: 'Abono', min: 0 })
     if (abono > precioFinal) {
       throw new Error(`El abono excede el total del pedido (${precioFinal})`)
     }
@@ -613,10 +635,20 @@ export function crearPedidoDirecto(
 
     // 4c. Insertar items.
     for (const item of input.items) {
-      const subtotalItem = item.cantidad * item.precioUnitario
+      // Defense in depth: aunque subtotalItems global ya está validado, cada
+      // producto por-item también podría overflow si los inputs son extremos.
+      // Validar antes del insert evita filas con `Infinity` en pedido_items.
+      const descripcionItem = item.descripcion.trim()
+      const subtotalItem = validarMonto(item.cantidad * item.precioUnitario, {
+        campo: `Item "${descripcionItem}": subtotal`,
+        min: 0
+      })
       const subtotalCosto =
         item.costoUnitarioEstimado != null
-          ? item.cantidad * item.costoUnitarioEstimado
+          ? validarMonto(item.cantidad * item.costoUnitarioEstimado, {
+              campo: `Item "${descripcionItem}": subtotal de costo`,
+              min: 0
+            })
           : null
       // Mapeo: si el caller manda 'otro', guardamos 'otro' en el enum.
       // Ese valor ya está en TIPOS_ITEM_PEDIDO por compatibilidad histórica.
@@ -624,7 +656,7 @@ export function crearPedidoDirecto(
         .values({
           pedidoId: pedidoCreado.id,
           tipoItem: item.tipoItem === 'otro' ? 'otro' : item.tipoItem,
-          descripcion: item.descripcion.trim(),
+          descripcion: descripcionItem,
           referencia: item.referencia ?? null,
           cantidad: item.cantidad,
           precioUnitario: item.precioUnitario,
@@ -788,17 +820,19 @@ export function crearPedidoConfirmadoConFactura(
   const cotizacionValidada = cotizacionAutorizada(db, input.datos, input.cotizacion)
   const descuento = input.descuento ?? null
   const descuentoMonto = descuento?.monto ?? 0
-  if (!Number.isFinite(descuentoMonto) || descuentoMonto < 0) {
-    throw new Error('El descuento debe ser un número válido mayor o igual a 0')
-  }
+  validarMonto(descuentoMonto, { campo: 'Descuento', min: 0 })
+  validarMonto(cotizacionValidada.precioLista, { campo: 'Precio de lista', min: 0 })
   if (descuentoMonto > cotizacionValidada.precioLista) {
     throw new Error(`El descuento excede el precio sugerido del pedido (${cotizacionValidada.precioLista})`)
   }
-  const totalFinal = cotizacionValidada.precioLista - descuentoMonto
+  // Re-validar el total derivado: aunque ambos operandos están validados, el
+  // resultado podría ser no-finito si los inputs son extremos (informe 318aa85).
+  const totalFinal = validarMonto(cotizacionValidada.precioLista - descuentoMonto, {
+    campo: 'Total del pedido',
+    min: 0
+  })
   const abono = input.abono?.monto ?? 0
-  if (!Number.isFinite(abono) || abono < 0) {
-    throw new Error('El abono debe ser un número válido mayor o igual a 0')
-  }
+  validarMonto(abono, { campo: 'Abono', min: 0 })
   if (abono > totalFinal) {
     throw new Error(`El abono excede el total del pedido (${totalFinal})`)
   }
@@ -1196,18 +1230,12 @@ export function editarPedidoComercial(
       )
     }
 
-    if (!Number.isFinite(input.descuentoMonto) || input.descuentoMonto < 0) {
-      throw new Error('El descuento debe ser un número válido mayor o igual a 0')
-    }
+    validarMonto(input.descuentoMonto, { campo: 'Descuento', min: 0 })
     if (input.descuentoMonto > pedido.precioLista) {
       throw new Error(`El descuento excede el precio sugerido (${pedido.precioLista})`)
     }
-    if (
-      input.costoEstimadoTotal !== undefined &&
-      input.costoEstimadoTotal !== null &&
-      (!Number.isFinite(input.costoEstimadoTotal) || input.costoEstimadoTotal < 0)
-    ) {
-      throw new Error('El costo estimado debe ser un número válido mayor o igual a 0')
+    if (input.costoEstimadoTotal !== undefined && input.costoEstimadoTotal !== null) {
+      validarMonto(input.costoEstimadoTotal, { campo: 'Costo estimado', min: 0 })
     }
 
     // Costo: si el pedido usa costo manual (restauración/vidrio_espejo), aceptamos
@@ -1227,7 +1255,13 @@ export function editarPedidoComercial(
       input.descuentoMonto,
       nuevoCostoEstimadoTotal
     )
-    const nuevoTotal = evaluacion.precioFinal
+    // Re-validar derivados de la evaluación comercial — si pedido.precioLista
+    // o el costo estimado son no-finitos por corrupción previa, abortamos
+    // antes de propagar el daño.
+    const nuevoTotal = validarMonto(evaluacion.precioFinal, {
+      campo: 'Nuevo precio total del pedido',
+      min: 0
+    })
     const motivo = input.descuentoMotivo?.trim() || null
 
     const pedidoActualizado = tx
@@ -1398,9 +1432,7 @@ export type CobrarYEntregarResult = {
  *         monto inválido o transición rechazada
  */
 export function cobrarYEntregar(db: DB, input: CobrarYEntregarInput): CobrarYEntregarResult {
-  if (!Number.isFinite(input.monto) || input.monto <= 0) {
-    throw new Error('El monto del cobro debe ser mayor a 0')
-  }
+  validarMonto(input.monto, { campo: 'Monto del cobro', min: Number.MIN_VALUE })
   validarEnum(input.metodoPago, METODOS_PAGO, 'metodoPago')
   validarFechaISO(input.fecha, 'YYYY-MM-DD', 'fecha')
 
@@ -1435,8 +1467,12 @@ export function cobrarYEntregar(db: DB, input: CobrarYEntregarInput): CobrarYEnt
       .from(devoluciones)
       .where(eq(devoluciones.facturaId, facturaActiva.id))
       .get()
-    const saldoActual =
-      facturaActiva.total - (totPagos?.sum ?? 0) + (totDev?.sum ?? 0)
+    // Si la factura tuviera total no-finito por corrupción previa, abortamos
+    // antes de propagar el daño al pago y al movimiento financiero.
+    const saldoActual = validarMonto(
+      facturaActiva.total - (totPagos?.sum ?? 0) + (totDev?.sum ?? 0),
+      { campo: 'Saldo actual de la factura', min: 0 }
+    )
 
     if (input.monto > saldoActual) {
       throw new Error(

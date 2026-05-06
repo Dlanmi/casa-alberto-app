@@ -1,9 +1,10 @@
 // Integration tests for the guards added by the business-correctness audit
 // (worktree-agent-ad7e00e2) to pagos and devoluciones.
 import { beforeEach, describe, expect, it } from 'vitest'
+import { sql } from 'drizzle-orm'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
-import { clientes, facturas, pedidos } from '../schema'
+import { clientes, facturas, pagos, pedidos } from '../schema'
 import {
   anularFactura,
   crearFactura,
@@ -55,7 +56,7 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
           metodoPago: 'efectivo',
           fecha: '2026-04-02'
         })
-      ).toThrow(/monto.*mayor a 0/i)
+      ).toThrow(/monto.*(mayor a 0|menor a)/i)
     })
 
     it('rechaza pago sobre factura anulada', () => {
@@ -89,7 +90,15 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
           metodoPago: 'efectivo',
           fecha: '2026-04-02'
         })
-      ).toThrow(/monto.*mayor a 0/i)
+      ).toThrow(/no es un número finito válido/i)
+      expect(() =>
+        registrarPago(db, {
+          facturaId,
+          monto: Number.POSITIVE_INFINITY,
+          metodoPago: 'efectivo',
+          fecha: '2026-04-02'
+        })
+      ).toThrow(/no es un número finito válido/i)
     })
 
     it('happy path: marca la factura como pagada cuando el saldo llega a 0', () => {
@@ -131,7 +140,7 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
           motivo: 'Cliente insatisfecho',
           fecha: '2026-04-03'
         })
-      ).toThrow(/monto.*mayor a 0/i)
+      ).toThrow(/monto.*(mayor a 0|menor a)/i)
     })
 
     it('rechaza devolución mayor que lo efectivamente cobrado', () => {
@@ -295,6 +304,93 @@ describe.runIf(nativeAbiAvailable)('facturas guards (Fase 2 §B.3)', () => {
           total: 999999
         })
       ).toThrow(/coincidir/i)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Hardening: valores no-finitos en facturas/pagos/devoluciones (informe 318aa85).
+  // Si un total/monto se cuela como Infinity/NaN, debe abortarse antes de tocar la DB.
+  // ---------------------------------------------------------------------------
+  describe('hardening — valores no-finitos', () => {
+    it('crearFactura rechaza total Infinity', () => {
+      const cliente = db.insert(clientes).values({ nombre: 'X' }).returning().get()
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: 'P-9100',
+          clienteId: cliente.id,
+          tipoTrabajo: 'enmarcacion_estandar',
+          precioTotal: 100000,
+          estado: 'en_proceso',
+          fechaIngreso: '2026-04-01'
+        })
+        .returning()
+        .get()
+      expect(() =>
+        crearFactura(db, {
+          pedidoId: pedido.id,
+          clienteId: cliente.id,
+          fecha: '2026-04-01',
+          total: Number.POSITIVE_INFINITY
+        })
+      ).toThrow(/no es un número finito válido/i)
+      // Ninguna factura debe haberse insertado.
+      expect(db.select().from(facturas).all()).toHaveLength(1) // solo la del beforeEach
+    })
+
+    it('crearFactura rechaza total NaN', () => {
+      const cliente = db.insert(clientes).values({ nombre: 'Y' }).returning().get()
+      const pedido = db
+        .insert(pedidos)
+        .values({
+          numero: 'P-9101',
+          clienteId: cliente.id,
+          tipoTrabajo: 'enmarcacion_estandar',
+          precioTotal: 100000,
+          estado: 'en_proceso',
+          fechaIngreso: '2026-04-01'
+        })
+        .returning()
+        .get()
+      expect(() =>
+        crearFactura(db, {
+          pedidoId: pedido.id,
+          clienteId: cliente.id,
+          fecha: '2026-04-01',
+          total: Number.NaN
+        })
+      ).toThrow(/no es un número finito válido/i)
+    })
+
+    it('registrarPago aborta si la factura ya tenía total no-finito (defensa contra DB corrupta)', () => {
+      // Inyectamos directamente con SQL raw para simular una factura
+      // contaminada por un commit previo a este fix. Saldo derivado = Infinity
+      // y validarMonto debe abortar antes de insertar el pago.
+      db.run(sql`UPDATE facturas SET total = 1e9999 WHERE id = ${facturaId}`)
+      expect(() =>
+        registrarPago(db, {
+          facturaId,
+          monto: 50000,
+          metodoPago: 'efectivo',
+          fecha: '2026-04-02'
+        })
+      ).toThrow(/no es un número finito válido/i)
+      // Sin pagos persistidos.
+      const pagosCount = db.select({ id: sql<number>`count(*)` }).from(pagos).get()
+      expect(pagosCount?.id).toBe(0)
+    })
+
+    it('registrarDevolucion aborta si el cobrado neto resulta no-finito', () => {
+      // Sembramos un pago manual con monto Infinity (simulando corrupción).
+      db.run(sql`INSERT INTO pagos (factura_id, monto, metodo_pago, fecha) VALUES (${facturaId}, 1e9999, 'efectivo', '2026-04-02')`)
+      expect(() =>
+        registrarDevolucion(db, {
+          facturaId,
+          monto: 1000,
+          motivo: 'test',
+          fecha: '2026-04-03'
+        })
+      ).toThrow(/no es un número finito válido/i)
     })
   })
 })

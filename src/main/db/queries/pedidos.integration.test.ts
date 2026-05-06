@@ -1199,7 +1199,7 @@ describe.runIf(nativeAbiAvailable)('cobrarYEntregar · quick-pay atómico', () =
         metodoPago: 'efectivo',
         fecha: '2026-04-15'
       })
-    ).toThrow(/mayor a 0/i)
+    ).toThrow(/(mayor a 0|menor a)/i)
   })
 
   it('rechaza método de pago inválido', () => {
@@ -1571,6 +1571,108 @@ describe.runIf(nativeAbiAvailable)('crearPedidoDirecto', () => {
     // Verifica que no quedó pedido huérfano
     const pedidosCount = db.select().from(pedidos).all().length
     expect(pedidosCount).toBe(0)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Hardening: valores no-finitos derivados de aritmética (informe 318aa85).
+  // PoC: cantidad y precio finitos individualmente, pero su producto overflow
+  // a Infinity. Sin el fix, SQLite acepta Infinity en columnas REAL y los
+  // CHECK (... >= 0) retornan TRUE para Infinity, corrompiendo financials.
+  // ---------------------------------------------------------------------------
+
+  it('rechaza item cuyo producto cantidad*precio overflow a Infinity (PoC del informe)', () => {
+    expect(() =>
+      crearPedidoDirecto(
+        db,
+        inputBase({
+          items: [
+            {
+              tipoItem: 'otro',
+              descripcion: 'PoC infinity',
+              cantidad: 1e308,
+              precioUnitario: 1e308
+            }
+          ]
+        })
+      )
+    ).toThrow(/no es un número finito válido/i)
+    // La transacción debe haber abortado antes de cualquier insert.
+    expect(db.select().from(pedidos).all()).toHaveLength(0)
+    expect(db.select().from(pedidoItems).all()).toHaveLength(0)
+    expect(db.select().from(facturas).all()).toHaveLength(0)
+  })
+
+  it('rechaza precioTotalOverride no-finito', () => {
+    expect(() =>
+      crearPedidoDirecto(
+        db,
+        inputBase({ precioTotalOverride: Number.POSITIVE_INFINITY })
+      )
+    ).toThrow(/no es un número finito válido/i)
+    expect(db.select().from(pedidos).all()).toHaveLength(0)
+  })
+
+  it('rechaza suma de items cuyo subtotal global overflow', () => {
+    // Cada item finito (Number.MAX_VALUE) pero la suma de muchos overflow.
+    const items = Array.from({ length: 5 }, (_, i) => ({
+      tipoItem: 'otro' as const,
+      descripcion: `item-${i}`,
+      cantidad: 1,
+      precioUnitario: Number.MAX_VALUE
+    }))
+    expect(() => crearPedidoDirecto(db, inputBase({ items }))).toThrow(
+      /no es un número finito válido/i
+    )
+    expect(db.select().from(pedidos).all()).toHaveLength(0)
+  })
+
+  it('rechaza costoUnitarioEstimado * cantidad no-finito', () => {
+    expect(() =>
+      crearPedidoDirecto(
+        db,
+        inputBase({
+          items: [
+            {
+              tipoItem: 'otro',
+              descripcion: 'costo overflow',
+              cantidad: 1e308,
+              precioUnitario: 0,
+              costoUnitarioEstimado: 1e308
+            }
+          ]
+        })
+      )
+    ).toThrow(/no es un número finito válido/i)
+    expect(db.select().from(pedidoItems).all()).toHaveLength(0)
+  })
+
+  it('rechaza cantidad NaN o Infinity directamente en el input', () => {
+    expect(() =>
+      crearPedidoDirecto(
+        db,
+        inputBase({
+          items: [
+            { tipoItem: 'otro', descripcion: 'nan', cantidad: NaN, precioUnitario: 1000 }
+          ]
+        })
+      )
+    ).toThrow(/no es un número finito válido/i)
+
+    expect(() =>
+      crearPedidoDirecto(
+        db,
+        inputBase({
+          items: [
+            {
+              tipoItem: 'otro',
+              descripcion: 'inf',
+              cantidad: Number.POSITIVE_INFINITY,
+              precioUnitario: 1000
+            }
+          ]
+        })
+      )
+    ).toThrow(/no es un número finito válido/i)
   })
 })
 
