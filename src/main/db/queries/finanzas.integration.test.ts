@@ -247,6 +247,50 @@ describe.runIf(nativeAbiAvailable)('serieDiariaMensual — heatmap calendario', 
     const serie2024 = serieDiariaMensual(db, '2026-02')
     expect(serie2024).toHaveLength(28)
   })
+
+  // -------------------------------------------------------------------------
+  // Hardening contra DoS por años fuera de rango (informe 3b31841).
+  // Sin el fix, mes="0000-01" hacía new Date(0,1,1) = 1900-02-01 (quirk de
+  // años 0-99) y el loop generaba ~694k entries → OOM crash. Con el fix,
+  // validarFechaISO rechaza el año fuera de [2000, 2100] antes del loop.
+  // -------------------------------------------------------------------------
+
+  it('rechaza mes con año 0000 (PoC del informe)', () => {
+    expect(() => serieDiariaMensual(db, '0000-01')).toThrow(/rango razonable/i)
+    expect(() => serieDiariaMensual(db, '0099-12')).toThrow(/rango razonable/i)
+  })
+
+  it('rechaza años posteriores a 2100', () => {
+    expect(() => serieDiariaMensual(db, '2101-01')).toThrow(/rango razonable/i)
+    expect(() => serieDiariaMensual(db, '9999-12')).toThrow(/rango razonable/i)
+  })
+
+  it('rechaza años anteriores a 2000', () => {
+    expect(() => serieDiariaMensual(db, '1999-12')).toThrow(/rango razonable/i)
+  })
+
+  it('rechaza formatos inválidos', () => {
+    expect(() => serieDiariaMensual(db, 'abc')).toThrow(/formato/i)
+    expect(() => serieDiariaMensual(db, '2026-1')).toThrow(/formato/i)
+    expect(() => serieDiariaMensual(db, '')).toThrow(/formato/i)
+    // mes 13 / mes 0 pasan el regex pero fallan en el chequeo de rango.
+    expect(() => serieDiariaMensual(db, '2026-13')).toThrow(/no es un mes válido/i)
+    expect(() => serieDiariaMensual(db, '2026-00')).toThrow(/no es un mes válido/i)
+  })
+
+  it('mes válido en frontera del año (diciembre) calcula correctamente el rango', () => {
+    registrarMovimientoManual(db, {
+      tipo: 'ingreso',
+      categoria: 'enmarcacion',
+      monto: 50000,
+      fecha: '2026-12-31'
+    })
+    const serie = serieDiariaMensual(db, '2026-12')
+    expect(serie).toHaveLength(31)
+    expect(serie[0]!.fecha).toBe('2026-12-01')
+    expect(serie[30]!.fecha).toBe('2026-12-31')
+    expect(serie[30]!.ingresos).toBe(50000)
+  })
 })
 
 describe.runIf(nativeAbiAvailable)('topClientes', () => {

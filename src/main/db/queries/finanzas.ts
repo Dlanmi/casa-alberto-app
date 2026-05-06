@@ -15,29 +15,35 @@ import {
   type TipoMovimientoFin,
   type TipoTrabajo
 } from '../schema'
+import { validarFechaISO } from '../../lib/validar-fecha'
 
-// Formato 'YYYY-MM' obligatorio para los helpers de mes — un mes mal
-// formateado se convierte en un Date inválido silencioso, lo que daría
-// rangos de fecha indefinidos. Validamos antes de parsear.
-const RE_MES_ISO = /^(\d{4})-(0[1-9]|1[0-2])$/
-
+// Helpers de mes — delegan formato + rango razonable [2000, 2100] al
+// validador central (`validarFechaISO`). Antes este módulo tenía su propio
+// regex que solo validaba forma; un mes como '0000-01' pasaba el check y
+// luego `new Date(0, 1, 1)` se convertía en 1900-02-01 (quirk de JS con
+// años 0-99), generando un rango de 1900 años → OOM al expandir el heatmap
+// diario. Ver informe 3b31841.
 function validarMesISO(mes: string, contexto: string): { y: number; m: number } {
-  const match = mes.match(RE_MES_ISO)
-  if (!match) {
-    throw new Error(`${contexto}: formato esperado YYYY-MM, recibido "${mes}"`)
-  }
-  return { y: Number(match[1]), m: Number(match[2]) }
+  validarFechaISO(mes, 'YYYY-MM', contexto)
+  const [y, m] = mes.split('-').map((n) => Number.parseInt(n, 10))
+  return { y, m }
 }
 
 /**
  * Calcula el primer día del mes siguiente. Usado para filtros de rango
  * exclusivo `fecha < siguiente-mes-01`, más correcto que `fecha <= ${mes}-31`
  * (que falla en febrero o meses de 30 días con strings tipo '2026-02-30').
+ *
+ * Aritmética pura sobre strings — sin `new Date(y, m, 1)`. El constructor
+ * numérico de Date interpreta años 0-99 como 1900-1999, lo que producía un
+ * rango distorsionado para entradas malformadas. La validación de rango ya
+ * cubre eso, pero esta versión es además trivialmente correcta y más rápida.
  */
 function primerDiaMesSiguiente(mes: string): string {
   const { y, m } = validarMesISO(mes, 'primerDiaMesSiguiente')
-  const next = new Date(y, m, 1)
-  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`
+  const yNext = m === 12 ? y + 1 : y
+  const mNext = m === 12 ? 1 : m + 1
+  return `${String(yNext).padStart(4, '0')}-${String(mNext).padStart(2, '0')}-01`
 }
 
 export type NuevoMovimientoManual = {
@@ -408,11 +414,7 @@ function rangoUltimosMeses(mesesAtras: number): { desde: string; hastaExcl: stri
     inicioMesActual.getMonth() - (mesesAtras - 1),
     1
   )
-  const inicioSiguiente = new Date(
-    inicioMesActual.getFullYear(),
-    inicioMesActual.getMonth() + 1,
-    1
-  )
+  const inicioSiguiente = new Date(inicioMesActual.getFullYear(), inicioMesActual.getMonth() + 1, 1)
   const fmt = (d: Date): string =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
   return { desde: fmt(inicioVentana), hastaExcl: fmt(inicioSiguiente) }
@@ -450,10 +452,7 @@ export function serieMensual(db: DB, mesesAtras = 6): FilaSerieMensual[] {
     .where(
       and(gte(movimientosFinancieros.fecha, desde), lt(movimientosFinancieros.fecha, hastaExcl))
     )
-    .groupBy(
-      sql`strftime('%Y-%m', ${movimientosFinancieros.fecha})`,
-      movimientosFinancieros.tipo
-    )
+    .groupBy(sql`strftime('%Y-%m', ${movimientosFinancieros.fecha})`, movimientosFinancieros.tipo)
     .all()
 
   // Construir el set completo de meses esperados para garantizar gaps llenos.
@@ -518,10 +517,19 @@ export function serieDiariaMensual(db: DB, mes: string): FilaSerieDiaria[] {
   const mapa = new Map<string, FilaSerieDiaria>()
   const cursor = new Date(`${desde}T12:00:00`)
   const fin = new Date(`${hastaExcl}T12:00:00`)
+  // Cap absoluto: ningún mes tiene más de 31 días. Defensa-en-profundidad
+  // contra un futuro bug aguas arriba que produjera un rango fuera de
+  // invariante (timezone inesperado, validador nuevo permisivo, etc.).
+  const MAX_DIAS_MES = 31
+  let iter = 0
   while (cursor < fin) {
+    if (iter >= MAX_DIAS_MES) {
+      throw new Error(`serieDiariaMensual: rango del mes excede ${MAX_DIAS_MES} días`)
+    }
     const fecha = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
     mapa.set(fecha, { fecha, ingresos: 0, gastos: 0, transacciones: 0 })
     cursor.setDate(cursor.getDate() + 1)
+    iter++
   }
   for (const row of rows) {
     const slot = mapa.get(row.fecha)
@@ -638,11 +646,7 @@ export type FilaIngresoTipo = {
   /** Categoría comercial. Para pedidos viene de `tipo_trabajo`. Las clases,
    *  kits y cuentas de cobro se mapean a categorías sintéticas con prefijo
    *  para que el donut las pueda diferenciar visualmente del resto. */
-  categoria:
-    | TipoTrabajo
-    | 'clases'
-    | 'kits'
-    | 'contratos'
+  categoria: TipoTrabajo | 'clases' | 'kits' | 'contratos'
   total: number
   cantidad: number
 }
@@ -702,10 +706,7 @@ export function ingresosPorTipoTrabajo(
     })
     .from(pagosClasesDetalle)
     .where(
-      and(
-        gte(pagosClasesDetalle.fecha, opts.desde),
-        lte(pagosClasesDetalle.fecha, opts.hasta)
-      )
+      and(gte(pagosClasesDetalle.fecha, opts.desde), lte(pagosClasesDetalle.fecha, opts.hasta))
     )
     .get()
   if ((clasesAgg?.total ?? 0) > 0) {
