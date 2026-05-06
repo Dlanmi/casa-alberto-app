@@ -315,17 +315,33 @@ function FacturaDetailModal({
             cantidad: number
             precioUnitario: number | null
             subtotal: number
+            metadata?: {
+              trabajoId?: number
+              tipoTrabajoOrigen?: string
+              medidas?: { anchoCm: number; altoCm: number }
+            } | null
           }[]
         }
       >
       const pedidoData = pedidoRes.ok ? pedidoRes.data : null
+      // v2.2.0+: si los items traen metadata.trabajoId, lo propagamos al PDF
+      // para que el generador agrupe por trabajo. Items pre-2.2.0 no tienen
+      // metadata y se renderizan como antes (lista plana).
       const pdfItems =
-        pedidoData?.items?.map((it) => ({
-          descripcion: it.descripcion ?? 'Item',
-          cantidad: it.cantidad,
-          precioUnitario: it.precioUnitario ?? it.subtotal,
-          subtotal: it.subtotal
-        })) ?? []
+        pedidoData?.items?.map((it) => {
+          const md = it.metadata ?? null
+          return {
+            descripcion: it.descripcion ?? 'Item',
+            cantidad: it.cantidad,
+            precioUnitario: it.precioUnitario ?? it.subtotal,
+            subtotal: it.subtotal,
+            ...(md?.trabajoId != null ? { trabajoId: md.trabajoId } : {}),
+            ...(md?.tipoTrabajoOrigen
+              ? { tipoTrabajoOrigen: md.tipoTrabajoOrigen as never }
+              : {}),
+            ...(md?.medidas ? { medidasTrabajo: md.medidas } : {})
+          }
+        }) ?? []
 
       // Use real payment history from facturaDetalle
       const pdfPagos =

@@ -21,6 +21,17 @@ function sanitizePdfText(s: string | null | undefined): string {
   return String(s).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
 }
 
+type FacturaItem = {
+  descripcion: string
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+  /** v2.2.0+ — agrupador de items dentro de un pedido multi-trabajo. */
+  trabajoId?: number
+  tipoTrabajoOrigen?: string
+  medidasTrabajo?: { anchoCm: number; altoCm: number }
+}
+
 type FacturaData = {
   numero: string
   fecha: string
@@ -28,7 +39,7 @@ type FacturaData = {
   clienteCedula?: string | null
   clienteTelefono?: string | null
   clienteDireccion?: string | null
-  items: { descripcion: string; cantidad: number; precioUnitario: number; subtotal: number }[]
+  items: FacturaItem[]
   subtotal: number
   totalMateriales: number
   precioLista?: number
@@ -39,6 +50,58 @@ type FacturaData = {
   saldo: number
   notas?: string | null
   formato?: PdfFormato
+}
+
+// Etiquetas legibles para los sub-headers de cada trabajo en pedidos mixtos.
+// Mantenemos sincronizado con TIPO_TRABAJO_LABEL del renderer (no compartimos
+// el archivo porque main no puede importar de src/renderer).
+const TIPO_TRABAJO_LABEL_PDF: Record<string, string> = {
+  enmarcacion_estandar: 'Enmarcación',
+  acolchado: 'Acolchado',
+  adherido: 'Adherido',
+  retablo: 'Retablo',
+  bastidor: 'Bastidor',
+  tapa: 'Tapa',
+  restauracion: 'Restauración',
+  vidrio_espejo: 'Vidrio / Espejo',
+  mixto: 'Pedido mixto'
+}
+
+/**
+ * Agrupa items por `trabajoId` preservando el orden original. Items sin
+ * trabajoId (ej. descuento global) van al grupo `null` al final.
+ */
+function agruparItemsPorTrabajo(
+  items: FacturaItem[]
+): Array<{ trabajoId: number | null; items: FacturaItem[]; tipoTrabajo?: string; medidas?: { anchoCm: number; altoCm: number } }> {
+  const grupos = new Map<
+    number | null,
+    {
+      trabajoId: number | null
+      items: FacturaItem[]
+      tipoTrabajo?: string
+      medidas?: { anchoCm: number; altoCm: number }
+    }
+  >()
+  for (const item of items) {
+    const key = item.trabajoId ?? null
+    if (!grupos.has(key)) {
+      grupos.set(key, {
+        trabajoId: key,
+        items: [],
+        tipoTrabajo: item.tipoTrabajoOrigen,
+        medidas: item.medidasTrabajo
+      })
+    }
+    grupos.get(key)!.items.push(item)
+  }
+  // Items con trabajoId primero (ordenados por id), luego el grupo "null"
+  // (descuento global, etc.).
+  return Array.from(grupos.values()).sort((a, b) => {
+    if (a.trabajoId === null) return 1
+    if (b.trabajoId === null) return -1
+    return a.trabajoId - b.trabajoId
+  })
 }
 
 function getConfig(db: DB, clave: string): string {
@@ -132,15 +195,41 @@ function renderFormatoPagina(doc: PDFKit.PDFDocument, data: FacturaData, negocio
     .lineTo(pageRight, tableTop + 14)
     .stroke('#e7e5e4')
 
-  // Items
+  // Items — agrupados por trabajoId si el pedido es multi-trabajo. Cuando
+  // todos los items tienen trabajoId === undefined (pedido pre-v2.2.0 o
+  // single trabajo), se renderiza como antes sin sub-headers.
   let y = tableTop + 20
-  doc.fontSize(9).font('Helvetica')
-  for (const item of data.items) {
-    doc.text(item.descripcion, col.desc, y, { width: col.cant - col.desc - 10 })
-    doc.text(String(item.cantidad), col.cant, y)
-    doc.text(item.precioUnitario ? formatCOP(item.precioUnitario) : '', col.unit, y)
-    doc.text(formatCOP(item.subtotal), col.sub, y)
-    y += 16
+  const grupos = agruparItemsPorTrabajo(data.items)
+  const esMultiTrabajo = grupos.filter((g) => g.trabajoId !== null).length > 1
+
+  for (const grupo of grupos) {
+    if (esMultiTrabajo && grupo.trabajoId !== null) {
+      // Sub-header del trabajo: "Trabajo N — Tipo · medidas"
+      const tipoLabel = grupo.tipoTrabajo
+        ? (TIPO_TRABAJO_LABEL_PDF[grupo.tipoTrabajo] ?? grupo.tipoTrabajo)
+        : ''
+      const medidasStr = grupo.medidas
+        ? ` · ${grupo.medidas.anchoCm} × ${grupo.medidas.altoCm} cm`
+        : ''
+      doc
+        .fontSize(9)
+        .font('Helvetica-Bold')
+        .fillColor('#57534e')
+        .text(`Trabajo ${grupo.trabajoId} — ${tipoLabel}${medidasStr}`, col.desc, y)
+      doc.fontSize(9).font('Helvetica').fillColor('black')
+      y += 14
+    }
+    for (const item of grupo.items) {
+      doc.text(item.descripcion, col.desc, y, { width: col.cant - col.desc - 10 })
+      doc.text(String(item.cantidad), col.cant, y)
+      doc.text(item.precioUnitario ? formatCOP(item.precioUnitario) : '', col.unit, y)
+      doc.text(formatCOP(item.subtotal), col.sub, y)
+      y += 16
+    }
+    if (esMultiTrabajo && grupo.trabajoId !== null) {
+      // Espacio extra entre trabajos para separación visual.
+      y += 4
+    }
   }
 
   doc.moveTo(50, y).lineTo(pageRight, y).stroke('#e7e5e4')
