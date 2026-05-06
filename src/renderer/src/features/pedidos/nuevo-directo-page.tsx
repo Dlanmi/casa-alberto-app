@@ -22,6 +22,7 @@ import { Modal } from '@renderer/components/ui/modal'
 import { Spinner } from '@renderer/components/ui/spinner'
 import { ClientePicker } from '@renderer/components/shared/cliente-picker'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
+import { MuestraMarcoPickerCargado } from '@renderer/components/shared/muestra-marco-picker'
 import { useToast } from '@renderer/contexts/toast-context'
 import { formatCOP, hoyISO, toFechaISO } from '@renderer/lib/format'
 import { formatPrimaryShortcut } from '@renderer/lib/shortcuts'
@@ -817,6 +818,10 @@ function ItemRow({ index, item, onUpdate, onRemove, canRemove }: ItemRowProps): 
   const [touched, setTouched] = useState({ descripcion: false, precio: false })
   const errDesc = touched.descripcion && !item.descripcion.trim()
   const errPrecio = touched.precio && (!Number.isFinite(item.precioUnitario) || item.precioUnitario < 0)
+  // Modal de selección de muestra de marco (catálogo). Solo se ofrece para
+  // tipoItem='marco' — para otros conceptos no aplica. El usuario puede
+  // seguir tipeando libremente si la muestra no está registrada.
+  const [pickerMarcoOpen, setPickerMarcoOpen] = useState(false)
   return (
     <div
       className={cn(
@@ -860,6 +865,20 @@ function ItemRow({ index, item, onUpdate, onRemove, canRemove }: ItemRowProps): 
           required
         />
       </div>
+      {item.tipoItem === 'marco' && (
+        <div className="flex items-center justify-between gap-2 rounded-md bg-accent/5 border border-accent/20 px-3 py-2">
+          <p className="text-xs text-text-muted">
+            ¿La muestra está en el catálogo? Selecciónala para enlazar referencia y precio.
+          </p>
+          <button
+            type="button"
+            onClick={() => setPickerMarcoOpen(true)}
+            className="text-xs font-medium text-accent-strong hover:underline whitespace-nowrap"
+          >
+            Elegir del catálogo
+          </button>
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-4">
         <TextField
           label="Referencia (opcional)"
@@ -894,6 +913,34 @@ function ItemRow({ index, item, onUpdate, onRemove, canRemove }: ItemRowProps): 
         <span className="text-text-muted mr-2">Subtotal:</span>
         <span className="font-semibold tabular-nums text-text">{formatCOP(subtotal)}</span>
       </div>
+
+      {/* Modal: catálogo de muestras de marco. Solo se monta cuando se abre
+          para diferir el fetch IPC hasta que sea necesario. */}
+      <Modal
+        open={pickerMarcoOpen}
+        onClose={() => setPickerMarcoOpen(false)}
+        title="Elegir marco del catálogo"
+        size="lg"
+      >
+        <MuestraMarcoPickerCargado
+          selectedId={null}
+          onSelect={(marco) => {
+            onUpdate({
+              descripcion: marco.descripcion || `Marco ${marco.referencia}`,
+              referencia: marco.referencia,
+              // El costo unitario para un marco se aproxima como el costo/m
+              // (asumiendo cantidad=1 metro). Si el papá ajusta cantidad
+              // después, el costo total se recalcula al persistir.
+              costoUnitarioEstimado:
+                marco.costoMetroEstimado ?? item.costoUnitarioEstimado,
+              // El precio unitario también sale del catálogo (precio/metro).
+              precioUnitario: marco.precioMetro
+            })
+            setPickerMarcoOpen(false)
+          }}
+          compacto
+        />
+      </Modal>
     </div>
   )
 }
