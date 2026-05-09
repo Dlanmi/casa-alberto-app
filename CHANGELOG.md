@@ -10,6 +10,52 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.2.1] — Hardening: cuatro caminos de fallo cerrados
+
+Patch que cierra cuatro huecos defensivos identificados en revisión de
+código del release 2.2.0. Ninguno alcanzable desde uso normal — todos
+requieren almacenamiento local manipulado o un renderer comprometido —
+pero el modelo de amenazas del proyecto trata ese límite como no
+confiable, así que se cierran preventivamente.
+
+### Arreglado
+
+- **El picker de catálogo de marcos ya no congela el "Pedido directo"
+  con varios items.** Antes, cada fila de marco montaba el modal aun
+  cerrado y disparaba un IPC al catálogo en cada render — con 5+ items
+  la pantalla quedaba lenta. Ahora el modal solo se monta cuando el
+  usuario hace click en "Elegir marco del catálogo".
+
+- **La base de datos rechaza totales no-finitos en pedidos
+  multi-trabajo, contratos, cuentas de cobro y movimientos manuales de
+  finanzas.** Antes un payload IPC con números extremos podía propagar
+  Infinity al insert (los CHECK del schema no lo bloqueaban). Ahora
+  todos los handlers IPC numéricos pasan por validación profunda antes
+  de persistir.
+
+- **El borrador del flujo "Pedido multi-trabajo" se descarta si está
+  corrupto.** Antes, si el localStorage quedaba con un draft malformado
+  (corte de luz a mitad de auto-save, mismatch entre versiones), la
+  ruta `/cotizador/pedido` quedaba en pantalla blanca y solo se
+  recuperaba limpiando manualmente la caché. Ahora la app valida el
+  draft profundamente y, si algo no cuadra, lo descarta y arranca
+  limpia.
+
+- **El borrador del cotizador individual también se descarta si está
+  corrupto.** Mismo patrón que el de multi-trabajo, aplicado al wizard
+  de un solo trabajo.
+
+### Para desarrolladores
+
+- 57 tests nuevos cubriendo los caminos hostiles (Infinity/NaN,
+  drafts vacíos, drafts con cliente o cotización malformados).
+- 19 tests pre-existentes que estaban con setup desactualizado fueron
+  re-alineados con el seed de configuración actual y la versión
+  moderna de SQLite. Toda la suite (915 tests) pasa.
+- TZ del runtime de tests fijada a `America/Bogota` para que los
+  helpers que dependen de día calendario (agenda, próximas entregas)
+  sean reproducibles.
+
 ## [2.2.0] — Pedido con varios trabajos en una sola visita
 
 Cuando un cliente llega con varios cuadros distintos (uno con marco simple,

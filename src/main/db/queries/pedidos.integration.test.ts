@@ -1154,13 +1154,40 @@ describe.runIf(nativeAbiAvailable)('cobrarYEntregar · quick-pay atómico', () =
   })
 
   it('rechaza si el pedido NO está en estado listo', () => {
-    const { pedidoId, saldo } = crearPedidoListoConSaldo(0)
-    cambiarEstadoPedido(db, pedidoId, 'entregado') // ya está entregado
+    // Antes intentábamos pasar a 'entregado' después de crear el pedido,
+    // pero `cambiarEstadoPedido` bloquea esa transición si la factura
+    // tiene saldo pendiente — y aquí saldo === total. Usamos un pedido
+    // que se queda en estado 'en_proceso' (no llega a 'listo'); también
+    // es un caso negativo válido para la regla de cobrarYEntregar.
+    const cot = cotizarEnmarcacionEstandar(db, {
+      anchoCm: 30,
+      altoCm: 40,
+      muestraMarcoId,
+      tipoVidrio: 'claro_2mm'
+    })
+    const result = crearPedidoConfirmadoConFactura(db, {
+      datos: {
+        clienteId,
+        tipoTrabajo: 'enmarcacion_estandar',
+        descripcion: 'Pedido NO listo',
+        anchoCm: 30,
+        altoCm: 40,
+        muestraMarcoId,
+        tipoVidrio: 'claro_2mm',
+        porcentajeMateriales: 10,
+        fechaIngreso: '2026-04-01'
+      },
+      cotizacion: cot,
+      facturaFecha: '2026-04-01',
+      abono: null
+    })
+    cambiarEstadoPedido(db, result.pedido.id, 'en_proceso')
+    // Pedido quedó en 'en_proceso' (no 'listo') — cobrarYEntregar debe rechazar.
 
     expect(() =>
       cobrarYEntregar(db, {
-        pedidoId,
-        monto: saldo,
+        pedidoId: result.pedido.id,
+        monto: result.factura.total,
         metodoPago: 'efectivo',
         fecha: '2026-04-15'
       })
@@ -1945,6 +1972,99 @@ describe.runIf(nativeAbiAvailable)('crearPedidoMultiTrabajo', () => {
     expect(db.select({ n: sql<number>`count(*)` }).from(pedidos).get()?.n).toBe(0)
     expect(db.select({ n: sql<number>`count(*)` }).from(pedidoItems).get()?.n).toBe(0)
     expect(db.select({ n: sql<number>`count(*)` }).from(facturas).get()?.n).toBe(0)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Hardening: PoC del informe de_8a359 — restauración con subtotal y
+  // totalMateriales individualmente finitos pero cuya suma overflow a Infinity.
+  // Sin validarMonto sobre el agregado, redondearPrecioFinal devuelve 0 y la
+  // DB recibe Infinity en pedidos.{subtotal,totalMateriales,brutoCotizado}
+  // (los CHECK >= 0 no rechazan Infinity).
+  // ---------------------------------------------------------------------------
+
+  it('rechaza restauración cuyo subtotal+totalMateriales overflow a Infinity (PoC informe)', () => {
+    const trabajoOverflow: TrabajoCotizado = {
+      tipoTrabajo: 'restauracion',
+      datos: {
+        clienteId,
+        tipoTrabajo: 'restauracion',
+        descripcion: 'PoC overflow',
+        precioManual: 1e308,
+        fechaIngreso: '2026-05-06'
+      },
+      cotizacion: {
+        items: [
+          {
+            tipoItem: 'restauracion',
+            descripcion: 'PoC overflow',
+            cantidad: 1,
+            precioUnitario: 1e308,
+            costoUnitarioEstimado: 0,
+            subtotal: 1e308,
+            subtotalCostoEstimado: 0
+          }
+        ],
+        subtotal: 1e308,
+        totalMateriales: 1e308,
+        brutoCotizado: 1e308,
+        precioLista: 1e308,
+        precioTotal: 1e308,
+        costoEstimadoTotal: 0,
+        margenEstimado: 0,
+        margenEstimadoPct: 0,
+        estadoRentabilidad: 'saludable'
+      }
+    }
+    expect(() =>
+      crearPedidoMultiTrabajo(db, inputBase({ trabajos: [trabajoOverflow] }))
+    ).toThrow(/no es un número finito válido/i)
+    expect(db.select({ n: sql<number>`count(*)` }).from(pedidos).get()?.n).toBe(0)
+    expect(db.select({ n: sql<number>`count(*)` }).from(pedidoItems).get()?.n).toBe(0)
+    expect(db.select({ n: sql<number>`count(*)` }).from(facturas).get()?.n).toBe(0)
+  })
+
+  it('rechaza agregado de subtotales que overflow entre múltiples trabajos restauración', () => {
+    // Cada trabajo individualmente tiene magnitudes finitas, pero la suma
+    // de Number.MAX_VALUE * 3 hace overflow.
+    const trabajoGrande = (i: number): TrabajoCotizado => ({
+      tipoTrabajo: 'restauracion',
+      datos: {
+        clienteId,
+        tipoTrabajo: 'restauracion',
+        descripcion: `Trabajo ${i}`,
+        precioManual: Number.MAX_VALUE,
+        fechaIngreso: '2026-05-06'
+      },
+      cotizacion: {
+        items: [
+          {
+            tipoItem: 'restauracion',
+            descripcion: `Trabajo ${i}`,
+            cantidad: 1,
+            precioUnitario: Number.MAX_VALUE,
+            costoUnitarioEstimado: 0,
+            subtotal: Number.MAX_VALUE,
+            subtotalCostoEstimado: 0
+          }
+        ],
+        subtotal: Number.MAX_VALUE,
+        totalMateriales: 0,
+        brutoCotizado: Number.MAX_VALUE,
+        precioLista: Number.MAX_VALUE,
+        precioTotal: Number.MAX_VALUE,
+        costoEstimadoTotal: 0,
+        margenEstimado: 0,
+        margenEstimadoPct: 0,
+        estadoRentabilidad: 'saludable'
+      }
+    })
+    expect(() =>
+      crearPedidoMultiTrabajo(
+        db,
+        inputBase({ trabajos: [trabajoGrande(1), trabajoGrande(2), trabajoGrande(3)] })
+      )
+    ).toThrow(/no es un número finito válido/i)
+    expect(db.select({ n: sql<number>`count(*)` }).from(pedidos).get()?.n).toBe(0)
   })
 })
 

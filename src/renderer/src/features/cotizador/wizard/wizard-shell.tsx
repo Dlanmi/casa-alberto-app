@@ -26,6 +26,7 @@ import {
   useAutoSave,
   type AutoSaveStatus
 } from '@renderer/hooks/use-auto-save'
+import { validarWizardData } from './wizard-data-validation'
 import type {
   TipoTrabajo,
   MuestraMarcoConProveedor,
@@ -166,7 +167,10 @@ export function WizardShell({
   const [data, setData] = useState<WizardData>(() => {
     if (initialData) return { ...INITIAL_DATA, ...initialData }
     if (isEmbed) return INITIAL_DATA
-    const draft = loadAutoSaveDraft<WizardData>(draftKey)
+    // Validador profundo: si el draft está malformado (ej. data: null literal,
+    // shape parcial por mismatch de versión, tampering local) loadAutoSaveDraft
+    // devuelve null y borra la clave — la próxima visita arranca limpia.
+    const draft = loadAutoSaveDraft<WizardData>(draftKey, validarWizardData)
     return draft?.data ?? INITIAL_DATA
   })
   const [cotizacion, setCotizacion] = useState<ResultadoCotizacion | null>(null)

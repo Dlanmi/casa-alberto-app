@@ -26,6 +26,7 @@ import {
   type EstadoMultiTrabajo,
   type TrabajoEnSesion
 } from './types'
+import { validarEstadoMultiTrabajo } from './draft-validation'
 
 const ESTADO_INICIAL: EstadoMultiTrabajo = {
   cliente: null,
@@ -43,17 +44,28 @@ export default function MultiTrabajoPage(): React.JSX.Element {
   const { showToast } = useToast()
 
   const [estado, setEstado] = useState<EstadoMultiTrabajo>(() => {
-    // Auto-save: recuperar draft si existe.
+    // Auto-save: recuperar draft si existe. Validación profunda en
+    // `validarEstadoMultiTrabajo` — si CUALQUIER campo del draft es inválido
+    // (storage corrupto, tampering, mismatch de versión) descartamos el draft
+    // entero y borramos la clave para que la próxima visita arranque limpia.
+    // Antes confiábamos en un check `Array.isArray(parsed.trabajos)` que
+    // dejaba pasar `{trabajos:[{}]}` y crasheaba el render con TypeError.
     try {
       const raw = localStorage.getItem(STORAGE_KEY_MULTITRABAJO)
       if (!raw) return ESTADO_INICIAL
-      const parsed = JSON.parse(raw)
-      // Validación mínima: si tiene shape básico aceptamos. Si no, descartamos.
-      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.trabajos)) {
-        return { ...ESTADO_INICIAL, ...parsed }
-      }
+      const parsed: unknown = JSON.parse(raw)
+      const valido = validarEstadoMultiTrabajo(parsed)
+      if (valido) return valido
+      // Descarte: borramos para evitar re-crashes en la próxima visita.
+      localStorage.removeItem(STORAGE_KEY_MULTITRABAJO)
       return ESTADO_INICIAL
     } catch {
+      // JSON inválido o lectura bloqueada: limpiar y arrancar de cero.
+      try {
+        localStorage.removeItem(STORAGE_KEY_MULTITRABAJO)
+      } catch {
+        /* localStorage bloqueado: ignoramos */
+      }
       return ESTADO_INICIAL
     }
   })

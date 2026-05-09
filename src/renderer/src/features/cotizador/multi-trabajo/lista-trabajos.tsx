@@ -1,7 +1,7 @@
 // Lista de trabajos cotizados dentro del pedido multi-trabajo. Cada card
 // resume las medidas + marco + paspartú + precio. Botones para editar
 // (re-abrir modal con datos precargados) y eliminar.
-import { Pencil, Trash2, Plus } from 'lucide-react'
+import { Pencil, Trash2, Plus, Frame } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
 import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
@@ -49,7 +49,12 @@ export function ListaTrabajos({
       ) : (
         <ul className="space-y-2">
           {trabajos.map((trabajo, idx) => {
-            const Icono = TIPO_TRABAJO_ICON[trabajo.tipoTrabajo]
+            // Defense in depth: validarEstadoMultiTrabajo descarta drafts
+            // con tipoTrabajo desconocido, pero si por mutación interna
+            // llega un valor fuera del map, evitamos `<undefined />` que
+            // crashea React.
+            const Icono = TIPO_TRABAJO_ICON[trabajo.tipoTrabajo] ?? Frame
+            const labelTrabajo = TIPO_TRABAJO_LABEL[trabajo.tipoTrabajo] ?? 'Trabajo'
             return (
               <li
                 key={trabajo.idLocal}
@@ -64,7 +69,7 @@ export function ListaTrabajos({
                       #{idx + 1}
                     </span>
                     <span className="text-sm font-semibold text-text">
-                      {TIPO_TRABAJO_LABEL[trabajo.tipoTrabajo]}
+                      {labelTrabajo}
                     </span>
                   </div>
                   <p className="text-xs text-text-muted mt-0.5 truncate">
