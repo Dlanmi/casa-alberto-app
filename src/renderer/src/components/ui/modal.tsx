@@ -8,6 +8,16 @@ import { getMotionDurationMs } from '@renderer/lib/motion'
 // load — porque al primer import el CSS puede no estar parseado aún y
 // caeríamos al fallback estático.
 
+// IMPORTANTE: Este componente renderiza `{children}` siempre, sin importar
+// `open`. Sólo controla el `<dialog>` nativo via showModal()/close(). Eso
+// significa que los hijos se montan ya en el primer render aunque el modal
+// nunca se abra: cualquier `useEffect`/`useIpc` dentro de los hijos corre
+// antes de tiempo. Si el contenido del modal hace fetch IPC al montar (o
+// cualquier trabajo costoso), el caller DEBE gatear externamente:
+//   {abierto && <Modal open={abierto} ...>{children}</Modal>}
+// para diferir el montaje hasta que el modal se abra. Esto es especialmente
+// importante cuando el `<Modal>` vive dentro de una fila/tarjeta que se
+// repite en una lista (multiplica el trabajo por N).
 type ModalProps = {
   open: boolean
   onClose: () => void
