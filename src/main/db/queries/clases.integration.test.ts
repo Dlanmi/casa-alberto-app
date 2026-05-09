@@ -2,6 +2,7 @@
 // audit (worktree-agent-ad7e00e2): acudiente obligatorio para menores,
 // saldo mensual no excedido, venta de kit sin estudiante/cliente.
 import { beforeEach, describe, expect, it } from 'vitest'
+import { eq } from 'drizzle-orm'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
 import { acudientes, clientes, configuracion, estudiantes } from '../schema'
@@ -21,12 +22,18 @@ describe.runIf(nativeAbiAvailable)('clases guards (Fase 2 §C, §D)', () => {
 
   beforeEach(() => {
     db = createTestDb().db
-    // Sembrar la configuración de precios que el módulo de clases consulta.
-    db.insert(configuracion)
-      .values([
-        { clave: 'precio_clase_mensual', valor: '100000', descripcion: 'Clase mensual' },
-        { clave: 'precio_kit_dibujo', valor: '15000', descripcion: 'Kit de dibujo' }
-      ])
+    // `createTestDb` ya invoca `ensureConfigInicial` que siembra todas las
+    // claves base (incluidas precio_clase_mensual=110000, precio_kit_dibujo=
+    // 15000). Estos tests dependen de valores específicos (100000 para
+    // mensualidad), así que ACTUALIZAMOS — antes hacíamos INSERT y rompía
+    // por UNIQUE constraint cuando el seed ya las había creado.
+    db.update(configuracion)
+      .set({ valor: '100000' })
+      .where(eq(configuracion.clave, 'precio_clase_mensual'))
+      .run()
+    db.update(configuracion)
+      .set({ valor: '15000' })
+      .where(eq(configuracion.clave, 'precio_kit_dibujo'))
       .run()
   })
 

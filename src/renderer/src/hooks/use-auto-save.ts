@@ -181,14 +181,55 @@ export function useAutoSave<T>({
 
 /**
  * Carga un draft previamente guardado. Devuelve null si no existe o está corrupto.
+ *
+ * Si se pasa `validate`, se aplica al campo `data` parseado: si el validador
+ * retorna `null`/`undefined` el draft entero se descarta y la clave se borra
+ * del storage para que la siguiente visita no reintente con el mismo payload
+ * malformado. Sin `validate`, se mantiene el comportamiento previo (cast
+ * directo) para compat con callers que aún no migran.
+ *
+ * Defense in depth: aunque el validador no se pase, ahora rechazamos también
+ * los casos en los que `parsed.data` es `null` literal o cuando el JSON
+ * raíz no es un objeto — antes esos pasaban por el cast y crasheaban en el
+ * caller (ej. `null.algunCampo` en wizard-shell).
  */
-export function loadAutoSaveDraft<T>(key: string): { data: T; savedAt: Date } | null {
+export function loadAutoSaveDraft<T>(
+  key: string,
+  validate?: (raw: unknown) => T | null | undefined
+): { data: T; savedAt: Date } | null {
   try {
     const raw = window.localStorage.getItem(storageKey(key))
     if (!raw) return null
-    const parsed = JSON.parse(raw) as { data: T; savedAt: string }
-    return { data: parsed.data, savedAt: new Date(parsed.savedAt) }
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) {
+      window.localStorage.removeItem(storageKey(key))
+      return null
+    }
+    const obj = parsed as Record<string, unknown>
+    const dataRaw = obj.data
+    const dataValidated = validate
+      ? validate(dataRaw)
+      : dataRaw == null
+        ? null
+        : (dataRaw as T)
+    if (dataValidated == null) {
+      window.localStorage.removeItem(storageKey(key))
+      return null
+    }
+    const data: T = dataValidated
+    const savedAtRaw = obj.savedAt
+    const savedAt =
+      typeof savedAtRaw === 'string' || typeof savedAtRaw === 'number'
+        ? new Date(savedAtRaw)
+        : new Date(0)
+    return { data, savedAt }
   } catch {
+    // JSON inválido o storage bloqueado: limpiar y devolver null.
+    try {
+      window.localStorage.removeItem(storageKey(key))
+    } catch {
+      /* localStorage bloqueado: ignoramos */
+    }
     return null
   }
 }

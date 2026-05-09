@@ -1,5 +1,6 @@
 // Fase 1 P-006 — reporte de margen por tipo de trabajo.
 import { beforeEach, describe, expect, it } from 'vitest'
+import { sql } from 'drizzle-orm'
 import type { DB } from '../index'
 import { createTestDb, nativeAbiAvailable } from '../test-utils'
 import {
@@ -7,6 +8,7 @@ import {
   contratos,
   cuentasCobro,
   facturas,
+  movimientosFinancieros,
   pedidoItems,
   pedidos,
   ventasKits
@@ -31,12 +33,15 @@ describe.runIf(nativeAbiAvailable)('reporteMargenPorTipo', () => {
     const cliente = db.insert(clientes).values({ nombre: 'Cliente Prueba' }).returning().get()
 
     // Pedido 1: enmarcacion — pago de 60k en abril.
+    // resumenComercialMensual lee `precioLista`, no `precioTotal` — antes
+    // sólo seteábamos `precioTotal` y por eso ventasBrutasPedidos quedaba 0.
     const pedido1 = db
       .insert(pedidos)
       .values({
         numero: 'P-0001',
         clienteId: cliente.id,
         tipoTrabajo: 'enmarcacion_estandar',
+        precioLista: 100000,
         precioTotal: 100000,
         estado: 'en_proceso',
         fechaIngreso: '2026-04-01'
@@ -69,6 +74,7 @@ describe.runIf(nativeAbiAvailable)('reporteMargenPorTipo', () => {
         numero: 'P-0002',
         clienteId: cliente.id,
         tipoTrabajo: 'restauracion',
+        precioLista: 80000,
         precioTotal: 80000,
         estado: 'en_proceso',
         fechaIngreso: '2026-04-02'
@@ -536,5 +542,90 @@ describe.runIf(nativeAbiAvailable)('ingresosPorTipoTrabajo — donut', () => {
     const kitsFila = filas.find((f) => f.categoria === 'kits')!
     expect(kitsFila).toBeDefined()
     expect(kitsFila.total).toBe(15000)
+  })
+})
+
+// Hardening: handler IPC `finanzas:registrarManual` recibe payload del
+// renderer. Sin validarMonto/validarFechaISO/validarEnum un payload corrupto
+// puede persistir Infinity/NaN/strings o enums fuera de catálogo, corrompiendo
+// permanentemente todos los reportes (resumenMensual, serieMensual, margen).
+describe.runIf(nativeAbiAvailable)('registrarMovimientoManual — defense in depth', () => {
+  let db: DB
+
+  beforeEach(() => {
+    db = createTestDb().db
+  })
+
+  function inputValido() {
+    return {
+      tipo: 'ingreso' as const,
+      categoria: 'otro' as const,
+      monto: 50000,
+      fecha: '2026-05-06',
+      descripcion: null,
+      referenciaTipo: 'manual' as const,
+      referenciaId: null,
+      proveedorId: null
+    }
+  }
+
+  it('rechaza monto Infinity', () => {
+    expect(() =>
+      registrarMovimientoManual(db, { ...inputValido(), monto: Number.POSITIVE_INFINITY })
+    ).toThrow(/no es un número finito válido/i)
+    expect(db.select({ n: sql<number>`count(*)` }).from(movimientosFinancieros).get()?.n).toBe(0)
+  })
+
+  it('rechaza monto NaN', () => {
+    expect(() => registrarMovimientoManual(db, { ...inputValido(), monto: NaN })).toThrow(
+      /no es un número finito válido/i
+    )
+    expect(db.select({ n: sql<number>`count(*)` }).from(movimientosFinancieros).get()?.n).toBe(0)
+  })
+
+  it('rechaza monto cero (CHECK schema exige > 0)', () => {
+    expect(() => registrarMovimientoManual(db, { ...inputValido(), monto: 0 })).toThrow()
+    expect(db.select({ n: sql<number>`count(*)` }).from(movimientosFinancieros).get()?.n).toBe(0)
+  })
+
+  it('rechaza monto negativo', () => {
+    expect(() =>
+      registrarMovimientoManual(db, { ...inputValido(), monto: -100 })
+    ).toThrow()
+    expect(db.select({ n: sql<number>`count(*)` }).from(movimientosFinancieros).get()?.n).toBe(0)
+  })
+
+  it('rechaza fecha con formato inválido', () => {
+    expect(() =>
+      registrarMovimientoManual(db, { ...inputValido(), fecha: '2026/05/06' })
+    ).toThrow(/formato/i)
+    expect(db.select({ n: sql<number>`count(*)` }).from(movimientosFinancieros).get()?.n).toBe(0)
+  })
+
+  it('rechaza tipo fuera de catálogo', () => {
+    expect(() =>
+      registrarMovimientoManual(db, {
+        ...inputValido(),
+        tipo: 'inventado' as never
+      })
+    ).toThrow()
+    expect(db.select({ n: sql<number>`count(*)` }).from(movimientosFinancieros).get()?.n).toBe(0)
+  })
+
+  it('rechaza categoria fuera de catálogo', () => {
+    expect(() =>
+      registrarMovimientoManual(db, {
+        ...inputValido(),
+        categoria: 'inventada' as never
+      })
+    ).toThrow()
+    expect(db.select({ n: sql<number>`count(*)` }).from(movimientosFinancieros).get()?.n).toBe(0)
+  })
+
+  it('acepta payload válido y persiste un movimiento', () => {
+    const mov = registrarMovimientoManual(db, inputValido())
+    expect(mov.monto).toBe(50000)
+    expect(mov.tipo).toBe('ingreso')
+    expect(db.select({ n: sql<number>`count(*)` }).from(movimientosFinancieros).get()?.n).toBe(1)
   })
 })

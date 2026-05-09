@@ -504,9 +504,10 @@ describe.runIf(nativeAbiAvailable)('listarFacturas — búsqueda por número', (
       })
       .returning()
       .get().id
-    crearFactura(db, { pedidoId, clienteId, fecha: '2026-04-01', total: 50000 })
-    crearFactura(db, { pedidoId, clienteId, fecha: '2026-04-02', total: 25000 })
-    crearFactura(db, { pedidoId, clienteId, fecha: '2026-04-03', total: 25000 })
+    // `crearFactura` exige `data.total === pedido.precioTotal`. Antes
+    // creábamos 3 facturas (50k+25k+25k) asumiendo split, pero la regla
+    // de negocio dejó de permitirlo — una factura activa por pedido.
+    crearFactura(db, { pedidoId, clienteId, fecha: '2026-04-01', total: 100000 })
   })
 
   it('encuentra factura por sufijo del número', () => {

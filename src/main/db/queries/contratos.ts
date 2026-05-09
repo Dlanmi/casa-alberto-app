@@ -9,6 +9,8 @@ import {
   type EstadoContrato
 } from '../schema'
 import { buildContainsPattern } from '../sql-helpers'
+import { validarMonto } from '../../lib/validar-monto'
+import { validarFechaISO } from '../../lib/validar-fecha'
 
 export type ItemContrato = {
   descripcion: string
@@ -26,21 +28,52 @@ export type NuevoContrato = {
 }
 
 export function crearContrato(db: DB, data: NuevoContrato) {
+  // Defense in depth: handler IPC público recibe items numéricos del
+  // renderer. cantidad y valorUnitario individualmente finitos pueden
+  // producir cantidad*valorUnitario = Infinity (overflow) o NaN; SQLite
+  // acepta ambos en columnas REAL. Sin estos guards, el contrato persiste
+  // con total/subtotal corrupto y rompe reportes financieros derivados.
+  validarFechaISO(data.fecha, 'YYYY-MM-DD', 'fecha')
+  const retencionPorcentaje = data.retencionPorcentaje ?? 0
+  // `Number.isFinite` rechaza NaN explícitamente — los chequeos < 0 / > 100
+  // no lo hacían (NaN siempre es false en comparaciones).
+  if (
+    !Number.isFinite(retencionPorcentaje) ||
+    retencionPorcentaje < 0 ||
+    retencionPorcentaje > 100
+  ) {
+    throw new Error('El porcentaje de retención debe ser un número finito entre 0 y 100')
+  }
+  if (data.items.length === 0) {
+    throw new Error('El contrato debe tener al menos un ítem')
+  }
+  for (const [i, it] of data.items.entries()) {
+    validarMonto(it.cantidad, { campo: `Item ${i + 1}: cantidad`, min: 0 })
+    validarMonto(it.valorUnitario, { campo: `Item ${i + 1}: valor unitario`, min: 0 })
+  }
+
   return db.transaction((tx) => {
     const numero = generarConsecutivo(tx as unknown as DB, 'contrato')
 
-    const subtotales = data.items.map((it) => ({
+    const subtotales = data.items.map((it, i) => ({
       ...it,
-      subtotal: Math.round(it.cantidad * it.valorUnitario)
+      // Re-validamos el producto: cantidad y valorUnitario pasaron individual,
+      // pero su producto puede overflow a Infinity para magnitudes extremas.
+      subtotal: validarMonto(Math.round(it.cantidad * it.valorUnitario), {
+        campo: `Item ${i + 1}: subtotal`,
+        min: 0
+      })
     }))
-    const total = subtotales.reduce((acc, it) => acc + it.subtotal, 0)
-    const retencionPorcentaje = data.retencionPorcentaje ?? 0
-    if (retencionPorcentaje < 0 || retencionPorcentaje > 100) {
-      throw new Error('El porcentaje de retención debe estar entre 0 y 100')
-    }
+    const total = validarMonto(
+      subtotales.reduce((acc, it) => acc + it.subtotal, 0),
+      { campo: 'Total del contrato', min: 0 }
+    )
     // Retención en la fuente (Fase 2 §F.3). Se redondea a pesos enteros para
     // evitar arrastrar decimales en la cuenta de cobro.
-    const retencionMonto = Math.round(total * (retencionPorcentaje / 100))
+    const retencionMonto = validarMonto(
+      Math.round(total * (retencionPorcentaje / 100)),
+      { campo: 'Monto de retención', min: 0 }
+    )
 
     const contrato = tx
       .insert(contratos)
@@ -150,10 +183,18 @@ export function crearCuentaCobro(db: DB, data: NuevaCuentaCobro) {
       )
     }
 
+    validarFechaISO(data.fecha, 'YYYY-MM-DD', 'fecha')
     if (!Number.isFinite(data.total) || data.total < 0) {
       throw new Error('El total de la cuenta de cobro no puede ser negativo')
     }
-    const retencion = Math.round(data.retencion ?? 0)
+    // `Math.round(NaN) === NaN`. Sin Number.isFinite los chequeos < 0 / > total
+    // no atrapaban NaN (toda comparación con NaN es false), persistiendo
+    // retencion=NaN y totalNeto=NaN en la DB.
+    const retencionRaw = data.retencion ?? 0
+    if (!Number.isFinite(retencionRaw)) {
+      throw new Error('La retención no es un número finito válido')
+    }
+    const retencion = Math.round(retencionRaw)
     if (retencion < 0) {
       throw new Error('La retención no puede ser negativa')
     }

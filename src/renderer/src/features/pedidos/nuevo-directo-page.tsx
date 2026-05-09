@@ -917,35 +917,41 @@ function ItemRow({ index, item, onUpdate, onRemove, canRemove }: ItemRowProps): 
         <span className="font-semibold tabular-nums text-text">{formatCOP(subtotal)}</span>
       </div>
 
-      {/* Modal: catálogo de muestras de marco. Solo se monta cuando se abre
-          para diferir el fetch IPC hasta que sea necesario. */}
-      <Modal
-        open={pickerMarcoOpen}
-        onClose={() => setPickerMarcoOpen(false)}
-        title="Elegir marco del catálogo"
-        size="lg"
-      >
-        <MuestraMarcoPickerCargado
-          selectedId={null}
-          onSelect={(marco) => {
-            onUpdate({
-              descripcion: marco.descripcion || `Marco ${marco.referencia}`,
-              referencia: marco.referencia,
-              // El costo unitario para un marco se aproxima como el costo/m
-              // (asumiendo cantidad=1 metro). Si el papá ajusta cantidad
-              // después, el costo total se recalcula al persistir.
-              costoUnitarioEstimado:
-                marco.costoMetroEstimado ?? item.costoUnitarioEstimado,
-              // El precio unitario también sale del catálogo (precio/metro).
-              precioUnitario: marco.precioMetro
-            })
-            setPickerMarcoOpen(false)
-          }}
-          // Sin `compacto`: el Modal ya provee scroll (max-h-[85vh]) y el
-          // grid no necesita su propio overflow. Con doble scroll (modal +
-          // grid) se sentía "scroll infinito" al llegar al final del grid.
-        />
-      </Modal>
+      {/* Modal: catálogo de muestras de marco. Sólo se monta cuando el item
+          es de tipo 'marco' Y el picker está abierto — `Modal` renderiza
+          {children} aunque open=false, así que sin este gate cada ItemRow
+          montaría MuestraMarcoPickerCargado y dispararía un IPC
+          listarMuestrasMarcos en el render inicial, multiplicando trabajo
+          por fila × tamaño de catálogo. */}
+      {item.tipoItem === 'marco' && pickerMarcoOpen && (
+        <Modal
+          open={pickerMarcoOpen}
+          onClose={() => setPickerMarcoOpen(false)}
+          title="Elegir marco del catálogo"
+          size="lg"
+        >
+          <MuestraMarcoPickerCargado
+            selectedId={null}
+            onSelect={(marco) => {
+              onUpdate({
+                descripcion: marco.descripcion || `Marco ${marco.referencia}`,
+                referencia: marco.referencia,
+                // El costo unitario para un marco se aproxima como el costo/m
+                // (asumiendo cantidad=1 metro). Si el papá ajusta cantidad
+                // después, el costo total se recalcula al persistir.
+                costoUnitarioEstimado:
+                  marco.costoMetroEstimado ?? item.costoUnitarioEstimado,
+                // El precio unitario también sale del catálogo (precio/metro).
+                precioUnitario: marco.precioMetro
+              })
+              setPickerMarcoOpen(false)
+            }}
+            // Sin `compacto`: el Modal ya provee scroll (max-h-[85vh]) y el
+            // grid no necesita su propio overflow. Con doble scroll (modal +
+            // grid) se sentía "scroll infinito" al llegar al final del grid.
+          />
+        </Modal>
+      )}
     </div>
   )
 }

@@ -16,7 +16,15 @@ describe.runIf(nativeAbiAvailable)('generarConsecutivo', () => {
   })
 
   it('genera CC-0001 en una DB fresca sin fila de configuración (auto-provision)', () => {
-    // Confirmamos que no hay fila pre-existente.
+    // El seed (`ensureConfigInicial`) creó la fila con valor '1'. Para
+    // ejercitar el path de auto-provisión la borramos primero — antes el
+    // test asumía que la DB fresca no tenía la fila, pero el seed evolucionó
+    // y ahora la pre-siembra. La función `generarConsecutivo` debe seguir
+    // funcionando incluso si arranca con la fila ausente (caso real: DBs
+    // creadas en versiones anteriores al seed extendido).
+    db.delete(configuracion)
+      .where(eq(configuracion.clave, 'consecutivo_cuentas_cobro'))
+      .run()
     const previa = db
       .select()
       .from(configuracion)

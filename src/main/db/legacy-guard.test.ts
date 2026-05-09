@@ -267,9 +267,14 @@ describe.runIf(ABI_AVAILABLE)('legacy-guard', () => {
       if (!BetterSqlite3) return
       const sqlite = new BetterSqlite3(':memory:')
       // Creamos una tabla legítima y luego inyectamos un row falso en
-      // sqlite_master para simular una DB tampered. Como sqlite_master es
-      // read-only desde SQL normal, usamos el writable schema para forzar.
+      // sqlite_master para simular una DB tampered. SQLite moderno bloquea
+      // writes a sqlite_master incluso con `writable_schema = ON` salvo que
+      // se desactive el modo "defensive". `unsafeMode(true)` desactiva esa
+      // protección sólo para esta conexión de test — en producción nunca
+      // se llama. Sin esto el INSERT tira `table sqlite_master may not be
+      // modified` y el test no puede armar el escenario hostil.
       sqlite.exec(`CREATE TABLE legit (id INTEGER)`)
+      sqlite.unsafeMode(true)
       sqlite.pragma('writable_schema = ON')
       // Construimos un name con payload de inyección. Si el guard no escapara
       // ni filtrara, el `exec` saldría del identifier y ejecutaría DROP de
@@ -310,6 +315,8 @@ describe.runIf(ABI_AVAILABLE)('legacy-guard', () => {
       sqlite.exec(`CREATE TABLE clientes (id INTEGER)`)
       sqlite.exec(`CREATE TABLE pedidos (id INTEGER)`)
       // Insertamos un row malicioso en sqlite_master además de las tablas reales.
+      // Ver test anterior para por qué `unsafeMode(true)` es necesario.
+      sqlite.unsafeMode(true)
       sqlite.pragma('writable_schema = ON')
       sqlite
         .prepare<unknown[]>(

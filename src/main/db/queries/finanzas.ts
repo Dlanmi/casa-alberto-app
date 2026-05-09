@@ -10,12 +10,17 @@ import {
   pedidoItems,
   pedidos,
   ventasKits,
+  CATEGORIAS_MOVIMIENTO,
+  REFERENCIAS_MOVIMIENTO,
+  TIPOS_MOVIMIENTO_FIN,
   type CategoriaMovimiento,
   type ReferenciaMovimiento,
   type TipoMovimientoFin,
   type TipoTrabajo
 } from '../schema'
 import { validarFechaISO } from '../../lib/validar-fecha'
+import { validarEnum } from '../../lib/validar-enum'
+import { validarMonto } from '../../lib/validar-monto'
 
 // Helpers de mes — delegan formato + rango razonable [2000, 2100] al
 // validador central (`validarFechaISO`). Antes este módulo tenía su propio
@@ -58,6 +63,23 @@ export type NuevoMovimientoManual = {
 }
 
 export function registrarMovimientoManual(db: DB, data: NuevoMovimientoManual) {
+  // Defense in depth: handler IPC público (`finanzas:registrarManual`) recibe
+  // datos del renderer. El CHECK SQLite `monto > 0` no rechaza Infinity, y
+  // los enums TS son borrados en runtime, así que un payload corrupto puede
+  // persistir Infinity/NaN/strings. Validamos ANTES del insert para que la
+  // DB nunca reciba valores no-finitos en columnas de plata o enums fuera
+  // de catálogo. Sin esto, todos los reportes (resumenMensual, serieMensual,
+  // reporteMargenPorTipo) se corrompen permanentemente con un solo payload.
+  validarEnum(data.tipo, TIPOS_MOVIMIENTO_FIN, 'tipo')
+  validarEnum(data.categoria, CATEGORIAS_MOVIMIENTO, 'categoria')
+  if (data.referenciaTipo != null) {
+    validarEnum(data.referenciaTipo, REFERENCIAS_MOVIMIENTO, 'referenciaTipo')
+  }
+  validarFechaISO(data.fecha, 'YYYY-MM-DD', 'fecha')
+  // min: Number.MIN_VALUE (positivo más pequeño) — el CHECK del schema exige
+  // monto > 0, así que 0 también debe rechazarse.
+  validarMonto(data.monto, { campo: 'Monto del movimiento', min: Number.MIN_VALUE })
+
   return db
     .insert(movimientosFinancieros)
     .values({

@@ -316,7 +316,15 @@ function cotizacionAutorizada(
     //   - precioLista = redondear(brutoCotizado) al múltiplo de $1.000
     // Antes confiábamos en `recibida.precioLista || recibida.precioTotal`, lo
     // que dejaba la puerta abierta a manipulación vía IPC directo.
-    const brutoCotizado = recibida.subtotal + recibida.totalMateriales
+    // validarMonto sobre la SUMA: subtotal y totalMateriales individualmente
+    // pueden ser finitos (chequeo de assertNumeroFinito) pero su suma puede
+    // overflow a Infinity. Sin esta validación, redondearPrecioFinal devuelve
+    // 0 silenciosamente y el bruto se filtraría a la DB en flujos como
+    // crearPedidoMultiTrabajo que persisten subtotal/totalMateriales raw.
+    const brutoCotizado = validarMonto(recibida.subtotal + recibida.totalMateriales, {
+      campo: 'Bruto cotizado de la restauración',
+      min: 0
+    })
     const precioLista = redondearPrecioFinal(brutoCotizado)
     // Multi-item-safe: cuando hay un solo ítem (caso típico) el costo manual
     // va completo. Si en el futuro se permite multi-item en restauración,
@@ -1038,6 +1046,24 @@ export function crearPedidoMultiTrabajo(
       )
     }
     const cotizacion = cotizacionAutorizada(db, trabajo.datos, trabajo.cotizacion)
+    // Defense in depth (mismo patrón que insertarPedidoDesdeCotizacion):
+    // validamos cada monto persistido — no solo precioLista — para que
+    // valores no-finitos derivados de la cotización (ej. restauración con
+    // overflow) no entren a la DB. Sin esto, los aggregates de las líneas
+    // de abajo podrían sumar Infinity en pedidos.{subtotal,totalMateriales,
+    // brutoCotizado} a pesar de que el CHECK SQLite >= 0 acepta Infinity.
+    validarMonto(cotizacion.subtotal, {
+      campo: `Trabajo #${idx + 1}: subtotal`,
+      min: 0
+    })
+    validarMonto(cotizacion.totalMateriales, {
+      campo: `Trabajo #${idx + 1}: total de materiales`,
+      min: 0
+    })
+    validarMonto(cotizacion.brutoCotizado, {
+      campo: `Trabajo #${idx + 1}: bruto cotizado`,
+      min: 0
+    })
     validarMonto(cotizacion.precioLista, {
       campo: `Trabajo #${idx + 1}: precio de lista`,
       min: 0
@@ -1091,6 +1117,27 @@ export function crearPedidoMultiTrabajo(
       )
     : null
   const evaluacion = evaluarPedido(db, subtotalTrabajos, descuentoMonto, costoEstimadoTotal)
+  // evaluarPedido puede propagar no-finitos en margenEstimado/precioFinal
+  // si los inputs derivan en cancelaciones extremas; revalidamos antes del
+  // insert (paridad con insertarPedidoDesdeCotizacion líneas 424-425).
+  validarMonto(evaluacion.descuentoMonto, { campo: 'Descuento aplicado', min: 0 })
+  validarMonto(evaluacion.precioFinal, { campo: 'Precio total del pedido', min: 0 })
+
+  // Aggregates de los campos crudos del pedido contenedor. Cada operando
+  // ya pasó por validarMonto en el .map anterior, pero la SUMA puede
+  // overflow a Infinity entre múltiples trabajos. Re-validamos.
+  const subtotalAgregado = validarMonto(
+    trabajosValidados.reduce((s, t) => s + t.cotizacion.subtotal, 0),
+    { campo: 'Subtotal agregado del pedido', min: 0 }
+  )
+  const totalMaterialesAgregado = validarMonto(
+    trabajosValidados.reduce((s, t) => s + t.cotizacion.totalMateriales, 0),
+    { campo: 'Total de materiales agregado', min: 0 }
+  )
+  const brutoCotizadoAgregado = validarMonto(
+    trabajosValidados.reduce((s, t) => s + t.cotizacion.brutoCotizado, 0),
+    { campo: 'Bruto cotizado agregado', min: 0 }
+  )
 
   // ---- 7. Transacción atómica ----
   return db.transaction((tx) => {
@@ -1132,12 +1179,9 @@ export function crearPedidoMultiTrabajo(
         tipoPaspartu: trabajoUnico?.datos.tipoPaspartu ?? null,
         tipoVidrio: trabajoUnico?.datos.tipoVidrio ?? null,
         porcentajeMateriales: trabajoUnico?.datos.porcentajeMateriales ?? 10,
-        subtotal: trabajosValidados.reduce((s, t) => s + t.cotizacion.subtotal, 0),
-        totalMateriales: trabajosValidados.reduce(
-          (s, t) => s + t.cotizacion.totalMateriales,
-          0
-        ),
-        brutoCotizado: trabajosValidados.reduce((s, t) => s + t.cotizacion.brutoCotizado, 0),
+        subtotal: subtotalAgregado,
+        totalMateriales: totalMaterialesAgregado,
+        brutoCotizado: brutoCotizadoAgregado,
         precioLista: subtotalTrabajos,
         descuentoMonto,
         descuentoMotivo: descuento?.motivo?.trim() || null,
