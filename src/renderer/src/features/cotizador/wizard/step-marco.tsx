@@ -20,6 +20,7 @@ export function StepMarco({ data, onChange, marcos }: Props): React.JSX.Element 
         marcos={marcos}
         selectedId={data.muestraMarcoId}
         onSelect={(marco) => onChange({ muestraMarcoId: marco.id, muestraMarco: marco })}
+        altoLimitado
       />
     </div>
   )

@@ -24,6 +24,12 @@ type Props = {
   /** Compacto: para usar dentro de un form pequeño (ej. pedido directo).
    *  En modo compacto: max-h con scroll, grid 1 col, sin headings. */
   compacto?: boolean
+  /** Si true, limita la altura del grid (no-compacto) a ~55vh y le da scroll
+   *  interno. Útil cuando el picker vive dentro de un layout sin scroll
+   *  propio (ej. paso del wizard del cotizador) donde con 100+ marcos el
+   *  botón "Siguiente" queda enterrado. NO usar dentro de un Modal que ya
+   *  scrollea — produce doble scroll y se siente raro. */
+  altoLimitado?: boolean
 }
 
 export function MuestraMarcoPicker({
@@ -31,7 +37,8 @@ export function MuestraMarcoPicker({
   selectedId,
   onSelect,
   placeholder = 'Buscar marco (ej: M-001, dorado)...',
-  compacto = false
+  compacto = false,
+  altoLimitado = false
 }: Props): React.JSX.Element {
   const [search, setSearch] = useState('')
 
@@ -70,7 +77,9 @@ export function MuestraMarcoPicker({
           'grid gap-3 p-1',
           compacto
             ? 'grid-cols-1 max-h-72 overflow-y-auto'
-            : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+            : altoLimitado
+              ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-h-[55vh] overflow-y-auto'
+              : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
         )}
       >
         {filtered.map((marco) => {
