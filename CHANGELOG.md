@@ -10,6 +10,29 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.2.2] — Cotizador más cómodo con catálogos grandes
+
+Patch enfocado en el paso de selección de marco cuando hay muchas
+muestras configuradas (100+ referencias). Sin cambios funcionales en el
+cálculo ni en los datos — solo comodidad de uso.
+
+### Arreglado
+
+- **El botón "Siguiente" del cotizador ya no se esconde detrás de la
+  lista de marcos.** Antes, en el paso "Seleccionar marco", si el
+  catálogo tenía 100+ muestras el grid de tarjetas crecía tanto que
+  había que hacer un scroll largo hasta el final para encontrar el
+  botón "Siguiente". Ahora la lista de marcos tiene su propio scroll
+  interno (alrededor de la mitad de la pantalla), y los botones de
+  navegación siempre quedan a la vista. La búsqueda y el contador
+  ("X de Y marcos") también permanecen siempre visibles arriba. Aplica
+  al cotizador clásico y al flujo de pedido con varios trabajos.
+
+- **El catálogo del "Pedido directo" no cambia.** El modal grande del
+  catálogo de marcos que se abre desde un item del pedido directo
+  mantiene el comportamiento actual — el modal scrollea entero, sin
+  doble scroll dentro de la lista.
+
 ## [2.2.1] — Hardening: cuatro caminos de fallo cerrados
 
 Patch que cierra cuatro huecos defensivos identificados en revisión de
