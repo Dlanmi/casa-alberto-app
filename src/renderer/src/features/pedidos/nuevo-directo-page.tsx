@@ -13,7 +13,16 @@
 // useState — preferimos legibilidad sobre useReducer en este tamaño.
 import { createElement, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, AlertCircle, FileText } from 'lucide-react'
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  AlertCircle,
+  FileText,
+  Pencil,
+  Check,
+  X
+} from 'lucide-react'
 import { OperationalBoard } from '@renderer/components/layout/page-frame'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
@@ -67,6 +76,19 @@ type ItemForm = {
   cantidad: number
   precioUnitario: number
   costoUnitarioEstimado: number | null
+  // v2.3.0 — agrupación opcional en "trabajos". `null` = item suelto
+  // (comportamiento pre-v2.3.0). Si tiene valor, debe coincidir con un
+  // entry en el estado `trabajos[]` del padre.
+  trabajoIdLocal: string | null
+}
+
+// v2.3.0 — un "trabajo" agrupa items que pertenecen a un mismo cuadro o
+// pieza dentro del pedido (ej. "Cuadro de la abuela", "Espejo del baño").
+// El idLocal es un UUID generado en el cliente; el backend lo mapea a
+// trabajoId 1-indexed al persistir en pedido_items.metadata.
+type TrabajoLocal = {
+  idLocal: string
+  nombre: string
 }
 
 // Estados que el dueño puede elegir como inicial. Excluimos 'cancelado' y
@@ -102,7 +124,7 @@ function nextUid(): string {
   return `item-${__uidCounter}`
 }
 
-function nuevoItemVacio(): ItemForm {
+function nuevoItemVacio(trabajoIdLocal: string | null = null): ItemForm {
   return {
     uid: nextUid(),
     tipoItem: 'otro',
@@ -110,8 +132,17 @@ function nuevoItemVacio(): ItemForm {
     referencia: '',
     cantidad: 1,
     precioUnitario: 0,
-    costoUnitarioEstimado: null
+    costoUnitarioEstimado: null,
+    trabajoIdLocal
   }
+}
+
+// Genera un UUID corto para el idLocal de un trabajo. No usamos
+// crypto.randomUUID directo porque queda muy largo en localStorage; un
+// hash corto base36 alcanza para no colisionar dentro de un pedido (≤30
+// trabajos típico).
+function nextTrabajoUid(): string {
+  return `t-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36).slice(-4)}`
 }
 
 // Días sugeridos desde hoy para auto-fecha de entrega según tipo de entrega.
@@ -193,6 +224,13 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
 
   const [items, setItems] = useState<ItemForm[]>(() => [nuevoItemVacio()])
 
+  // v2.3.0 — trabajos definidos por el dueño para agrupar items dentro del
+  // pedido (ej. "Cuadro de la abuela", "Espejo del baño"). Por defecto
+  // vacío: el pedido se comporta como hasta v2.2.x (items planos sueltos).
+  // El dueño agrega trabajos con el botón "+ Agregar trabajo" en la
+  // sección de items.
+  const [trabajos, setTrabajos] = useState<TrabajoLocal[]>([])
+
   // Override de total. Si null, se usa la suma. Si number, el override.
   const [precioTotalOverride, setPrecioTotalOverride] = useState<number | null>(null)
 
@@ -237,10 +275,47 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
   const itemsValidos = items.every(
     (it) => it.descripcion.trim().length > 0 && it.cantidad > 0 && it.precioUnitario >= 0
   )
+
+  // v2.3.0 — todo trabajo definido debe tener ≥1 item asociado. Si el dueño
+  // crea un trabajo y deja vacíos sus items, no se puede guardar — usar la
+  // X del trabajo para eliminarlo, o agregar al menos un item.
+  const trabajosSinItems = useMemo(
+    () =>
+      trabajos.filter((t) => !items.some((it) => it.trabajoIdLocal === t.idLocal)),
+    [trabajos, items]
+  )
+
+  // Items agrupados para el render. Iteramos `trabajos[]` en orden de
+  // creación; los items "sueltos" (trabajoIdLocal=null) van al final como
+  // grupo aparte. Reutiliza el mismo array `items` (mismas referencias),
+  // así el patrón de update por uid sigue funcionando.
+  const itemsPorTrabajo = useMemo(() => {
+    const map = new Map<string, ItemForm[]>()
+    for (const t of trabajos) map.set(t.idLocal, [])
+    const sueltos: ItemForm[] = []
+    for (const it of items) {
+      if (it.trabajoIdLocal && map.has(it.trabajoIdLocal)) {
+        map.get(it.trabajoIdLocal)!.push(it)
+      } else {
+        sueltos.push(it)
+      }
+    }
+    return { porTrabajo: map, sueltos }
+  }, [items, trabajos])
+
+  const subtotalPorTrabajo = useCallback(
+    (idLocal: string): number => {
+      const list = itemsPorTrabajo.porTrabajo.get(idLocal) ?? []
+      return list.reduce((s, it) => s + it.cantidad * it.precioUnitario, 0)
+    },
+    [itemsPorTrabajo]
+  )
+
   const formValido =
     cliente !== null &&
     items.length >= 1 &&
     itemsValidos &&
+    trabajosSinItems.length === 0 &&
     totalFinal >= 0 &&
     (!conAbono || (abonoMonto > 0 && abonoMonto <= totalFinal))
 
@@ -255,6 +330,35 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
 
   const updateItem = useCallback((uid: string, patch: Partial<ItemForm>) => {
     setItems((prev) => prev.map((it) => (it.uid === uid ? { ...it, ...patch } : it)))
+  }, [])
+
+  // --- Helpers trabajos (v2.3.0) ---
+
+  // Agrega un nuevo trabajo con nombre default "Trabajo N" + un item vacío
+  // dentro (para que no quede "vacío" desde el inicio). El dueño puede
+  // renombrarlo después tocando el ícono ✎ en el header del bloque.
+  const addTrabajo = useCallback(() => {
+    const idLocal = nextTrabajoUid()
+    setTrabajos((prev) => {
+      const nombre = `Trabajo ${prev.length + 1}`
+      return [...prev, { idLocal, nombre }]
+    })
+    setItems((prev) => [...prev, nuevoItemVacio(idLocal)])
+  }, [])
+
+  const updateTrabajoNombre = useCallback((idLocal: string, nombre: string) => {
+    setTrabajos((prev) => prev.map((t) => (t.idLocal === idLocal ? { ...t, nombre } : t)))
+  }, [])
+
+  // Elimina un trabajo Y sus items asociados. La UI llama esto solo después
+  // de confirmar con el usuario si el trabajo tiene items (ver render).
+  const removeTrabajo = useCallback((idLocal: string) => {
+    setTrabajos((prev) => prev.filter((t) => t.idLocal !== idLocal))
+    setItems((prev) => prev.filter((it) => it.trabajoIdLocal !== idLocal))
+  }, [])
+
+  const addItemATrabajo = useCallback((idLocal: string) => {
+    setItems((prev) => [...prev, nuevoItemVacio(idLocal)])
   }, [])
 
   // --- Cancelar con guard ---
@@ -275,6 +379,13 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
     }
     if (!itemsValidos) {
       setSubmitError('Revisa los items: descripción, cantidad y precio son requeridos')
+      return
+    }
+    if (trabajosSinItems.length > 0) {
+      const nombres = trabajosSinItems.map((t) => `"${t.nombre}"`).join(', ')
+      setSubmitError(
+        `Cada trabajo debe tener al menos un item. Trabajos sin items: ${nombres}. Agrégales items o elimínalos.`
+      )
       return
     }
     if (conAbono && (abonoMonto <= 0 || abonoMonto > totalFinal)) {
@@ -298,14 +409,24 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
         estadoInicial,
         notas: notas.trim() || null
       },
-      items: items.map<ItemPedidoDirecto>((it) => ({
-        tipoItem: it.tipoItem,
-        descripcion: it.descripcion.trim(),
-        referencia: it.referencia.trim() || null,
-        cantidad: it.cantidad,
-        precioUnitario: it.precioUnitario,
-        costoUnitarioEstimado: it.costoUnitarioEstimado
-      })),
+      items: items.map<ItemPedidoDirecto>((it) => {
+        const trabajo = it.trabajoIdLocal
+          ? trabajos.find((t) => t.idLocal === it.trabajoIdLocal)
+          : null
+        return {
+          tipoItem: it.tipoItem,
+          descripcion: it.descripcion.trim(),
+          referencia: it.referencia.trim() || null,
+          cantidad: it.cantidad,
+          precioUnitario: it.precioUnitario,
+          costoUnitarioEstimado: it.costoUnitarioEstimado,
+          // v2.3.0 — propagamos la agrupación al backend. Si el item no
+          // está en ningún trabajo, pasan como null y se persiste sin
+          // metadata.trabajoId (item suelto).
+          trabajoIdLocal: it.trabajoIdLocal,
+          trabajoNombre: trabajo?.nombre ?? null
+        }
+      }),
       precioTotalOverride: precioTotalOverride,
       factura: { fecha: fechaIngreso },
       abono: conAbono
@@ -546,34 +667,101 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
           />
         </section>
 
-        {/* --------- 3. Items --------- */}
+        {/* --------- 3. Items y/o Trabajos --------- */}
         <section
           aria-labelledby="seccion-items"
-          className="rounded-lg border border-border bg-surface p-5 space-y-3"
+          className="rounded-lg border border-border bg-surface p-5 space-y-4"
         >
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 id="seccion-items" className="text-base font-semibold text-text">
-              Items del pedido
+              {trabajos.length > 0 ? 'Trabajos y items' : 'Items del pedido'}
               <span className="ml-2 text-xs font-normal text-text-muted">
-                ({items.length} {items.length === 1 ? 'item' : 'items'})
+                ({items.length} {items.length === 1 ? 'item' : 'items'}
+                {trabajos.length > 0 &&
+                  `, ${trabajos.length} ${trabajos.length === 1 ? 'trabajo' : 'trabajos'}`}
+                )
               </span>
             </h2>
-            <Button variant="outline" onClick={addItem} type="button">
-              <Plus size={16} />
-              Agregar item
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={addTrabajo} type="button">
+                <Plus size={16} />
+                Agregar trabajo
+              </Button>
+              <Button variant="outline" onClick={addItem} type="button">
+                <Plus size={16} />
+                Agregar item
+              </Button>
+            </div>
           </div>
-          <div className="space-y-3">
-            {items.map((item, index) => (
-              <ItemRow
-                key={item.uid}
-                index={index}
-                item={item}
-                onUpdate={(patch) => updateItem(item.uid, patch)}
-                onRemove={() => removeItem(item.uid)}
-                canRemove={items.length > 1}
+
+          {trabajos.length === 0 && (
+            <p className="text-xs text-text-muted">
+              ¿El cliente trae varios cuadros distintos? Toca <strong>Agregar trabajo</strong>{' '}
+              para agrupar los items de cada uno por separado.
+            </p>
+          )}
+
+          {/* Bloques de trabajo (si hay) */}
+          {trabajos.map((trabajo, idx) => {
+            const itemsDelTrabajo = itemsPorTrabajo.porTrabajo.get(trabajo.idLocal) ?? []
+            const subtotal = subtotalPorTrabajo(trabajo.idLocal)
+            return (
+              <TrabajoBlock
+                key={trabajo.idLocal}
+                index={idx}
+                trabajo={trabajo}
+                items={itemsDelTrabajo}
+                subtotal={subtotal}
+                onUpdateNombre={(nombre) => updateTrabajoNombre(trabajo.idLocal, nombre)}
+                onRemove={() => {
+                  const tieneItems = itemsDelTrabajo.length > 0
+                  if (
+                    !tieneItems ||
+                    window.confirm(
+                      `¿Eliminar el trabajo "${trabajo.nombre}" y sus ${itemsDelTrabajo.length} ${
+                        itemsDelTrabajo.length === 1 ? 'item' : 'items'
+                      }?`
+                    )
+                  ) {
+                    removeTrabajo(trabajo.idLocal)
+                  }
+                }}
+                onAddItem={() => addItemATrabajo(trabajo.idLocal)}
+                onUpdateItem={(uid, patch) => updateItem(uid, patch)}
+                onRemoveItem={(uid) => removeItem(uid)}
+                canRemoveItem={items.length > 1}
               />
-            ))}
+            )
+          })}
+
+          {/* Items sueltos (sin trabajo) — siempre se muestran. Cuando no hay
+              trabajos definidos, esta es la única sección y NO se muestra
+              header (queda como pedido directo tradicional). */}
+          <div className="space-y-3">
+            {trabajos.length > 0 && itemsPorTrabajo.sueltos.length > 0 && (
+              <div className="border-t border-border pt-3">
+                <p className="text-sm font-semibold text-text-muted uppercase tracking-wide">
+                  Items sueltos
+                </p>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Items que no pertenecen a ningún trabajo en particular (ej. transporte,
+                  cinta colgadora, materiales sueltos).
+                </p>
+              </div>
+            )}
+            {itemsPorTrabajo.sueltos.map((item) => {
+              const indiceGlobal = items.indexOf(item)
+              return (
+                <ItemRow
+                  key={item.uid}
+                  index={indiceGlobal}
+                  item={item}
+                  onUpdate={(patch) => updateItem(item.uid, patch)}
+                  onRemove={() => removeItem(item.uid)}
+                  canRemove={items.length > 1}
+                />
+              )
+            })}
           </div>
         </section>
 
@@ -840,6 +1028,186 @@ function TotalFinalInput({
           ? 'Precio personalizado — la diferencia con la suma NO se registra como descuento.'
           : 'Por defecto se cobra la suma de items. Edita para fijar un total distinto.'}
       </p>
+    </div>
+  )
+}
+
+// v2.3.0 — Bloque visual que agrupa los items pertenecientes a un mismo
+// "trabajo" (ej. "Cuadro de la abuela"). Header con nombre editable
+// inline, botón X para eliminar (con confirmación si tiene items),
+// items hijos con la misma ItemRow del flujo plano, y subtotal al final.
+type TrabajoBlockProps = {
+  index: number
+  trabajo: TrabajoLocal
+  items: ItemForm[]
+  subtotal: number
+  onUpdateNombre: (nombre: string) => void
+  onRemove: () => void
+  onAddItem: () => void
+  onUpdateItem: (uid: string, patch: Partial<ItemForm>) => void
+  onRemoveItem: (uid: string) => void
+  canRemoveItem: boolean
+}
+
+function TrabajoBlock({
+  index,
+  trabajo,
+  items,
+  subtotal,
+  onUpdateNombre,
+  onRemove,
+  onAddItem,
+  onUpdateItem,
+  onRemoveItem,
+  canRemoveItem
+}: TrabajoBlockProps): React.JSX.Element {
+  const sinItems = items.length === 0
+  return (
+    <div
+      className={cn(
+        'rounded-md border-2 bg-surface-muted/40 p-4 space-y-3',
+        // Highlight si está vacío: bloquea el guardado, hay que avisar
+        sinItems ? 'border-error/60' : 'border-border'
+      )}
+    >
+      <TrabajoHeader
+        index={index}
+        nombre={trabajo.nombre}
+        onUpdateNombre={onUpdateNombre}
+        onRemove={onRemove}
+        subtotal={subtotal}
+        cantidadItems={items.length}
+      />
+
+      {sinItems ? (
+        <p className="text-xs text-error-strong px-2 py-2 flex items-center gap-1.5">
+          <AlertCircle size={14} />
+          Este trabajo no tiene items. Agrega al menos uno o elimina el trabajo.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item, idx) => (
+            <ItemRow
+              key={item.uid}
+              index={idx}
+              item={item}
+              onUpdate={(patch) => onUpdateItem(item.uid, patch)}
+              onRemove={() => onRemoveItem(item.uid)}
+              canRemove={canRemoveItem}
+            />
+          ))}
+        </div>
+      )}
+
+      <Button variant="outline" size="sm" onClick={onAddItem} type="button">
+        <Plus size={14} />
+        Agregar item a este trabajo
+      </Button>
+    </div>
+  )
+}
+
+// Header del bloque de trabajo: número + nombre editable inline + botón
+// para eliminar todo el trabajo. El subtotal se muestra a la derecha
+// como indicador del precio del trabajo (no editable).
+type TrabajoHeaderProps = {
+  index: number
+  nombre: string
+  onUpdateNombre: (nombre: string) => void
+  onRemove: () => void
+  subtotal: number
+  cantidadItems: number
+}
+
+function TrabajoHeader({
+  index,
+  nombre,
+  onUpdateNombre,
+  onRemove,
+  subtotal,
+  cantidadItems
+}: TrabajoHeaderProps): React.JSX.Element {
+  const [editando, setEditando] = useState(false)
+  const [borrador, setBorrador] = useState(nombre)
+
+  function guardar(): void {
+    const limpio = borrador.trim()
+    onUpdateNombre(limpio.length > 0 ? limpio : `Trabajo ${index + 1}`)
+    setEditando(false)
+  }
+
+  function cancelar(): void {
+    setBorrador(nombre)
+    setEditando(false)
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1">
+          Trabajo {index + 1}
+          <span className="ml-2 normal-case font-normal text-text-soft">
+            · {cantidadItems} {cantidadItems === 1 ? 'item' : 'items'}
+          </span>
+        </p>
+        {editando ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={borrador}
+              onChange={(e) => setBorrador(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') guardar()
+                if (e.key === 'Escape') cancelar()
+              }}
+              autoFocus
+              maxLength={200}
+              placeholder={`Trabajo ${index + 1}`}
+              className={cn(
+                'h-10 flex-1 rounded-md border border-border bg-surface px-3 text-sm text-text',
+                'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
+              )}
+            />
+            <Button variant="ghost" size="sm" onClick={guardar} aria-label="Guardar nombre">
+              <Check size={16} />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={cancelar} aria-label="Cancelar">
+              <X size={16} />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 min-h-10">
+            <span className="text-base font-semibold text-text truncate">{nombre}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setBorrador(nombre)
+                setEditando(true)
+              }}
+              aria-label="Editar nombre del trabajo"
+              title="Editar nombre"
+            >
+              <Pencil size={14} />
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        <span className="font-mono tabular-nums text-sm font-semibold text-text">
+          {formatCOP(subtotal)}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRemove}
+          aria-label={`Eliminar trabajo ${index + 1}`}
+          title="Eliminar trabajo"
+          className="text-error hover:text-error-strong hover:bg-error-bg"
+        >
+          <Trash2 size={14} />
+        </Button>
+      </div>
     </div>
   )
 }
