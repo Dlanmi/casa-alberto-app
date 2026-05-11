@@ -160,9 +160,18 @@ export function PedidoDetailPanel({
       // v2.2.0+: propagamos metadata.trabajoId al PDF para que items de un
       // pedido multi-trabajo se agrupen visualmente. Pedidos viejos sin
       // metadata se renderizan como lista plana (comportamiento histórico).
+      // v2.3.0+: también propagamos trabajoNombre para pedidos directos con
+      // trabajos definidos por el dueño (ej. "Cuadro de la abuela").
       const pdfItems =
         pedidoRes.data.items?.map((it) => {
-          const md = (it as { metadata?: { trabajoId?: number; tipoTrabajoOrigen?: string; medidas?: { anchoCm: number; altoCm: number } } | null }).metadata ?? null
+          const md = (it as {
+            metadata?: {
+              trabajoId?: number
+              tipoTrabajoOrigen?: string
+              medidas?: { anchoCm: number; altoCm: number }
+              trabajoNombre?: string
+            } | null
+          }).metadata ?? null
           return {
             descripcion: it.descripcion ?? 'Item',
             cantidad: it.cantidad,
@@ -172,7 +181,8 @@ export function PedidoDetailPanel({
             ...(md?.tipoTrabajoOrigen
               ? { tipoTrabajoOrigen: md.tipoTrabajoOrigen as never }
               : {}),
-            ...(md?.medidas ? { medidasTrabajo: md.medidas } : {})
+            ...(md?.medidas ? { medidasTrabajo: md.medidas } : {}),
+            ...(md?.trabajoNombre ? { trabajoNombre: md.trabajoNombre } : {})
           }
         }) ?? []
 

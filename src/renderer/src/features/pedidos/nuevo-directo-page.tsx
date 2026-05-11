@@ -1419,13 +1419,33 @@ async function generarYAbrirPDF(opts: {
       })
       return
     }
+    // v2.3.0 — propagar metadata.trabajoId + trabajoNombre al PDF para
+    // que la factura agrupe los items por trabajo cuando el dueño definió
+    // varios trabajos en el pedido directo. Pedidos sin trabajos (la
+    // mayoría) traen metadata=null y el PDF los renderiza plano.
     const items =
-      detalle.data.items?.map((it) => ({
-        descripcion: it.descripcion ?? 'Item',
-        cantidad: it.cantidad,
-        precioUnitario: it.precioUnitario ?? it.subtotal,
-        subtotal: it.subtotal
-      })) ?? []
+      detalle.data.items?.map((it) => {
+        const md = (it as {
+          metadata?: {
+            trabajoId?: number
+            tipoTrabajoOrigen?: string
+            medidas?: { anchoCm: number; altoCm: number }
+            trabajoNombre?: string
+          } | null
+        }).metadata ?? null
+        return {
+          descripcion: it.descripcion ?? 'Item',
+          cantidad: it.cantidad,
+          precioUnitario: it.precioUnitario ?? it.subtotal,
+          subtotal: it.subtotal,
+          ...(md?.trabajoId != null ? { trabajoId: md.trabajoId } : {}),
+          ...(md?.tipoTrabajoOrigen
+            ? { tipoTrabajoOrigen: md.tipoTrabajoOrigen as never }
+            : {}),
+          ...(md?.medidas ? { medidasTrabajo: md.medidas } : {}),
+          ...(md?.trabajoNombre ? { trabajoNombre: md.trabajoNombre } : {})
+        }
+      }) ?? []
 
     const pdfPagos = opts.pagos.map((p) => ({
       fecha: p.fecha,

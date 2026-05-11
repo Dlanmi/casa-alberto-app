@@ -30,6 +30,10 @@ type FacturaItem = {
   trabajoId?: number
   tipoTrabajoOrigen?: string
   medidasTrabajo?: { anchoCm: number; altoCm: number }
+  /** v2.3.0 — nombre libre del trabajo cuando viene de pedido directo
+   *  con trabajos definidos por el dueño. Si está presente, reemplaza al
+   *  sub-header "Trabajo N — Tipo" del flujo multi-trabajo del cotizador. */
+  trabajoNombre?: string
 }
 
 type FacturaData = {
@@ -71,18 +75,17 @@ const TIPO_TRABAJO_LABEL_PDF: Record<string, string> = {
  * Agrupa items por `trabajoId` preservando el orden original. Items sin
  * trabajoId (ej. descuento global) van al grupo `null` al final.
  */
-function agruparItemsPorTrabajo(
+type GrupoFactura = {
+  trabajoId: number | null
   items: FacturaItem[]
-): Array<{ trabajoId: number | null; items: FacturaItem[]; tipoTrabajo?: string; medidas?: { anchoCm: number; altoCm: number } }> {
-  const grupos = new Map<
-    number | null,
-    {
-      trabajoId: number | null
-      items: FacturaItem[]
-      tipoTrabajo?: string
-      medidas?: { anchoCm: number; altoCm: number }
-    }
-  >()
+  tipoTrabajo?: string
+  medidas?: { anchoCm: number; altoCm: number }
+  /** v2.3.0 — nombre libre del trabajo (pedido directo con trabajos). */
+  nombre?: string
+}
+
+function agruparItemsPorTrabajo(items: FacturaItem[]): GrupoFactura[] {
+  const grupos = new Map<number | null, GrupoFactura>()
   for (const item of items) {
     const key = item.trabajoId ?? null
     if (!grupos.has(key)) {
@@ -90,13 +93,14 @@ function agruparItemsPorTrabajo(
         trabajoId: key,
         items: [],
         tipoTrabajo: item.tipoTrabajoOrigen,
-        medidas: item.medidasTrabajo
+        medidas: item.medidasTrabajo,
+        nombre: item.trabajoNombre
       })
     }
     grupos.get(key)!.items.push(item)
   }
   // Items con trabajoId primero (ordenados por id), luego el grupo "null"
-  // (descuento global, etc.).
+  // (descuento global, items sueltos, etc.).
   return Array.from(grupos.values()).sort((a, b) => {
     if (a.trabajoId === null) return 1
     if (b.trabajoId === null) return -1
@@ -202,23 +206,51 @@ function renderFormatoPagina(doc: PDFKit.PDFDocument, data: FacturaData, negocio
   const grupos = agruparItemsPorTrabajo(data.items)
   const esMultiTrabajo = grupos.filter((g) => g.trabajoId !== null).length > 1
 
+  // Hay items sueltos cuando el grupo con trabajoId=null tiene contenido Y
+  // coexiste con trabajos definidos. Solo en ese caso mostramos el header
+  // "Otros" para distinguirlos visualmente. Si TODO el pedido es sin
+  // trabajos (caso pedido directo simple), no mostramos header.
+  const grupoSueltos = grupos.find((g) => g.trabajoId === null)
+  const hayItemsSueltos = (grupoSueltos?.items.length ?? 0) > 0
+
   for (const grupo of grupos) {
-    if (esMultiTrabajo && grupo.trabajoId !== null) {
-      // Sub-header del trabajo: "Trabajo N — Tipo · medidas"
-      const tipoLabel = grupo.tipoTrabajo
-        ? (TIPO_TRABAJO_LABEL_PDF[grupo.tipoTrabajo] ?? grupo.tipoTrabajo)
-        : ''
-      const medidasStr = grupo.medidas
-        ? ` · ${grupo.medidas.anchoCm} × ${grupo.medidas.altoCm} cm`
-        : ''
+    const esGrupoConTrabajo = grupo.trabajoId !== null
+    const mostrarHeader =
+      (esMultiTrabajo && esGrupoConTrabajo) ||
+      // Header "Otros" solo cuando coexisten items sueltos con ≥1 trabajo.
+      (esMultiTrabajo && !esGrupoConTrabajo && hayItemsSueltos)
+
+    if (mostrarHeader) {
+      let textoHeader: string
+      if (esGrupoConTrabajo) {
+        // v2.3.0 — preferir nombre libre del trabajo (pedido directo) por
+        // sobre el sub-header "Trabajo N — Tipo · medidas" (multi-trabajo
+        // del cotizador). Si no hay nombre, mantener el comportamiento
+        // pre-v2.3.0 para no romper PDFs de pedidos creados antes.
+        if (grupo.nombre) {
+          textoHeader = grupo.nombre
+        } else {
+          const tipoLabel = grupo.tipoTrabajo
+            ? (TIPO_TRABAJO_LABEL_PDF[grupo.tipoTrabajo] ?? grupo.tipoTrabajo)
+            : ''
+          const medidasStr = grupo.medidas
+            ? ` · ${grupo.medidas.anchoCm} × ${grupo.medidas.altoCm} cm`
+            : ''
+          textoHeader = `Trabajo ${grupo.trabajoId} — ${tipoLabel}${medidasStr}`
+        }
+      } else {
+        // Header del grupo "items sueltos" cuando coexiste con trabajos.
+        textoHeader = 'Otros'
+      }
       doc
         .fontSize(9)
         .font('Helvetica-Bold')
         .fillColor('#57534e')
-        .text(`Trabajo ${grupo.trabajoId} — ${tipoLabel}${medidasStr}`, col.desc, y)
+        .text(textoHeader, col.desc, y)
       doc.fontSize(9).font('Helvetica').fillColor('black')
       y += 14
     }
+
     for (const item of grupo.items) {
       doc.text(item.descripcion, col.desc, y, { width: col.cant - col.desc - 10 })
       doc.text(String(item.cantidad), col.cant, y)
@@ -226,8 +258,8 @@ function renderFormatoPagina(doc: PDFKit.PDFDocument, data: FacturaData, negocio
       doc.text(formatCOP(item.subtotal), col.sub, y)
       y += 16
     }
-    if (esMultiTrabajo && grupo.trabajoId !== null) {
-      // Espacio extra entre trabajos para separación visual.
+    if (mostrarHeader) {
+      // Espacio extra entre grupos para separación visual.
       y += 4
     }
   }

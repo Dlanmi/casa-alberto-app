@@ -319,6 +319,7 @@ function FacturaDetailModal({
               trabajoId?: number
               tipoTrabajoOrigen?: string
               medidas?: { anchoCm: number; altoCm: number }
+              trabajoNombre?: string
             } | null
           }[]
         }
@@ -327,6 +328,8 @@ function FacturaDetailModal({
       // v2.2.0+: si los items traen metadata.trabajoId, lo propagamos al PDF
       // para que el generador agrupe por trabajo. Items pre-2.2.0 no tienen
       // metadata y se renderizan como antes (lista plana).
+      // v2.3.0+: también propagamos trabajoNombre para pedidos directos con
+      // trabajos definidos (factura con headers de trabajo nombrados).
       const pdfItems =
         pedidoData?.items?.map((it) => {
           const md = it.metadata ?? null
@@ -339,7 +342,8 @@ function FacturaDetailModal({
             ...(md?.tipoTrabajoOrigen
               ? { tipoTrabajoOrigen: md.tipoTrabajoOrigen as never }
               : {}),
-            ...(md?.medidas ? { medidasTrabajo: md.medidas } : {})
+            ...(md?.medidas ? { medidasTrabajo: md.medidas } : {}),
+            ...(md?.trabajoNombre ? { trabajoNombre: md.trabajoNombre } : {})
           }
         }) ?? []
 
