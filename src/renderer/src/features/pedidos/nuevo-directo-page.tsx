@@ -34,6 +34,11 @@ import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { MuestraMarcoPickerCargado } from '@renderer/components/shared/muestra-marco-picker'
 import { useToast } from '@renderer/contexts/toast-context'
 import { useIpc } from '@renderer/hooks/use-ipc'
+import {
+  clearAutoSaveDraft,
+  loadAutoSaveDraft,
+  useAutoSave
+} from '@renderer/hooks/use-auto-save'
 import { formatCOP, hoyISO, toFechaISO } from '@renderer/lib/format'
 import { formatPrimaryShortcut } from '@renderer/lib/shortcuts'
 import { useMoneyInput } from '@renderer/lib/use-money-input'
@@ -89,6 +94,50 @@ type ItemForm = {
 type TrabajoLocal = {
   idLocal: string
   nombre: string
+}
+
+// v2.3.0 — clave del draft auto-guardado en localStorage. Si el papá cierra
+// la app o reload accidental, el form se reconstruye con lo que tenía.
+const DRAFT_KEY = 'pedido-directo:wip'
+
+// Shape del draft persistido. Se valida con `validarPedidoDirectoDraft`
+// antes de aplicarlo — si llega corrupto (storage manipulado, mismatch de
+// versión, parsing parcial), se descarta entero y el form arranca limpio.
+type PedidoDirectoDraft = {
+  // Solo guardamos clienteId para no clavar una snapshot del cliente que
+  // luego puede haber sido editado o eliminado. Al cargar el draft, la
+  // lógica re-fetcha el cliente fresco (o lo deja en null si ya no existe).
+  clienteId: number | null
+  tipoTrabajo: TipoTrabajo
+  descripcion: string
+  anchoCm: number | null
+  altoCm: number | null
+  fechaIngreso: string
+  fechaEntregaEditada: string | null
+  tipoEntrega: TipoEntrega
+  estadoInicial: EstadoPedido
+  notas: string
+  items: ItemForm[]
+  trabajos: TrabajoLocal[]
+  precioTotalOverride: number | null
+  conAbono: boolean
+  abonoMonto: number
+  abonoMetodo: MetodoPago
+  abonoFechaEditada: string | null
+  generarPDF: boolean
+}
+
+function validarPedidoDirectoDraft(raw: unknown): PedidoDirectoDraft | null {
+  if (!raw || typeof raw !== 'object') return null
+  const d = raw as Record<string, unknown>
+  // Sanity check de campos críticos. Si pasa esto, confiamos en defaults
+  // para campos que falten. NO validamos shape exhaustiva de items/trabajos
+  // — el form los acepta vacíos sin romper.
+  if (typeof d.fechaIngreso !== 'string') return null
+  if (!Array.isArray(d.items)) return null
+  if (d.trabajos != null && !Array.isArray(d.trabajos)) return null
+  if (typeof d.tipoTrabajo !== 'string') return null
+  return d as unknown as PedidoDirectoDraft
 }
 
 // Estados que el dueño puede elegir como inicial. Excluimos 'cancelado' y
@@ -174,19 +223,58 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
   const navigate = useNavigate()
   const { showToast } = useToast()
 
+  // v2.3.0 — Auto-save: cargar draft persistido (si existe) UNA SOLA VEZ
+  // al montar. Se hace fuera de useEffect porque queremos que los useState
+  // arranquen con los valores del draft directamente, evitando un primer
+  // render con defaults seguido de un re-render con la data.
+  // `loadAutoSaveDraft` hace validación profunda: si el draft está corrupto
+  // (storage manipulado, parsing parcial), lo descarta y limpia la key.
+  const draftInicial = useMemo(
+    () => loadAutoSaveDraft<PedidoDirectoDraft>(DRAFT_KEY, validarPedidoDirectoDraft)?.data,
+    []
+  )
+
   // --- Estado del form ---
+  // El cliente solo se persiste por id en el draft (para no clavar una copia
+  // del cliente que luego puede haber sido editado). Al cargar el draft, un
+  // useEffect re-fetcha el cliente fresco si tenía clienteId.
   const [cliente, setCliente] = useState<Cliente | null>(null)
-  const [tipoTrabajo, setTipoTrabajo] = useState<TipoTrabajo>('enmarcacion_estandar')
-  const [descripcion, setDescripcion] = useState('')
-  const [anchoCm, setAnchoCm] = useState<number | null>(null)
-  const [altoCm, setAltoCm] = useState<number | null>(null)
-  const [fechaIngreso, setFechaIngreso] = useState(hoyISO())
+  const [tipoTrabajo, setTipoTrabajo] = useState<TipoTrabajo>(
+    draftInicial?.tipoTrabajo ?? 'enmarcacion_estandar'
+  )
+  const [descripcion, setDescripcion] = useState(draftInicial?.descripcion ?? '')
+  const [anchoCm, setAnchoCm] = useState<number | null>(draftInicial?.anchoCm ?? null)
+  const [altoCm, setAltoCm] = useState<number | null>(draftInicial?.altoCm ?? null)
+  const [fechaIngreso, setFechaIngreso] = useState(draftInicial?.fechaIngreso ?? hoyISO())
   // `fechaEntregaEditada` es la fecha que el dueño escribió a mano. Si es
   // null, mostramos la sugerencia derivada de tipoEntrega + fechaIngreso.
   // Esta forma evita el patrón setState-en-effect (la sugerencia se computa
   // durante el render, no se sincroniza vía useEffect).
-  const [fechaEntregaEditada, setFechaEntregaEditada] = useState<string | null>(null)
-  const [tipoEntrega, setTipoEntrega] = useState<TipoEntrega>('estandar')
+  const [fechaEntregaEditada, setFechaEntregaEditada] = useState<string | null>(
+    draftInicial?.fechaEntregaEditada ?? null
+  )
+  const [tipoEntrega, setTipoEntrega] = useState<TipoEntrega>(
+    draftInicial?.tipoEntrega ?? 'estandar'
+  )
+
+  // Re-fetch del cliente del draft (si había uno guardado por id). Si el
+  // cliente ya no existe (fue eliminado entre sesiones), queda en null —
+  // el dueño tendrá que reseleccionarlo.
+  useEffect(() => {
+    const clienteId = draftInicial?.clienteId
+    if (clienteId == null) return
+    let canceled = false
+    void (async () => {
+      const res = (await window.api.clientes.obtener(clienteId)) as
+        | { ok: true; data: Cliente }
+        | { ok: false; error: string }
+      if (canceled) return
+      if (res.ok) setCliente(res.data)
+    })()
+    return () => {
+      canceled = true
+    }
+  }, [draftInicial?.clienteId])
 
   // Días sugeridos por tipo de entrega — se leen de la tabla `configuracion`.
   // El dueño los edita desde la pantalla de Configuración. Usamos fallbacks
@@ -219,34 +307,50 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
   const fechaEntrega =
     fechaEntregaEditada ?? sugerirFechaEntrega(tipoEntrega, fechaIngreso, diasSugeridos)
   const fechaEntregaTocada = fechaEntregaEditada !== null
-  const [estadoInicial, setEstadoInicial] = useState<EstadoPedido>('confirmado')
-  const [notas, setNotas] = useState('')
+  const [estadoInicial, setEstadoInicial] = useState<EstadoPedido>(
+    draftInicial?.estadoInicial ?? 'confirmado'
+  )
+  const [notas, setNotas] = useState(draftInicial?.notas ?? '')
 
-  const [items, setItems] = useState<ItemForm[]>(() => [nuevoItemVacio()])
+  const [items, setItems] = useState<ItemForm[]>(() => {
+    // Al cargar items desde draft, re-asignamos uids: los uids del draft
+    // colisionan con el contador global si se monta y desmonta la página
+    // varias veces. Genera nuevos para evitar React keys duplicadas.
+    if (draftInicial?.items && draftInicial.items.length > 0) {
+      return draftInicial.items.map((it) => ({ ...it, uid: nextUid() }))
+    }
+    return [nuevoItemVacio()]
+  })
 
   // v2.3.0 — trabajos definidos por el dueño para agrupar items dentro del
   // pedido (ej. "Cuadro de la abuela", "Espejo del baño"). Por defecto
   // vacío: el pedido se comporta como hasta v2.2.x (items planos sueltos).
   // El dueño agrega trabajos con el botón "+ Agregar trabajo" en la
   // sección de items.
-  const [trabajos, setTrabajos] = useState<TrabajoLocal[]>([])
+  const [trabajos, setTrabajos] = useState<TrabajoLocal[]>(draftInicial?.trabajos ?? [])
 
   // Override de total. Si null, se usa la suma. Si number, el override.
-  const [precioTotalOverride, setPrecioTotalOverride] = useState<number | null>(null)
+  const [precioTotalOverride, setPrecioTotalOverride] = useState<number | null>(
+    draftInicial?.precioTotalOverride ?? null
+  )
 
   // Bloque abono opcional
-  const [conAbono, setConAbono] = useState(false)
-  const [abonoMonto, setAbonoMonto] = useState<number>(0)
-  const [abonoMetodo, setAbonoMetodo] = useState<MetodoPago>('efectivo')
+  const [conAbono, setConAbono] = useState(draftInicial?.conAbono ?? false)
+  const [abonoMonto, setAbonoMonto] = useState<number>(draftInicial?.abonoMonto ?? 0)
+  const [abonoMetodo, setAbonoMetodo] = useState<MetodoPago>(
+    draftInicial?.abonoMetodo ?? 'efectivo'
+  )
   // Si el dueño NO edita esta fecha, espejea `fechaIngreso` automáticamente.
   // Caso retroactivo: registra abono histórico junto con el pedido viejo,
   // sin tener que tocar manualmente el campo de fecha. Coherente con el
   // patrón de `fechaEntrega`.
-  const [abonoFechaEditada, setAbonoFechaEditada] = useState<string | null>(null)
+  const [abonoFechaEditada, setAbonoFechaEditada] = useState<string | null>(
+    draftInicial?.abonoFechaEditada ?? null
+  )
   const abonoFecha = abonoFechaEditada ?? fechaIngreso
 
   // PDF
-  const [generarPDF, setGenerarPDF] = useState(false)
+  const [generarPDF, setGenerarPDF] = useState(draftInicial?.generarPDF ?? false)
 
   // Submit / errores
   const [submitting, setSubmitting] = useState(false)
@@ -260,6 +364,69 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
     abonoMonto: conAbono ? abonoMonto : 0,
     notas,
     precioTotalOverride
+  })
+
+  // v2.3.0 — Auto-save del draft cada 30s. Solo guarda si hay contenido
+  // útil (cliente seleccionado, items con descripción, o trabajos definidos)
+  // para evitar polución de localStorage con drafts vacíos. El draft se
+  // borra automáticamente al guardar exitoso (ver handleSubmit) o al
+  // confirmar el descarte en el dirty guard.
+  const draftData = useMemo<PedidoDirectoDraft>(
+    () => ({
+      clienteId: cliente?.id ?? null,
+      tipoTrabajo,
+      descripcion,
+      anchoCm,
+      altoCm,
+      fechaIngreso,
+      fechaEntregaEditada,
+      tipoEntrega,
+      estadoInicial,
+      notas,
+      items,
+      trabajos,
+      precioTotalOverride,
+      conAbono,
+      abonoMonto,
+      abonoMetodo,
+      abonoFechaEditada,
+      generarPDF
+    }),
+    [
+      cliente,
+      tipoTrabajo,
+      descripcion,
+      anchoCm,
+      altoCm,
+      fechaIngreso,
+      fechaEntregaEditada,
+      tipoEntrega,
+      estadoInicial,
+      notas,
+      items,
+      trabajos,
+      precioTotalOverride,
+      conAbono,
+      abonoMonto,
+      abonoMetodo,
+      abonoFechaEditada,
+      generarPDF
+    ]
+  )
+  useAutoSave<PedidoDirectoDraft>({
+    key: DRAFT_KEY,
+    data: draftData,
+    intervalMs: 30000,
+    debounceMs: 1500,
+    // Solo persistimos si el form tiene contenido útil — sino seguimos
+    // contaminando localStorage con drafts vacíos cada vez que el dueño
+    // entra a la página sin completar nada.
+    isDirty: (d) =>
+      d.clienteId !== null ||
+      d.descripcion.length > 0 ||
+      d.notas.length > 0 ||
+      d.trabajos.length > 0 ||
+      d.items.some((it) => it.descripcion.length > 0 || it.precioUnitario > 0)
   })
 
   // --- Derivados ---
@@ -465,6 +632,12 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
           showToast
         })
       }
+
+      // v2.3.0 — limpiar el draft auto-guardado: el pedido ya quedó en DB,
+      // no tiene sentido conservar el borrador (si lo dejáramos, la próxima
+      // visita re-mostraría datos del pedido recién creado como si fuera
+      // un draft pendiente).
+      clearAutoSaveDraft(DRAFT_KEY)
 
       showToast({
         tone: 'success',
@@ -927,7 +1100,16 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
           <Button variant="outline" onClick={() => setConfirmCancel(false)}>
             Seguir editando
           </Button>
-          <Button variant="primary" onClick={() => navigate('/pedidos')}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              // v2.3.0 — descartar también limpia el draft auto-guardado.
+              // Si no lo hiciéramos, la próxima vez que entre a "Nuevo
+              // pedido directo" volvería a aparecer todo lo que descartó.
+              clearAutoSaveDraft(DRAFT_KEY)
+              navigate('/pedidos')
+            }}
+          >
             Descartar
           </Button>
         </div>
