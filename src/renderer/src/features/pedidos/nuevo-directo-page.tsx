@@ -24,6 +24,7 @@ import { ClientePicker } from '@renderer/components/shared/cliente-picker'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { MuestraMarcoPickerCargado } from '@renderer/components/shared/muestra-marco-picker'
 import { useToast } from '@renderer/contexts/toast-context'
+import { useIpc } from '@renderer/hooks/use-ipc'
 import { formatCOP, hoyISO, toFechaISO } from '@renderer/lib/format'
 import { formatPrimaryShortcut } from '@renderer/lib/shortcuts'
 import { useMoneyInput } from '@renderer/lib/use-money-input'
@@ -114,17 +115,23 @@ function nuevoItemVacio(): ItemForm {
 }
 
 // Días sugeridos desde hoy para auto-fecha de entrega según tipo de entrega.
-// El dueño puede sobreescribir el valor — son solo defaults inteligentes.
-const DIAS_SUGERIDOS_ENTREGA: Record<TipoEntrega, number> = {
+// Los valores son configurables desde la pantalla de Configuración (claves
+// `dias_entrega_urgente/_estandar/_sin_afan`). Aquí solo definimos fallbacks
+// por si la lectura IPC todavía no resolvió o un valor quedó vacío.
+const DIAS_SUGERIDOS_FALLBACK: Record<TipoEntrega, number> = {
   urgente: 3,
   estandar: 7,
   sin_afan: 14
 }
 
-function sugerirFechaEntrega(tipoEntrega: TipoEntrega, fechaIngreso: string): string {
+function sugerirFechaEntrega(
+  tipoEntrega: TipoEntrega,
+  fechaIngreso: string,
+  dias: Record<TipoEntrega, number>
+): string {
   const base = new Date(`${fechaIngreso}T12:00:00`)
   if (Number.isNaN(base.getTime())) return ''
-  base.setDate(base.getDate() + DIAS_SUGERIDOS_ENTREGA[tipoEntrega])
+  base.setDate(base.getDate() + dias[tipoEntrega])
   return toFechaISO(base)
 }
 
@@ -149,7 +156,37 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
   // durante el render, no se sincroniza vía useEffect).
   const [fechaEntregaEditada, setFechaEntregaEditada] = useState<string | null>(null)
   const [tipoEntrega, setTipoEntrega] = useState<TipoEntrega>('estandar')
-  const fechaEntrega = fechaEntregaEditada ?? sugerirFechaEntrega(tipoEntrega, fechaIngreso)
+
+  // Días sugeridos por tipo de entrega — se leen de la tabla `configuracion`.
+  // El dueño los edita desde la pantalla de Configuración. Usamos fallbacks
+  // mientras el IPC carga (3/7/14) para que la sugerencia funcione desde el
+  // primer render.
+  const { data: diasUrgente } = useIpc<number>(
+    () =>
+      window.api.configuracion.getNumber('dias_entrega_urgente', DIAS_SUGERIDOS_FALLBACK.urgente),
+    []
+  )
+  const { data: diasEstandar } = useIpc<number>(
+    () =>
+      window.api.configuracion.getNumber('dias_entrega_estandar', DIAS_SUGERIDOS_FALLBACK.estandar),
+    []
+  )
+  const { data: diasSinAfan } = useIpc<number>(
+    () =>
+      window.api.configuracion.getNumber('dias_entrega_sin_afan', DIAS_SUGERIDOS_FALLBACK.sin_afan),
+    []
+  )
+  const diasSugeridos = useMemo<Record<TipoEntrega, number>>(
+    () => ({
+      urgente: diasUrgente ?? DIAS_SUGERIDOS_FALLBACK.urgente,
+      estandar: diasEstandar ?? DIAS_SUGERIDOS_FALLBACK.estandar,
+      sin_afan: diasSinAfan ?? DIAS_SUGERIDOS_FALLBACK.sin_afan
+    }),
+    [diasUrgente, diasEstandar, diasSinAfan]
+  )
+
+  const fechaEntrega =
+    fechaEntregaEditada ?? sugerirFechaEntrega(tipoEntrega, fechaIngreso, diasSugeridos)
   const fechaEntregaTocada = fechaEntregaEditada !== null
   const [estadoInicial, setEstadoInicial] = useState<EstadoPedido>('confirmado')
   const [notas, setNotas] = useState('')
@@ -454,7 +491,7 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
               label={
                 fechaEntregaTocada
                   ? 'Fecha de entrega'
-                  : `Fecha de entrega (sugerida +${DIAS_SUGERIDOS_ENTREGA[tipoEntrega]} días)`
+                  : `Fecha de entrega (sugerida +${diasSugeridos[tipoEntrega]} días)`
               }
               type="date"
               value={fechaEntrega}
@@ -678,7 +715,7 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
             role="status"
             aria-live="polite"
             aria-label="Guardando pedido"
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/10 backdrop-blur-sm pointer-events-none"
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/10 backdrop-blur-(--backdrop-blur) pointer-events-none"
           >
             <div className="bg-surface rounded-lg shadow-3 px-5 py-4 flex items-center gap-3">
               <Spinner size="sm" />

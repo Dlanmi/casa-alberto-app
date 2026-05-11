@@ -76,7 +76,7 @@ export function StepResumenEmbed({
                 key={idx}
                 className={cn(
                   'flex items-center gap-2 text-sm',
-                  item.tipoItem === 'descuento' && 'text-red-600'
+                  item.tipoItem === 'descuento' && 'text-error'
                 )}
               >
                 <Icon size={14} className="text-text-muted shrink-0" aria-hidden="true" />

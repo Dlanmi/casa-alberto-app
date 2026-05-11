@@ -93,7 +93,7 @@ export function ListaTrabajos({
                     size="sm"
                     onClick={() => onEliminar(trabajo.idLocal)}
                     aria-label={`Eliminar trabajo ${idx + 1}`}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="text-error hover:text-error-strong hover:bg-error-bg"
                   >
                     <Trash2 size={14} />
                   </Button>

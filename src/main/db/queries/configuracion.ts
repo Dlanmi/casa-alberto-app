@@ -26,16 +26,39 @@ const CLAVES_NUMERICAS = [
   'precio_kit_dibujo',
   'porcentaje_materiales_default',
   'tiempo_entrega_default',
+  'dias_entrega_urgente',
+  'dias_entrega_estandar',
+  'dias_entrega_sin_afan',
   'consecutivo_facturas',
   'consecutivo_pedidos',
   'consecutivo_contratos'
 ]
+
+// Claves que representan cantidades de días. La app las usa para sugerir
+// fechas de entrega — un valor absurdo (Infinity, decimal, 99.999) generaría
+// fechas inválidas. Las acotamos a un año entero. Aplica el mismo género de
+// hardening del incidente Infinity en pedidos multi-trabajo (v2.2.1).
+const CLAVES_DIAS = new Set([
+  'tiempo_entrega_default',
+  'dias_entrega_urgente',
+  'dias_entrega_estandar',
+  'dias_entrega_sin_afan'
+])
+const DIAS_MAX = 365
 
 export function setConfig(db: DB, clave: string, valor: string, descripcion?: string): void {
   if (CLAVES_NUMERICAS.includes(clave)) {
     const n = parseFloat(valor)
     if (isNaN(n) || n < 0) {
       throw new Error(`El valor de "${clave}" debe ser un número válido mayor o igual a 0`)
+    }
+    if (CLAVES_DIAS.has(clave)) {
+      if (!Number.isInteger(n)) {
+        throw new Error(`El valor de "${clave}" debe ser un número entero de días`)
+      }
+      if (n > DIAS_MAX) {
+        throw new Error(`El valor de "${clave}" no puede ser mayor a ${DIAS_MAX} días`)
+      }
     }
   }
 

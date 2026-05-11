@@ -61,6 +61,21 @@ const CONFIG_INICIAL: { clave: string; valor: string; descripcion: string }[] = 
     descripcion: 'Margen estimado mínimo (%) antes de alertar rentabilidad baja'
   },
   { clave: 'tiempo_entrega_default', valor: '8', descripcion: 'Días de entrega por defecto' },
+  {
+    clave: 'dias_entrega_urgente',
+    valor: '3',
+    descripcion: 'Días sugeridos para entrega urgente'
+  },
+  {
+    clave: 'dias_entrega_estandar',
+    valor: '7',
+    descripcion: 'Días sugeridos para entrega estándar'
+  },
+  {
+    clave: 'dias_entrega_sin_afan',
+    valor: '14',
+    descripcion: 'Días sugeridos para entrega sin afán'
+  },
   { clave: 'precio_clase_mensual', valor: '110000', descripcion: 'Precio mensual clases' },
   { clave: 'precio_kit_dibujo', valor: '15000', descripcion: 'Precio kit de dibujo' },
   { clave: 'backup_ubicacion', valor: '', descripcion: 'Ruta carpeta backup' },

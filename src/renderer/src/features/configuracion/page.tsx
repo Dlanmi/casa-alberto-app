@@ -53,6 +53,11 @@ const CONFIG_GROUPS: ConfigGroup[] = [
     title: 'Precios y tarifas',
     description: 'Valores base para el cotizador y listas de precios',
     prefix: ['precio_']
+  },
+  {
+    title: 'Tiempos de entrega',
+    description: 'Días sugeridos al crear un pedido según el tipo de entrega',
+    prefix: ['dias_entrega_', 'tiempo_entrega_']
   }
 ]
 
@@ -62,7 +67,11 @@ const CONFIG_LABELS: Record<string, string> = {
   nit: 'NIT',
   telefono_negocio: 'Teléfono del negocio',
   direccion_negocio: 'Dirección del negocio',
-  correo_negocio: 'Correo del negocio'
+  correo_negocio: 'Correo del negocio',
+  tiempo_entrega_default: 'Tiempo de entrega (general, días)',
+  dias_entrega_urgente: 'Entrega urgente (días)',
+  dias_entrega_estandar: 'Entrega estándar (días)',
+  dias_entrega_sin_afan: 'Entrega sin afán (días)'
 }
 
 function findGroup(clave: string): string {
@@ -87,6 +96,9 @@ function configHint(clave: string): string {
   if (clave.startsWith('precio_')) return 'Usado por el cotizador y las listas de precios'
   if (clave.startsWith('consecutivo_') || clave.startsWith('prefijo_'))
     return 'Define la numeración automática de documentos'
+  if (clave.startsWith('dias_entrega_') || clave === 'tiempo_entrega_default') {
+    return 'Días desde el ingreso para sugerir fecha de entrega'
+  }
   if (
     clave.startsWith('negocio_') ||
     clave.startsWith('empresa_') ||

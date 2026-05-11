@@ -80,7 +80,10 @@ const CLAVES_CONFIG_PERMITIDAS = new Set([
   'margen_minimo_alerta_pct',
   'porcentaje_materiales_default',
   'porcentaje_costo_materiales_armado_default',
-  'tiempo_entrega_default'
+  'tiempo_entrega_default',
+  'dias_entrega_urgente',
+  'dias_entrega_estandar',
+  'dias_entrega_sin_afan'
 ])
 
 // Nombres oficiales de las hojas. El parser los exige tal cual; si faltan o
