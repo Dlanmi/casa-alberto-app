@@ -20,6 +20,7 @@ import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { useToast } from '@renderer/contexts/toast-context'
 import { useMoneyInput } from '@renderer/lib/use-money-input'
 import { formatCOP, hoyISO } from '@renderer/lib/format'
+import { DEFAULT_LIST_QUERY_LIMIT } from '@renderer/lib/constants'
 import { cn } from '@renderer/lib/cn'
 import type { LucideIcon } from 'lucide-react'
 import type { Cliente, IpcResult, MetodoPago, Pedido } from '@shared/types'
@@ -153,7 +154,7 @@ export function QuickPayModal({
       // (necesitamos la factura activa para pasarle el id)
       const facturaRes = (await window.api.facturas.listar({
         clienteId: pedido.clienteId,
-        limit: 100
+        limit: DEFAULT_LIST_QUERY_LIMIT
       })) as IpcResult<{ id: number; pedidoId: number; estado: string }[]>
       if (!facturaRes.ok) {
         setError(facturaRes.error)

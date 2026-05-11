@@ -15,6 +15,7 @@ import {
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
 import { Input } from '@renderer/components/ui/input'
+import { Toggle } from '@renderer/components/ui/toggle'
 import { GuidanceHint } from '@renderer/components/shared/guidance-hint'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { ClientePicker } from '@renderer/components/shared/cliente-picker'
@@ -293,28 +294,17 @@ export function StepResumen({
                 $1.000.
               </p>
             </div>
-            <button
-              onClick={() => {
-                const next = !data.conDescuento
+            <Toggle
+              checked={data.conDescuento}
+              onChange={(next) =>
                 onChange({
                   conDescuento: next,
                   descuentoNum: next ? data.descuentoNum : 0,
                   motivoDescuento: next ? data.motivoDescuento : ''
                 })
-              }}
-              className={cn(
-                'relative h-7 w-12 shrink-0 rounded-full transition-colors cursor-pointer',
-                data.conDescuento ? 'bg-success' : 'bg-border'
-              )}
-              aria-label={data.conDescuento ? 'Desactivar descuento' : 'Activar descuento'}
-            >
-              <span
-                className={cn(
-                  'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
-                  data.conDescuento ? 'left-[23px]' : 'left-[3px]'
-                )}
-              />
-            </button>
+              }
+              ariaLabel={data.conDescuento ? 'Desactivar descuento' : 'Activar descuento'}
+            />
           </div>
 
           {data.conDescuento && (
@@ -602,27 +592,16 @@ export function StepResumen({
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() =>
-                  onChange({
-                    tipoEntrega: data.tipoEntrega === 'urgente' ? 'estandar' : 'urgente'
-                  })
+              <Toggle
+                checked={data.tipoEntrega === 'urgente'}
+                onChange={(esUrgente) =>
+                  onChange({ tipoEntrega: esUrgente ? 'urgente' : 'estandar' })
                 }
-                className={cn(
-                  'relative h-7 w-12 shrink-0 rounded-full transition-colors cursor-pointer',
-                  data.tipoEntrega === 'urgente' ? 'bg-warning' : 'bg-border'
-                )}
-                aria-label={
+                ariaLabel={
                   data.tipoEntrega === 'urgente' ? 'Quitar urgencia' : 'Marcar como urgente'
                 }
-              >
-                <span
-                  className={cn(
-                    'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
-                    data.tipoEntrega === 'urgente' ? 'left-[23px]' : 'left-[3px]'
-                  )}
-                />
-              </button>
+                tone="warning"
+              />
             </div>
           </div>
 

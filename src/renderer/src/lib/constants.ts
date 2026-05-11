@@ -192,3 +192,11 @@ export const TIPO_ENTREGA_COLOR: Record<TipoEntrega, StatusColor> = {
   urgente: 'warning',
   sin_afan: 'info'
 }
+
+// ---- Query limits ----
+
+// Límite por defecto al traer listados que la UI presenta truncados (la app
+// no pagina explícitamente, pero acota lo que pide al main process para no
+// transmitir miles de filas en panels de "facturas recientes", "pagos
+// recientes", etc.). Cambiar aquí impacta a todos los callers a la vez.
+export const DEFAULT_LIST_QUERY_LIMIT = 100

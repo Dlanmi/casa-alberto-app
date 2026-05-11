@@ -19,6 +19,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Modal } from '@renderer/components/ui/modal'
 import { Input } from '@renderer/components/ui/input'
 import { Spinner } from '@renderer/components/ui/spinner'
+import { Toggle } from '@renderer/components/ui/toggle'
 import { EstadoPedidoBadge } from '@renderer/components/shared/estado-badge'
 import { PrecioDisplay } from '@renderer/components/shared/precio-display'
 import { FechaDisplay } from '@renderer/components/shared/fecha-display'
@@ -30,7 +31,11 @@ import { useIpc } from '@renderer/hooks/use-ipc'
 import { useMoneyInput } from '@renderer/lib/use-money-input'
 import { useToast } from '@renderer/contexts/toast-context'
 import { useSlidePanel, SLIDE_PANEL_EXIT_MS } from '@renderer/hooks/use-slide-panel'
-import { TIPO_TRABAJO_LABEL, ESTADO_PEDIDO_LABEL } from '@renderer/lib/constants'
+import {
+  TIPO_TRABAJO_LABEL,
+  ESTADO_PEDIDO_LABEL,
+  DEFAULT_LIST_QUERY_LIMIT
+} from '@renderer/lib/constants'
 import type { LucideIcon } from 'lucide-react'
 import type { Cliente, Pedido, Factura, EstadoPedido, IpcResult, PedidoItem } from '@shared/types'
 
@@ -102,7 +107,10 @@ export function PedidoDetailPanel({
     data: facturas,
     loading: facturasLoading,
     refetch: refetchFacturas
-  } = useIpc<Factura[]>(() => window.api.facturas.listar({ limit: 100 }), [pedido.id])
+  } = useIpc<Factura[]>(
+    () => window.api.facturas.listar({ limit: DEFAULT_LIST_QUERY_LIMIT }),
+    [pedido.id]
+  )
 
   // Find the active factura for this pedido
   const facturasDelPedido =
@@ -786,27 +794,17 @@ function EditarComercialModal({
               Se ajusta el total y se sincroniza la factura si existe.
             </p>
           </div>
-          <button
-            onClick={() => {
-              setConDescuento((prev) => !prev)
-              if (conDescuento) {
+          <Toggle
+            checked={conDescuento}
+            onChange={(next) => {
+              setConDescuento(next)
+              if (!next) {
                 setDescuentoNum(0)
                 setMotivo('')
               }
             }}
-            className={cn(
-              'relative h-7 w-12 shrink-0 rounded-full transition-colors cursor-pointer',
-              conDescuento ? 'bg-success' : 'bg-border'
-            )}
-            aria-label={conDescuento ? 'Desactivar descuento' : 'Activar descuento'}
-          >
-            <span
-              className={cn(
-                'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
-                conDescuento ? 'left-[23px]' : 'left-[3px]'
-              )}
-            />
-          </button>
+            ariaLabel={conDescuento ? 'Desactivar descuento' : 'Activar descuento'}
+          />
         </div>
 
         {conDescuento && (

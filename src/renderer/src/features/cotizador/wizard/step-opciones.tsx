@@ -2,6 +2,7 @@ import { Check } from 'lucide-react'
 import { useEffect } from 'react'
 import { cn } from '@renderer/lib/cn'
 import { Slider } from '@renderer/components/ui/slider'
+import { Toggle } from '@renderer/components/ui/toggle'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import { formatCOP } from '@renderer/lib/format'
 import type { PrecioVidrio, TipoTrabajo } from '@shared/types'
@@ -47,21 +48,11 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
                   Se coloca alrededor de la obra. Amplía las dimensiones del marco y el vidrio.
                 </p>
               </div>
-              <button
-                onClick={() => onChange({ conPaspartu: !data.conPaspartu })}
-                className={cn(
-                  'relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0',
-                  data.conPaspartu ? 'bg-success' : 'bg-border'
-                )}
-                aria-label={data.conPaspartu ? 'Desactivar paspartu' : 'Activar paspartu'}
-              >
-                <span
-                  className={cn(
-                    'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
-                    data.conPaspartu ? 'left-[23px]' : 'left-[3px]'
-                  )}
-                />
-              </button>
+              <Toggle
+                checked={data.conPaspartu}
+                onChange={(v) => onChange({ conPaspartu: v })}
+                ariaLabel={data.conPaspartu ? 'Desactivar paspartu' : 'Activar paspartu'}
+              />
             </div>
 
             {data.conPaspartu && (
@@ -128,23 +119,13 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
                         metro lineal.
                       </p>
                     </div>
-                    <button
-                      onClick={() => onChange({ conSuplemento: !data.conSuplemento })}
-                      className={cn(
-                        'relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0',
-                        data.conSuplemento ? 'bg-success' : 'bg-border'
-                      )}
-                      aria-label={
+                    <Toggle
+                      checked={data.conSuplemento}
+                      onChange={(v) => onChange({ conSuplemento: v })}
+                      ariaLabel={
                         data.conSuplemento ? 'Desactivar suplemento' : 'Activar suplemento'
                       }
-                    >
-                      <span
-                        className={cn(
-                          'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
-                          data.conSuplemento ? 'left-[23px]' : 'left-[3px]'
-                        )}
-                      />
-                    </button>
+                    />
                   </div>
                 </div>
               </div>
@@ -161,21 +142,11 @@ export function StepOpciones({ data, onChange, tipoTrabajo }: Props): React.JSX.
                 Se cotiza por metro cuadrado. Las medidas se redondean de 10 en 10 cm.
               </p>
             </div>
-            <button
-              onClick={() => onChange({ conVidrio: !data.conVidrio })}
-              className={cn(
-                'relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0',
-                data.conVidrio ? 'bg-success' : 'bg-border'
-              )}
-              aria-label={data.conVidrio ? 'Desactivar vidrio' : 'Activar vidrio'}
-            >
-              <span
-                className={cn(
-                  'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-surface shadow-1 transition-all duration-base',
-                  data.conVidrio ? 'left-[23px]' : 'left-[3px]'
-                )}
-              />
-            </button>
+            <Toggle
+              checked={data.conVidrio}
+              onChange={(v) => onChange({ conVidrio: v })}
+              ariaLabel={data.conVidrio ? 'Desactivar vidrio' : 'Activar vidrio'}
+            />
           </div>
 
           {data.conVidrio && (
