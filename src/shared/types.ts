@@ -404,6 +404,21 @@ export type ItemPedidoDirecto = {
   costoUnitarioEstimado?: number | null
   /** Metadata estructurada cuando viene de lista (medidas, área, etc.). */
   metadata?: PedidoItemMetadata | null
+  /** v2.3.0 — agrupación de items en "trabajos" dentro del mismo pedido.
+   *
+   *  - `trabajoIdLocal`: identificador efímero (UUID) generado por el
+   *    frontend para agrupar items que pertenecen al mismo trabajo (ej.
+   *    "Cuadro de la abuela" tiene 3 items: marco, vidrio, paspartú). El
+   *    backend lo mapea a un `trabajoId` numérico 1-indexed antes de
+   *    persistir en `pedido_items.metadata`.
+   *  - `trabajoNombre`: nombre libre del trabajo, dado por el dueño. Se
+   *    replica en cada item del trabajo. Si vacío al guardar, el backend
+   *    usa "Trabajo N".
+   *
+   *  Si ambos son null/undefined, el item es "suelto" (sin trabajo —
+   *  comportamiento pre-v2.3.0). Items sueltos coexisten con trabajos. */
+  trabajoIdLocal?: string | null
+  trabajoNombre?: string | null
 }
 
 export type DatosClienteParaPedidoDirecto =

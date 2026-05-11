@@ -444,6 +444,14 @@ export type PedidoItemMetadata = {
   anchoPaspartuCm?: number
   tipoPaspartu?: 'pintado' | 'acrilico'
 
+  // Campo del flujo "pedido directo con múltiples trabajos" (v2.3.0). Permite
+  // que el dueño nombre cada trabajo libremente (ej. "Cuadro de la abuela",
+  // "Espejo del baño") cuando crea un pedido manual con varios trabajos.
+  // Se replica en CADA item del trabajo para que la factura PDF pueda usarlo
+  // como header del grupo sin lookup adicional. En multi-trabajo del cotizador
+  // este campo no se usa: el header del grupo viene de tipoTrabajoOrigen.
+  trabajoNombre?: string
+
   [key: string]: unknown
 }
 
