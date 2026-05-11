@@ -10,6 +10,55 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.2.3] — Tiempos de entrega configurables + limpieza visual
+
+Versión que extiende la pantalla de Configuración para que el dueño
+pueda ajustar los días sugeridos de entrega según el tipo (urgente,
+estándar, sin afán). Incluye limpieza visual interna: tokens unificados
+de colores y un componente Toggle reutilizable. Sin cambios funcionales
+en el cotizador ni en las cotizaciones.
+
+### Nuevo
+
+- **Días de entrega configurables.** En Configuración aparece un nuevo
+  grupo "Tiempos de entrega" con cuatro campos editables: entrega
+  urgente (default 3 días), entrega estándar (7), entrega sin afán
+  (14) y tiempo de entrega general (8). Antes estos números vivían
+  hardcoded en el código; ahora se pueden cambiar sin tocar nada y la
+  app respeta el valor configurado al sugerir la fecha de entrega de
+  un pedido directo. La sugerencia es solo un default — el dueño
+  puede sobreescribir la fecha cuando quiera.
+
+### Mejorado
+
+- **Botón de eliminar trabajo más sobrio.** En el flujo de pedido con
+  varios trabajos, el botón "papelera" para quitar un trabajo usaba
+  un rojo demasiado brillante. Ahora usa el rojo institucional de la
+  app (más oscuro, hover con fondo rosado suave), consistente con el
+  resto de mensajes de error.
+
+- **Color del descuento en cotizaciones.** El monto del descuento en
+  el resumen de cotización ahora se muestra en rojo institucional en
+  lugar del rojo genérico.
+
+- **Animaciones del wizard unificadas.** El indicador de carga del
+  pedido directo (el blur del fondo) y los toggles del cotizador
+  (paspartú, vidrio, suplemento, descuento, urgente) ahora comparten
+  los tokens de color y la duración base del proyecto. Mismo
+  comportamiento visible, menos código duplicado.
+
+### Para desarrolladores
+
+- Nuevo componente `<Toggle>` en `components/ui/toggle.tsx` que
+  reemplaza 6 instancias del mismo markup repetido. Soporta variante
+  `tone="warning"` para el toggle de "marcar urgente".
+- Validación de dominio para las claves `dias_entrega_*` y
+  `tiempo_entrega_default`: deben ser enteros entre 0 y 365 días.
+  Hardening preventivo del mismo género del Infinity guard de v2.2.1.
+- Constante `DEFAULT_LIST_QUERY_LIMIT = 100` en `lib/constants.ts`
+  reemplaza dos magic numbers en `quick-pay-modal` y
+  `pedido-detail-panel`.
+
 ## [2.2.2] — Cotizador más cómodo con catálogos grandes
 
 Patch enfocado en el paso de selección de marco cuando hay muchas
