@@ -10,6 +10,82 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.3.0] — Pedido directo con múltiples trabajos + edición directa
+
+Versión que extiende el flujo "Nuevo pedido directo" para que un solo
+pedido pueda contener varios trabajos cuando un cliente llega con dos o
+más cuadros distintos en la misma visita. Antes el dueño tenía que
+crear pedidos separados (dos facturas, dos abonos, dos PDF); ahora todo
+queda en un solo pedido con su factura agrupada. También mejora la
+edición de trabajos en el flujo multi-trabajo del cotizador.
+
+### Nuevo
+
+- **Pedido directo con varios trabajos.** En "Pedidos → Nuevo directo"
+  aparece un nuevo botón "+ Agregar trabajo" al lado de "+ Agregar
+  item". Al hacer click se crea un bloque visual con nombre editable
+  ("Cuadro de la abuela", "Espejo del baño") y los items se agregan
+  dentro. Subtotal por trabajo + total general. Items que no
+  pertenecen a ningún trabajo (transporte, cinta colgadora, etc.)
+  quedan abajo bajo "Items sueltos". La factura PDF agrupa los items
+  por trabajo con su nombre como sub-header, y los items sueltos
+  aparecen al final bajo "Otros". Cuando hay dos o más trabajos
+  definidos, el pedido se marca como "Pedido mixto" en el kanban.
+
+- **Auto-guardado del pedido directo.** Si el dueño está armando un
+  pedido grande y la app se cierra o hay reload accidental, ya no
+  pierde lo que llevaba. Cada 30 segundos la app guarda un borrador
+  local. La próxima visita reconstruye el formulario con todo: cliente,
+  items, trabajos, descripción, fechas. Al guardar el pedido o
+  descartar explícitamente, el borrador se borra para evitar que
+  reaparezca como pendiente.
+
+- **Edición directa de trabajos en multi-trabajo del cotizador.** En el
+  flujo "Cotizador → Pedido con varios trabajos", al editar un trabajo
+  existente, ahora hay tres botones de acceso rápido en cada card:
+  "Cambiar marco", "Cambiar medidas" y "Editar todo". Cada uno abre el
+  wizard directamente en el paso correspondiente — antes había que
+  recorrer los cinco pasos del wizard para cambiar una sola cosa. Un
+  banner discreto recuerda que los puntos numerados arriba son
+  navegables.
+
+### Sin cambios
+
+- Si el dueño no usa la nueva funcionalidad (no agrega ningún trabajo
+  en el pedido directo), el flujo se comporta exactamente igual que
+  antes. La sección se titula "Items del pedido" y los items van sin
+  agrupar. Cero migración de pedidos viejos.
+
+### Para desarrolladores
+
+- Nuevo campo `trabajoNombre?: string` en `PedidoItemMetadata` (JSON,
+  sin migration). Se replica en cada item del trabajo para que el PDF
+  pueda usarlo como header sin lookup adicional.
+- `crearPedidoDirecto` ahora acepta `trabajoIdLocal` (UUID frontend) +
+  `trabajoNombre` por item, los mapea a `trabajoId` 1-indexed y decide
+  `tipoTrabajo='mixto'` si hay ≥2 trabajos distintos. Validación de
+  dominio: nombre máx 200 chars, defaults a "Trabajo N" si vacío, log
+  warning + uso del primer nombre si llegan inconsistencias.
+- 8 tests nuevos en `pedidos.integration.test.ts` cubriendo: compat
+  sin trabajos, 1 trabajo, 2 trabajos (mixto), 1 trabajo + items
+  sueltos, nombres vacíos, nombres con whitespace, nombre >200 chars,
+  inconsistencia defensiva.
+- Auto-save del pedido directo reutiliza `useAutoSave` /
+  `loadAutoSaveDraft` / `clearAutoSaveDraft` (hook compartido con
+  multi-trabajo del cotizador desde v2.2.0). Key del draft:
+  `pedido-directo:wip`. Cliente se persiste solo por id; al cargar
+  se re-fetcha fresco (defense contra cliente eliminado entre
+  sesiones).
+- Nuevo prop `stepInicial?: WizardStepKey` en `WizardShell`. La
+  función `computeVisibleSteps(tipoTrabajo)` se extrajo a función
+  pura fuera del componente para poder resolver el índice inicial
+  dentro del useState initializer.
+- Los flujos del PDF (`pedido-detail-panel`, `nuevo-directo-page`,
+  `facturas/page`) propagan `trabajoNombre` al payload del IPC
+  `pdf:generarFactura`. El generador agrupa por `trabajoId` y usa
+  el nombre como header del grupo si existe, con fallback al patrón
+  "Trabajo N — Tipo · medidas" del multi-trabajo del cotizador.
+
 ## [2.2.3] — Tiempos de entrega configurables + limpieza visual
 
 Versión que extiende la pantalla de Configuración para que el dueño
