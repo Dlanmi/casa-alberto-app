@@ -1,19 +1,38 @@
 // Lista de trabajos cotizados dentro del pedido multi-trabajo. Cada card
-// resume las medidas + marco + paspartú + precio. Botones para editar
-// (re-abrir modal con datos precargados) y eliminar.
-import { Pencil, Trash2, Plus, Frame } from 'lucide-react'
+// resume las medidas + marco + paspartú + precio. Botones contextuales
+// para editar partes específicas (marco, medidas) o el trabajo completo,
+// además de eliminar. Los botones rápidos saltan directo al paso del
+// wizard correspondiente — antes había que recorrer los 5 pasos para
+// cambiar una sola cosa.
+import { Pencil, Trash2, Plus, Frame, Ruler } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { Card } from '@renderer/components/ui/card'
 import { TIPO_TRABAJO_LABEL } from '@renderer/lib/constants'
 import { TIPO_TRABAJO_ICON } from '@renderer/lib/iconography'
 import { formatCOP } from '@renderer/lib/format'
+import type { TipoTrabajoConcreto } from '@shared/types'
+import type { WizardStepKey } from '../wizard/wizard-shell'
 import type { TrabajoEnSesion } from './types'
 
 type Props = {
   trabajos: TrabajoEnSesion[]
   onAgregar: () => void
-  onEditar: (idLocal: string) => void
+  /** Sin `paso`: abre el modal en el paso "resumen" (editar todo, con
+   *  navegación libre vía StepDots). Con `paso`: abre directamente en
+   *  ese paso del wizard. */
+  onEditar: (idLocal: string, paso?: WizardStepKey) => void
   onEliminar: (idLocal: string) => void
+}
+
+// Tipos de trabajo que tienen paso "Marco" en su wizard. Los demás
+// (vidrio_espejo, retablo, bastidor, tapa, adherido, restauracion) no
+// muestran el acceso rápido "Cambiar marco".
+const TIPOS_CON_MARCO: TipoTrabajoConcreto[] = ['enmarcacion_estandar', 'acolchado']
+
+// Tipos de trabajo que tienen paso "Medidas". Todos excepto restauración
+// (cuya cotización es de precio manual sin medidas).
+function tieneMedidas(tipo: TipoTrabajoConcreto): boolean {
+  return tipo !== 'restauracion'
 }
 
 export function ListaTrabajos({
@@ -76,15 +95,38 @@ export function ListaTrabajos({
                     {resumirTrabajo(trabajo)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="font-mono tabular-nums text-sm font-semibold text-text">
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="font-mono tabular-nums text-sm font-semibold text-text mr-1">
                     {formatCOP(trabajo.cotizacion.precioLista)}
                   </span>
+                  {TIPOS_CON_MARCO.includes(trabajo.tipoTrabajo) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEditar(trabajo.idLocal, 'marco')}
+                      aria-label={`Cambiar marco del trabajo ${idx + 1}`}
+                      title="Cambiar marco"
+                    >
+                      <Frame size={14} />
+                    </Button>
+                  )}
+                  {tieneMedidas(trabajo.tipoTrabajo) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEditar(trabajo.idLocal, 'medidas')}
+                      aria-label={`Cambiar medidas del trabajo ${idx + 1}`}
+                      title="Cambiar medidas"
+                    >
+                      <Ruler size={14} />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => onEditar(trabajo.idLocal)}
-                    aria-label={`Editar trabajo ${idx + 1}`}
+                    aria-label={`Editar trabajo ${idx + 1} completo`}
+                    title="Editar todo"
                   >
                     <Pencil size={14} />
                   </Button>
@@ -93,6 +135,7 @@ export function ListaTrabajos({
                     size="sm"
                     onClick={() => onEliminar(trabajo.idLocal)}
                     aria-label={`Eliminar trabajo ${idx + 1}`}
+                    title="Eliminar"
                     className="text-error hover:text-error-strong hover:bg-error-bg"
                   >
                     <Trash2 size={14} />

@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { Modal } from '@renderer/components/ui/modal'
 import { TipoTrabajoGrid } from '../tipo-trabajo-grid'
 import { WizardShell } from '../wizard/wizard-shell'
-import type { WizardData, TrabajoConfirmadoEmbed } from '../wizard/wizard-shell'
+import type { WizardData, TrabajoConfirmadoEmbed, WizardStepKey } from '../wizard/wizard-shell'
 import type { TipoTrabajoConcreto } from '@shared/types'
 import type { TrabajoEnSesion } from './types'
 
@@ -19,13 +19,19 @@ type Props = {
   /** Si se pasa, modo edición: precarga el wizard con los datos del trabajo
    *  y reemplaza la entrada existente al confirmar (mismo idLocal). */
   trabajoEditando: TrabajoEnSesion | null
+  /** Step en el que arrancar el wizard. Útil para los botones "Cambiar
+   *  marco", "Cambiar medidas" que abren el modal directo al paso que
+   *  el usuario quiere editar. Default: paso 0 (medidas). Solo aplica
+   *  en modo edición. */
+  stepInicial?: WizardStepKey
 }
 
 export function AgregarTrabajoModal({
   open,
   onClose,
   onConfirmar,
-  trabajoEditando
+  trabajoEditando,
+  stepInicial
 }: Props): React.JSX.Element {
   const [tipoTrabajo, setTipoTrabajo] = useState<TipoTrabajoConcreto | null>(
     trabajoEditando?.tipoTrabajo ?? null
@@ -86,6 +92,7 @@ export function AgregarTrabajoModal({
           cliente={null}
           onClienteChange={() => undefined}
           initialData={trabajoEditando?.data as Partial<WizardData> | undefined}
+          stepInicial={trabajoEditando ? stepInicial : undefined}
           onConfirmarEmbed={handleConfirmEmbed}
         />
       )}

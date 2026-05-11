@@ -27,6 +27,7 @@ import {
   type TrabajoEnSesion
 } from './types'
 import { validarEstadoMultiTrabajo } from './draft-validation'
+import type { WizardStepKey } from '../wizard/wizard-shell'
 
 const ESTADO_INICIAL: EstadoMultiTrabajo = {
   cliente: null,
@@ -72,6 +73,13 @@ export default function MultiTrabajoPage(): React.JSX.Element {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editandoIdLocal, setEditandoIdLocal] = useState<string | null>(null)
+  // Paso del wizard al que saltar cuando se abre el modal en modo edición.
+  // 'resumen' es el default ("editar todo" → ya ves la cotización completa
+  // y puedes saltar a cualquier paso con StepDots). 'marco' o 'medidas'
+  // cuando viene desde un botón rápido en la card del trabajo.
+  const [stepInicialEdicion, setStepInicialEdicion] = useState<WizardStepKey | undefined>(
+    undefined
+  )
   const [creating, setCreating] = useState(false)
   const [confirmDescartar, setConfirmDescartar] = useState(false)
 
@@ -107,17 +115,25 @@ export default function MultiTrabajoPage(): React.JSX.Element {
 
   function abrirModalAgregar(): void {
     setEditandoIdLocal(null)
+    setStepInicialEdicion(undefined)
     setModalOpen(true)
   }
 
-  function abrirModalEditar(idLocal: string): void {
+  // Edición de trabajo. Sin `paso`, abre en 'resumen' (la cotización
+  // completa, desde donde el dueño puede saltar a cualquier paso con
+  // StepDots). Con `paso`, abre directo al paso que el dueño quiere
+  // cambiar — útil para los accesos rápidos "Cambiar marco" /
+  // "Cambiar medidas" de la lista.
+  function abrirModalEditar(idLocal: string, paso: WizardStepKey = 'resumen'): void {
     setEditandoIdLocal(idLocal)
+    setStepInicialEdicion(paso)
     setModalOpen(true)
   }
 
   function cerrarModal(): void {
     setModalOpen(false)
     setEditandoIdLocal(null)
+    setStepInicialEdicion(undefined)
   }
 
   function confirmarTrabajo(trabajo: TrabajoEnSesion): void {
@@ -317,6 +333,7 @@ export default function MultiTrabajoPage(): React.JSX.Element {
         onClose={cerrarModal}
         onConfirmar={confirmarTrabajo}
         trabajoEditando={trabajoEditando}
+        stepInicial={stepInicialEdicion}
       />
 
       {/* -- Confirmación descartar ------------------------------------ */}

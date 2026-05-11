@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { ArrowLeft, ArrowRight, Check, Cloud, CloudOff, Loader2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Cloud, CloudOff, Loader2, Pencil, X } from 'lucide-react'
 import { cn } from '@renderer/lib/cn'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
@@ -115,7 +115,51 @@ const STEPS = [
   { key: 'resumen', label: 'Resumen' }
 ] as const
 
-type WizardStepKey = (typeof STEPS)[number]['key'] | 'precio' | 'vidrio_tipo'
+export type WizardStepKey = (typeof STEPS)[number]['key'] | 'precio' | 'vidrio_tipo'
+
+// Cálculo puro de los pasos visibles según tipo de trabajo. Fuera del
+// componente para poder llamarlo desde el initializer de useState (que
+// necesita conocer los pasos del tipoTrabajo actual para resolver el
+// índice de `stepInicial`).
+function computeVisibleSteps(
+  tipoTrabajo: TipoTrabajo
+): { key: WizardStepKey; label: string }[] {
+  if (tipoTrabajo === 'enmarcacion_estandar') return [...STEPS]
+  if (tipoTrabajo === 'restauracion') {
+    return [
+      { key: 'precio', label: 'Precio' },
+      { key: 'resumen', label: 'Resumen' }
+    ]
+  }
+  if (tipoTrabajo === 'vidrio_espejo') {
+    return [
+      { key: 'medidas', label: 'Medidas' },
+      { key: 'vidrio_tipo', label: 'Tipo de vidrio' },
+      { key: 'resumen', label: 'Resumen' }
+    ]
+  }
+  if (tipoTrabajo === 'acolchado') {
+    return [
+      { key: 'medidas', label: 'Medidas' },
+      { key: 'marco', label: 'Marco' },
+      { key: 'materiales', label: 'Materiales' },
+      { key: 'resumen', label: 'Resumen' }
+    ]
+  }
+  if (tipoTrabajo === 'adherido') {
+    // Fase 2 §A.6 — adherido no lleva marco/vidrio/paspartú, solo la
+    // lámina pegada al MDF. Flujo mínimo: medidas → materiales → resumen.
+    return [
+      { key: 'medidas', label: 'Medidas' },
+      { key: 'materiales', label: 'Materiales' },
+      { key: 'resumen', label: 'Resumen' }
+    ]
+  }
+  // Retablo, bastidor, tapa: medidas + materiales + resumen (sin marco/opciones).
+  return [...STEPS].filter(
+    (wizardStep) => wizardStep.key !== 'marco' && wizardStep.key !== 'opciones'
+  )
+}
 
 // Resultado del wizard en modo embed: tipo de trabajo concreto + datos
 // suficientes para que el padre construya el TrabajoCotizado del IPC
@@ -142,6 +186,12 @@ type WizardShellProps = {
   onConfirmarEmbed?: (trabajo: TrabajoConfirmadoEmbed) => void
   /** Datos pre-cargados para edición de un trabajo existente. Solo modo embed. */
   initialData?: Partial<WizardData>
+  /** Paso en el que arrancar. Por defecto arranca en el primero. Útil al
+   *  editar un trabajo existente: el usuario abre directamente el paso que
+   *  quiere cambiar (marco, medidas, resumen) en lugar de re-recorrer
+   *  el wizard completo. Si la key no existe en los pasos visibles para
+   *  este tipoTrabajo, se ignora silenciosamente y arranca en 0. */
+  stepInicial?: WizardStepKey
 }
 
 export function WizardShell({
@@ -151,10 +201,16 @@ export function WizardShell({
   onClienteChange,
   modo = 'pedido-completo',
   onConfirmarEmbed,
-  initialData
+  initialData,
+  stepInicial
 }: WizardShellProps): React.JSX.Element {
   const isEmbed = modo === 'embed'
-  const [step, setStep] = useState(0)
+  const [step, setStep] = useState(() => {
+    if (!stepInicial) return 0
+    const steps = computeVisibleSteps(tipoTrabajo)
+    const idx = steps.findIndex((s) => s.key === stepInicial)
+    return idx >= 0 ? idx : 0
+  })
   // Dirección del último cambio de paso, para escoger el keyframe de
   // entrada (right→ avance, ←left retroceso). Se aplica al wrapper
   // envuelto con key del step actual para forzar re-mount + animación.
@@ -417,40 +473,7 @@ export function WizardShell({
     ]
   )
 
-  const isEnmarcacion = tipoTrabajo === 'enmarcacion_estandar'
-  const esManual = tipoTrabajo === 'restauracion'
-
-  const visibleSteps: { key: WizardStepKey; label: string }[] = isEnmarcacion
-    ? [...STEPS]
-    : esManual
-      ? [
-          { key: 'precio', label: 'Precio' },
-          { key: 'resumen', label: 'Resumen' }
-        ]
-      : tipoTrabajo === 'vidrio_espejo'
-        ? [
-            { key: 'medidas', label: 'Medidas' },
-            { key: 'vidrio_tipo', label: 'Tipo de vidrio' },
-            { key: 'resumen', label: 'Resumen' }
-          ]
-        : tipoTrabajo === 'acolchado'
-          ? [
-              { key: 'medidas', label: 'Medidas' },
-              { key: 'marco', label: 'Marco' },
-              { key: 'materiales', label: 'Materiales' },
-              { key: 'resumen', label: 'Resumen' }
-            ]
-          : tipoTrabajo === 'adherido'
-            ? [
-                // Fase 2 §A.6 — adherido no lleva marco/vidrio/paspartú, solo la
-                // lámina pegada al MDF. Flujo mínimo: medidas → materiales → resumen.
-                { key: 'medidas', label: 'Medidas' },
-                { key: 'materiales', label: 'Materiales' },
-                { key: 'resumen', label: 'Resumen' }
-              ]
-            : STEPS.filter(
-                (wizardStep) => wizardStep.key !== 'marco' && wizardStep.key !== 'opciones'
-              )
+  const visibleSteps = computeVisibleSteps(tipoTrabajo)
 
   const currentStep = visibleSteps[step]
   const canContinue = canContinueFromStep(currentStep?.key, data, cotizacion)
@@ -542,6 +565,25 @@ export function WizardShell({
                   }}
                 />
               </div>
+
+              {/* Banner de modo edición — solo en embed cuando se reciben
+                  datos pre-cargados (es decir, el padre abrió este wizard
+                  para editar un trabajo existente, no para agregar uno
+                  nuevo). Recuerda al dueño que los puntos de arriba son
+                  navegables — antes de los botones rápidos del lista, era
+                  común que el dueño no se diera cuenta y recorriera los
+                  5 pasos para cambiar una sola cosa. */}
+              {isEmbed && initialData && (
+                <div className="mb-4 px-2">
+                  <div className="rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent-strong flex items-center gap-2">
+                    <Pencil size={14} className="shrink-0" />
+                    <span>
+                      <strong>Editando un trabajo existente.</strong> Toca cualquier paso de arriba
+                      para saltar directo a lo que quieras cambiar.
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <GuidanceHint
                 tone={stepGuidance.tone}
