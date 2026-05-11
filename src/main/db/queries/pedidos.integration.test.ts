@@ -1655,6 +1655,227 @@ describe.runIf(nativeAbiAvailable)('crearPedidoDirecto', () => {
     expect(db.select().from(pedidos).all()).toHaveLength(0)
   })
 
+  // ---------------------------------------------------------------------------
+  // v2.3.0 — pedido directo con múltiples trabajos (items agrupados).
+  // El frontend manda `trabajoIdLocal` (UUID) + `trabajoNombre` por item.
+  // El backend mapea idLocal → trabajoId 1-indexed y persiste en
+  // pedido_items.metadata. Si hay ≥2 trabajos distintos, tipoTrabajo='mixto'.
+  // ---------------------------------------------------------------------------
+
+  it('items sin trabajoIdLocal → comportamiento compat (sin trabajoId en metadata)', () => {
+    const result = crearPedidoDirecto(db, inputBase())
+    expect(result.pedido.tipoTrabajo).toBe('enmarcacion_estandar')
+    const items = db.select().from(pedidoItems).where(eq(pedidoItems.pedidoId, result.pedido.id)).all()
+    expect(items).toHaveLength(2)
+    for (const it of items) {
+      const meta = it.metadata as Record<string, unknown> | null
+      expect(meta?.trabajoId).toBeUndefined()
+      expect(meta?.trabajoNombre).toBeUndefined()
+    }
+  })
+
+  it('1 trabajo con 2 items → tipoTrabajo del form + items con trabajoId=1 y nombre', () => {
+    const result = crearPedidoDirecto(db, {
+      ...inputBase(),
+      items: [
+        {
+          tipoItem: 'marco',
+          descripcion: 'Marco K200',
+          cantidad: 1,
+          precioUnitario: 80000,
+          trabajoIdLocal: 't-abuela',
+          trabajoNombre: 'Cuadro de la abuela'
+        },
+        {
+          tipoItem: 'vidrio',
+          descripcion: 'Vidrio antirreflectivo',
+          cantidad: 1,
+          precioUnitario: 25000,
+          trabajoIdLocal: 't-abuela',
+          trabajoNombre: 'Cuadro de la abuela'
+        }
+      ]
+    } as never)
+    expect(result.pedido.tipoTrabajo).toBe('enmarcacion_estandar')
+    const items = db.select().from(pedidoItems).where(eq(pedidoItems.pedidoId, result.pedido.id)).all()
+    expect(items).toHaveLength(2)
+    for (const it of items) {
+      const meta = it.metadata as Record<string, unknown>
+      expect(meta.trabajoId).toBe(1)
+      expect(meta.trabajoNombre).toBe('Cuadro de la abuela')
+    }
+  })
+
+  it('2 trabajos distintos → tipoTrabajo="mixto" + trabajoIds 1 y 2', () => {
+    const result = crearPedidoDirecto(db, {
+      ...inputBase(),
+      items: [
+        {
+          tipoItem: 'marco',
+          descripcion: 'Marco K200',
+          cantidad: 1,
+          precioUnitario: 80000,
+          trabajoIdLocal: 't-abuela',
+          trabajoNombre: 'Cuadro de la abuela'
+        },
+        {
+          tipoItem: 'marco',
+          descripcion: 'Marco K150',
+          cantidad: 1,
+          precioUnitario: 60000,
+          trabajoIdLocal: 't-bano',
+          trabajoNombre: 'Espejo del baño'
+        }
+      ]
+    } as never)
+    expect(result.pedido.tipoTrabajo).toBe('mixto')
+    const items = db
+      .select()
+      .from(pedidoItems)
+      .where(eq(pedidoItems.pedidoId, result.pedido.id))
+      .all()
+    const meta0 = items[0]!.metadata as Record<string, unknown>
+    const meta1 = items[1]!.metadata as Record<string, unknown>
+    expect(meta0.trabajoId).toBe(1)
+    expect(meta0.trabajoNombre).toBe('Cuadro de la abuela')
+    expect(meta1.trabajoId).toBe(2)
+    expect(meta1.trabajoNombre).toBe('Espejo del baño')
+  })
+
+  it('1 trabajo + 1 item suelto → trabajo tiene trabajoId, suelto no', () => {
+    const result = crearPedidoDirecto(db, {
+      ...inputBase(),
+      items: [
+        {
+          tipoItem: 'marco',
+          descripcion: 'Marco K200',
+          cantidad: 1,
+          precioUnitario: 80000,
+          trabajoIdLocal: 't-abuela',
+          trabajoNombre: 'Cuadro de la abuela'
+        },
+        {
+          tipoItem: 'otro',
+          descripcion: 'Transporte a domicilio',
+          cantidad: 1,
+          precioUnitario: 25000
+          // sin trabajoIdLocal: item suelto
+        }
+      ]
+    } as never)
+    // Solo 1 trabajo → tipoTrabajo del form, no 'mixto'
+    expect(result.pedido.tipoTrabajo).toBe('enmarcacion_estandar')
+    const items = db
+      .select()
+      .from(pedidoItems)
+      .where(eq(pedidoItems.pedidoId, result.pedido.id))
+      .all()
+    const conTrabajo = items.find((it) => it.descripcion === 'Marco K200')!
+    const suelto = items.find((it) => it.descripcion === 'Transporte a domicilio')!
+    expect((conTrabajo.metadata as Record<string, unknown>).trabajoId).toBe(1)
+    expect((conTrabajo.metadata as Record<string, unknown>).trabajoNombre).toBe(
+      'Cuadro de la abuela'
+    )
+    expect(suelto.metadata).toBeNull()
+  })
+
+  it('trabajoNombre vacío → backend usa "Trabajo N" como default', () => {
+    const result = crearPedidoDirecto(db, {
+      ...inputBase(),
+      items: [
+        {
+          tipoItem: 'marco',
+          descripcion: 'Marco sin nombre',
+          cantidad: 1,
+          precioUnitario: 50000,
+          trabajoIdLocal: 't-sin-nombre',
+          trabajoNombre: ''
+        }
+      ]
+    } as never)
+    const items = db
+      .select()
+      .from(pedidoItems)
+      .where(eq(pedidoItems.pedidoId, result.pedido.id))
+      .all()
+    expect((items[0]!.metadata as Record<string, unknown>).trabajoNombre).toBe('Trabajo 1')
+  })
+
+  it('trabajoNombre con whitespace solo → "Trabajo N" default', () => {
+    const result = crearPedidoDirecto(db, {
+      ...inputBase(),
+      items: [
+        {
+          tipoItem: 'marco',
+          descripcion: 'Marco',
+          cantidad: 1,
+          precioUnitario: 50000,
+          trabajoIdLocal: 't-ws',
+          trabajoNombre: '   '
+        }
+      ]
+    } as never)
+    const items = db
+      .select()
+      .from(pedidoItems)
+      .where(eq(pedidoItems.pedidoId, result.pedido.id))
+      .all()
+    expect((items[0]!.metadata as Record<string, unknown>).trabajoNombre).toBe('Trabajo 1')
+  })
+
+  it('trabajoNombre > 200 caracteres → rechaza', () => {
+    expect(() =>
+      crearPedidoDirecto(db, {
+        ...inputBase(),
+        items: [
+          {
+            tipoItem: 'marco',
+            descripcion: 'Marco',
+            cantidad: 1,
+            precioUnitario: 50000,
+            trabajoIdLocal: 't-largo',
+            trabajoNombre: 'X'.repeat(201)
+          }
+        ]
+      } as never)
+    ).toThrow(/no puede exceder 200 caracteres/i)
+  })
+
+  it('mismo trabajoIdLocal con nombres distintos → usa el primero (defense, no throws)', () => {
+    const result = crearPedidoDirecto(db, {
+      ...inputBase(),
+      items: [
+        {
+          tipoItem: 'marco',
+          descripcion: 'Marco',
+          cantidad: 1,
+          precioUnitario: 50000,
+          trabajoIdLocal: 't-mismo',
+          trabajoNombre: 'Nombre original'
+        },
+        {
+          tipoItem: 'vidrio',
+          descripcion: 'Vidrio',
+          cantidad: 1,
+          precioUnitario: 25000,
+          trabajoIdLocal: 't-mismo',
+          trabajoNombre: 'Nombre conflictivo'
+        }
+      ]
+    } as never)
+    const items = db
+      .select()
+      .from(pedidoItems)
+      .where(eq(pedidoItems.pedidoId, result.pedido.id))
+      .all()
+    for (const it of items) {
+      const meta = it.metadata as Record<string, unknown>
+      expect(meta.trabajoId).toBe(1)
+      // El primer nombre gana; el segundo se descarta con warning a stderr.
+      expect(meta.trabajoNombre).toBe('Nombre original')
+    }
+  })
+
   it('rechaza costoUnitarioEstimado * cantidad no-finito', () => {
     expect(() =>
       crearPedidoDirecto(

@@ -596,7 +596,60 @@ export function crearPedidoDirecto(
         min: 0
       })
     }
+    // v2.3.0 — validar trabajoNombre si está presente (longitud razonable,
+    // protege la factura PDF de strings absurdamente largos que rompan el
+    // layout). Si llega null/undefined, se permite (item suelto).
+    if (item.trabajoNombre != null) {
+      if (typeof item.trabajoNombre !== 'string') {
+        throw new Error(`Item #${i + 1}: trabajoNombre debe ser texto`)
+      }
+      if (item.trabajoNombre.length > 200) {
+        throw new Error(`Item #${i + 1}: el nombre del trabajo no puede exceder 200 caracteres`)
+      }
+    }
   }
+
+  // v2.3.0 — Mapeo de trabajos: el frontend usa UUIDs (`trabajoIdLocal`) para
+  // agrupar items que pertenecen al mismo "trabajo" (ej. "Cuadro de la
+  // abuela"). Aquí los convertimos a `trabajoId` numérico 1-indexed (el
+  // formato que ya usa el flujo multi-trabajo del cotizador desde v2.2.0).
+  // Items sin `trabajoIdLocal` son "sueltos" — no llevan `trabajoId` en
+  // metadata, comportamiento idéntico al pre-v2.3.0.
+  const mapaTrabajos = new Map<string, { trabajoId: number; nombre: string }>()
+  let trabajoIdCounter = 0
+  for (const [i, item] of input.items.entries()) {
+    if (!item.trabajoIdLocal) continue
+    if (!mapaTrabajos.has(item.trabajoIdLocal)) {
+      // Nombre del trabajo: viene del primer item con este idLocal. Si está
+      // vacío o es solo whitespace, default a "Trabajo N" (consistente con
+      // la regla de UX). Items subsiguientes con el mismo idLocal pueden
+      // venir con otro nombre — usamos el primero (defense + log).
+      trabajoIdCounter += 1
+      const nombreCrudo = (item.trabajoNombre ?? '').trim()
+      const nombre = nombreCrudo.length > 0 ? nombreCrudo : `Trabajo ${trabajoIdCounter}`
+      mapaTrabajos.set(item.trabajoIdLocal, { trabajoId: trabajoIdCounter, nombre })
+    } else {
+      // Defense in depth: si dos items con el mismo trabajoIdLocal traen
+      // nombres distintos, conservamos el primero pero advertimos. Un
+      // frontend bien implementado nunca debería caer aquí.
+      const existente = mapaTrabajos.get(item.trabajoIdLocal)!
+      const nombreActual = (item.trabajoNombre ?? '').trim()
+      if (nombreActual && nombreActual !== existente.nombre) {
+        console.warn(
+          `[crearPedidoDirecto] Item #${i + 1} tiene trabajoNombre "${nombreActual}" pero el trabajo ${existente.trabajoId} ya estaba registrado con nombre "${existente.nombre}". Usando el primero.`
+        )
+      }
+    }
+  }
+
+  // Si hay trabajos definidos, validar que cada uno tenga ≥1 item. (Por
+  // construcción del map siempre hay ≥1, pero por defense lo verificamos.)
+  // Además: si hay ≥2 trabajos distintos, el tipoTrabajo del pedido se
+  // reemplaza por 'mixto' (consistente con `crearPedidoMultiTrabajo`).
+  const hayMultipleTrabajos = mapaTrabajos.size >= 2
+  const tipoTrabajoPedido: typeof input.pedido.tipoTrabajo = hayMultipleTrabajos
+    ? 'mixto'
+    : input.pedido.tipoTrabajo
 
   // ---- 2. Cálculos derivados ----
   // Cada producto/suma se re-valida con validarMonto. Inputs finitos pueden
@@ -675,7 +728,7 @@ export function crearPedidoDirecto(
       .values({
         numero,
         clienteId,
-        tipoTrabajo: input.pedido.tipoTrabajo,
+        tipoTrabajo: tipoTrabajoPedido,
         descripcion: input.pedido.descripcion ?? null,
         anchoCm: input.pedido.anchoCm ?? null,
         altoCm: input.pedido.altoCm ?? null,
@@ -720,6 +773,18 @@ export function crearPedidoDirecto(
               min: 0
             })
           : null
+      // v2.3.0 — Enriquecer metadata con info del trabajo si el item lo trae.
+      // Mergeamos sobre cualquier metadata previa (geometría, etc.). Items
+      // sin trabajoIdLocal quedan con su metadata original (o null) —
+      // comportamiento pre-v2.3.0 intacto para pedidos directos "simples".
+      const trabajoInfo = item.trabajoIdLocal ? mapaTrabajos.get(item.trabajoIdLocal) : undefined
+      const metadataFinal = trabajoInfo
+        ? {
+            ...(item.metadata ?? {}),
+            trabajoId: trabajoInfo.trabajoId,
+            trabajoNombre: trabajoInfo.nombre
+          }
+        : (item.metadata ?? null)
       // Mapeo: si el caller manda 'otro', guardamos 'otro' en el enum.
       // Ese valor ya está en TIPOS_ITEM_PEDIDO por compatibilidad histórica.
       tx.insert(pedidoItems)
@@ -733,7 +798,7 @@ export function crearPedidoDirecto(
           costoUnitarioEstimado: item.costoUnitarioEstimado ?? null,
           subtotal: subtotalItem,
           subtotalCostoEstimado: subtotalCosto,
-          metadata: item.metadata ?? null
+          metadata: metadataFinal
         })
         .run()
     }
