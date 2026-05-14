@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { initDb } from './db'
 import { runMigrations } from './db/migrate'
 import { ensureConfigInicial } from './db/seed'
+import { sanitizeConfigOnBoot } from './db/sanitize-config'
 import { getConfig, setConfig } from './db/queries/configuracion'
 import { registerIpcHandlers } from './ipc'
 import { reclasificarPedidos } from './db/queries/pedidos'
@@ -123,6 +124,12 @@ app.whenReady().then(() => {
     // de ejemplo, debe elegirlo explícitamente en el wizard de onboarding
     // vía IPC `app:loadDemoData`.
     ensureConfigInicial(db)
+    // v2.3.1 — sanea claves de configuración numéricas con valores fuera
+    // de rango (defense in depth contra Excel importado pre-fix del
+    // informe de seguridad sobre 7f37f5b). Idempotente: si la DB está
+    // limpia, no hace nada. Si encuentra corrupción, restaura al default
+    // del seed y loguea cada clave restaurada para auditoría.
+    sanitizeConfigOnBoot(db)
     registerIpcHandlers(db)
 
     // Tareas automáticas de arranque (idempotentes):

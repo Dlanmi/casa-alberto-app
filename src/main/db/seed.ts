@@ -28,7 +28,7 @@ import { crearPedidoDesdeCotizacion, cambiarEstadoPedido } from './queries/pedid
 import { crearFactura, registrarPago } from './queries/facturas'
 import { crearEstudiante, registrarPagoClase, venderKit } from './queries/clases'
 
-const CONFIG_INICIAL: { clave: string; valor: string; descripcion: string }[] = [
+export const CONFIG_INICIAL: { clave: string; valor: string; descripcion: string }[] = [
   // Valores vacíos en instalación real. El usuario los completa en el
   // wizard de onboarding. No pre-llenamos el nombre del negocio para que
   // no se sienta "identidad asumida" por el dueño.
