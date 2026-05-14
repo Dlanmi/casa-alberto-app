@@ -20,6 +20,12 @@ import {
   METODOS_PAGO
 } from '@shared/types'
 import { validarWizardData } from '../wizard/wizard-data-validation'
+import {
+  esEnum,
+  esNumeroFinito,
+  esObjeto,
+  esString
+} from '@renderer/lib/runtime-validators'
 import type {
   AbonoEnSesion,
   DescuentoEnSesion,
@@ -27,30 +33,20 @@ import type {
   TrabajoEnSesion
 } from './types'
 
-// -- Predicados primitivos --------------------------------------------------
-
-function esObjeto(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
-
-function esNumeroFinito(v: unknown): v is number {
-  return typeof v === 'number' && Number.isFinite(v)
-}
-
-function esString(v: unknown): v is string {
-  return typeof v === 'string'
-}
-
+// Predicados específicos del dominio multi-trabajo. Los primitivos
+// (`esObjeto`, `esNumeroFinito`, `esString`, `esEnum`) viven en
+// `@renderer/lib/runtime-validators` compartidos con el resto de
+// validators del proyecto.
 function esTipoTrabajoConcreto(v: unknown): v is TipoTrabajoConcreto {
-  return esString(v) && (TIPOS_TRABAJO_CONCRETO as readonly string[]).includes(v)
+  return esEnum(v, TIPOS_TRABAJO_CONCRETO)
 }
 
 function esTipoEntrega(v: unknown): v is TipoEntrega {
-  return esString(v) && (TIPOS_ENTREGA as readonly string[]).includes(v)
+  return esEnum(v, TIPOS_ENTREGA)
 }
 
 function esMetodoPago(v: unknown): boolean {
-  return esString(v) && (METODOS_PAGO as readonly string[]).includes(v)
+  return esEnum(v, METODOS_PAGO)
 }
 
 // -- Validadores de shape compuesto ----------------------------------------

@@ -4,23 +4,17 @@
 // antes de aceptar un draft de localStorage). Política: si CUALQUIER campo
 // requerido está malformado se devuelve `undefined` y el caller descarta
 // el draft entero.
+//
+// Los predicados primitivos (esObjeto, esString, etc.) viven en
+// `@renderer/lib/runtime-validators` compartidos con el resto de
+// validators del proyecto. Antes estaban duplicados aquí.
 import type { WizardData } from './wizard-shell'
-
-function esObjeto(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
-
-function esNumeroFinito(v: unknown): v is number {
-  return typeof v === 'number' && Number.isFinite(v)
-}
-
-function esString(v: unknown): v is string {
-  return typeof v === 'string'
-}
-
-function esBool(v: unknown): v is boolean {
-  return typeof v === 'boolean'
-}
+import {
+  esBool,
+  esNumeroFinito,
+  esObjeto,
+  esString
+} from '@renderer/lib/runtime-validators'
 
 export function validarWizardData(v: unknown): WizardData | undefined {
   if (!esObjeto(v)) return undefined
