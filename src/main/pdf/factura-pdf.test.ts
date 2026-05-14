@@ -6,7 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { abrirPDF, generarFacturaPDF, sanitizePdfText, NUMERO_REGEX } from './factura-pdf'
+import {
+  abrirPDF,
+  agruparItemsPorTrabajo,
+  decidirMostrarHeaders,
+  generarFacturaPDF,
+  sanitizePdfText,
+  NUMERO_REGEX,
+  type GrupoFactura
+} from './factura-pdf'
 
 // vi.mock es hoisted al top del archivo, así que las variables de estado
 // que el mock necesita compartir con el test deben declararse con vi.hoisted.
@@ -208,5 +216,150 @@ describe('generarFacturaPDF — validación del formato (defense in depth)', () 
     expect(() => generarFacturaPDF(fakeDb, makeData('termico80'))).not.toThrow(
       /Formato de PDF inválido/i
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Bug del informe sobre b206a5f — headers de grupo cuando hay 1 trabajo +
+// items sueltos quedaban omitidos en ambos formatos (carta y térmico).
+// Auditoría reveló bug paralelo: térmico nunca mostraba header "Otros".
+// ---------------------------------------------------------------------------
+
+function grupoTrabajo(id: number, nombre: string, itemsCount = 1): GrupoFactura {
+  const items = Array.from({ length: itemsCount }, (_, i) => ({
+    descripcion: `Item ${i + 1}`,
+    cantidad: 1,
+    precioUnitario: 10000,
+    subtotal: 10000,
+    trabajoId: id,
+    trabajoNombre: nombre
+  }))
+  return { trabajoId: id, items, nombre }
+}
+
+function grupoSueltos(itemsCount = 1): GrupoFactura {
+  const items = Array.from({ length: itemsCount }, (_, i) => ({
+    descripcion: `Suelto ${i + 1}`,
+    cantidad: 1,
+    precioUnitario: 5000,
+    subtotal: 5000
+  }))
+  return { trabajoId: null, items }
+}
+
+describe('decidirMostrarHeaders — matriz de casos del informe', () => {
+  it('0 trabajos, todos sueltos → false (compat pedido directo simple)', () => {
+    expect(decidirMostrarHeaders([grupoSueltos(3)])).toBe(false)
+  })
+
+  it('1 trabajo, 0 sueltos → false (single trabajo, no aporta diferenciar)', () => {
+    expect(decidirMostrarHeaders([grupoTrabajo(1, 'Cuadro', 3)])).toBe(false)
+  })
+
+  it('1 trabajo + 1 suelto → true (BUG-FIX del informe)', () => {
+    expect(
+      decidirMostrarHeaders([grupoTrabajo(1, 'Cuadro de la abuela'), grupoSueltos(1)])
+    ).toBe(true)
+  })
+
+  it('1 trabajo + varios sueltos → true', () => {
+    expect(decidirMostrarHeaders([grupoTrabajo(1, 'Cuadro'), grupoSueltos(3)])).toBe(true)
+  })
+
+  it('2 trabajos sin sueltos → true (multi-trabajo)', () => {
+    expect(
+      decidirMostrarHeaders([grupoTrabajo(1, 'Cuadro A'), grupoTrabajo(2, 'Cuadro B')])
+    ).toBe(true)
+  })
+
+  it('2 trabajos + sueltos → true', () => {
+    expect(
+      decidirMostrarHeaders([
+        grupoTrabajo(1, 'A'),
+        grupoTrabajo(2, 'B'),
+        grupoSueltos(1)
+      ])
+    ).toBe(true)
+  })
+
+  it('grupo de sueltos vacío no cuenta (defense)', () => {
+    // Si por algún edge case llega un grupo `null` con 0 items, no cuenta
+    // como "hay sueltos" — sin headers para el único trabajo.
+    expect(decidirMostrarHeaders([grupoTrabajo(1, 'X'), grupoSueltos(0)])).toBe(false)
+  })
+
+  it('array vacío → false', () => {
+    expect(decidirMostrarHeaders([])).toBe(false)
+  })
+})
+
+describe('agruparItemsPorTrabajo — orden y captura de metadata', () => {
+  it('items sin trabajoId → un solo grupo null', () => {
+    const grupos = agruparItemsPorTrabajo([
+      { descripcion: 'A', cantidad: 1, precioUnitario: 100, subtotal: 100 },
+      { descripcion: 'B', cantidad: 1, precioUnitario: 200, subtotal: 200 }
+    ])
+    expect(grupos).toHaveLength(1)
+    expect(grupos[0]!.trabajoId).toBeNull()
+    expect(grupos[0]!.items).toHaveLength(2)
+  })
+
+  it('captura trabajoNombre del primer item del grupo', () => {
+    const grupos = agruparItemsPorTrabajo([
+      {
+        descripcion: 'Marco',
+        cantidad: 1,
+        precioUnitario: 100,
+        subtotal: 100,
+        trabajoId: 1,
+        trabajoNombre: 'Cuadro de la abuela'
+      },
+      {
+        descripcion: 'Vidrio',
+        cantidad: 1,
+        precioUnitario: 50,
+        subtotal: 50,
+        trabajoId: 1,
+        trabajoNombre: 'Cuadro de la abuela'
+      }
+    ])
+    expect(grupos).toHaveLength(1)
+    expect(grupos[0]!.nombre).toBe('Cuadro de la abuela')
+  })
+
+  it('ordena trabajos por trabajoId ascendente; null al final', () => {
+    const grupos = agruparItemsPorTrabajo([
+      { descripcion: 'B', cantidad: 1, precioUnitario: 100, subtotal: 100, trabajoId: 2 },
+      { descripcion: 'X', cantidad: 1, precioUnitario: 50, subtotal: 50 }, // suelto
+      { descripcion: 'A', cantidad: 1, precioUnitario: 100, subtotal: 100, trabajoId: 1 }
+    ])
+    expect(grupos.map((g) => g.trabajoId)).toEqual([1, 2, null])
+  })
+
+  it('items con trabajoNombre + items sueltos coexisten en grupos distintos', () => {
+    // Este es el caso del informe: 1 trabajo + 1 suelto.
+    const grupos = agruparItemsPorTrabajo([
+      {
+        descripcion: 'Marco',
+        cantidad: 1,
+        precioUnitario: 80000,
+        subtotal: 80000,
+        trabajoId: 1,
+        trabajoNombre: 'Cuadro'
+      },
+      {
+        descripcion: 'Transporte',
+        cantidad: 1,
+        precioUnitario: 25000,
+        subtotal: 25000
+      }
+    ])
+    expect(grupos).toHaveLength(2)
+    expect(grupos[0]!.trabajoId).toBe(1)
+    expect(grupos[0]!.nombre).toBe('Cuadro')
+    expect(grupos[1]!.trabajoId).toBeNull()
+    expect(grupos[1]!.items[0]!.descripcion).toBe('Transporte')
+    // Y la decisión de mostrar headers en ese caso es true (BUG-FIX).
+    expect(decidirMostrarHeaders(grupos)).toBe(true)
   })
 })

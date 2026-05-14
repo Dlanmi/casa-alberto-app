@@ -75,7 +75,7 @@ const TIPO_TRABAJO_LABEL_PDF: Record<string, string> = {
  * Agrupa items por `trabajoId` preservando el orden original. Items sin
  * trabajoId (ej. descuento global) van al grupo `null` al final.
  */
-type GrupoFactura = {
+export type GrupoFactura = {
   trabajoId: number | null
   items: FacturaItem[]
   tipoTrabajo?: string
@@ -84,7 +84,7 @@ type GrupoFactura = {
   nombre?: string
 }
 
-function agruparItemsPorTrabajo(items: FacturaItem[]): GrupoFactura[] {
+export function agruparItemsPorTrabajo(items: FacturaItem[]): GrupoFactura[] {
   const grupos = new Map<number | null, GrupoFactura>()
   for (const item of items) {
     const key = item.trabajoId ?? null
@@ -106,6 +106,31 @@ function agruparItemsPorTrabajo(items: FacturaItem[]): GrupoFactura[] {
     if (b.trabajoId === null) return -1
     return a.trabajoId - b.trabajoId
   })
+}
+
+/**
+ * Regla unificada para decidir si la factura PDF debe mostrar sub-headers
+ * de agrupación. Aplica tanto al formato carta/A4 como al térmico.
+ *
+ * Mostrar headers cuando hay ≥2 GRUPOS visibles y al menos uno tiene
+ * `trabajoId` (sino no hay nada que diferenciar). Casos cubiertos:
+ *
+ *   - 0 trabajos, todos items sueltos       → false (compat pre-v2.3.0)
+ *   - 1 trabajo, sin items sueltos          → false (single trabajo, no
+ *                                                    aporta separar)
+ *   - 1 trabajo + items sueltos             → TRUE  (BUG-FIX del informe
+ *                                                    sobre b206a5f)
+ *   - ≥2 trabajos                           → true  (multi-trabajo)
+ *
+ * Antes, `renderFormatoPagina` y `renderFormatoTermico` tenían cada uno
+ * su versión inline con la condición `> 1`, que dejaba "1 trabajo + 1
+ * item suelto" sin headers en ambos formatos. El informe lo detectó en
+ * formato carta; la auditoría confirmó el mismo bug en térmico.
+ */
+export function decidirMostrarHeaders(grupos: GrupoFactura[]): boolean {
+  const trabajosConId = grupos.filter((g) => g.trabajoId !== null).length
+  const hayItemsSueltos = (grupos.find((g) => g.trabajoId === null)?.items.length ?? 0) > 0
+  return trabajosConId > 1 || (trabajosConId >= 1 && hayItemsSueltos)
 }
 
 function getConfig(db: DB, clave: string): string {
@@ -199,28 +224,24 @@ function renderFormatoPagina(doc: PDFKit.PDFDocument, data: FacturaData, negocio
     .lineTo(pageRight, tableTop + 14)
     .stroke('#e7e5e4')
 
-  // Items — agrupados por trabajoId si el pedido es multi-trabajo. Cuando
-  // todos los items tienen trabajoId === undefined (pedido pre-v2.2.0 o
-  // single trabajo), se renderiza como antes sin sub-headers.
+  // Items — agrupados por trabajoId si el pedido amerita mostrar headers
+  // (ver `decidirMostrarHeaders` para la regla). Casos sin agrupación
+  // visible (pedido directo simple, single trabajo sin sueltos) se
+  // renderizan plano como antes de v2.3.0.
   let y = tableTop + 20
   const grupos = agruparItemsPorTrabajo(data.items)
-  const esMultiTrabajo = grupos.filter((g) => g.trabajoId !== null).length > 1
-
-  // Hay items sueltos cuando el grupo con trabajoId=null tiene contenido Y
-  // coexiste con trabajos definidos. Solo en ese caso mostramos el header
-  // "Otros" para distinguirlos visualmente. Si TODO el pedido es sin
-  // trabajos (caso pedido directo simple), no mostramos header.
-  const grupoSueltos = grupos.find((g) => g.trabajoId === null)
-  const hayItemsSueltos = (grupoSueltos?.items.length ?? 0) > 0
+  const mostrarHeaders = decidirMostrarHeaders(grupos)
 
   for (const grupo of grupos) {
-    const esGrupoConTrabajo = grupo.trabajoId !== null
-    const mostrarHeader =
-      (esMultiTrabajo && esGrupoConTrabajo) ||
-      // Header "Otros" solo cuando coexisten items sueltos con ≥1 trabajo.
-      (esMultiTrabajo && !esGrupoConTrabajo && hayItemsSueltos)
+    // Guard contra grupos vacíos: no renderizar header de un grupo sin
+    // items aunque `mostrarHeaders` sea true (defense — agruparItemsPorTrabajo
+    // no debería producirlos, pero por si acaso).
+    if (grupo.items.length === 0) continue
 
-    if (mostrarHeader) {
+    const esGrupoConTrabajo = grupo.trabajoId !== null
+    const mostrarHeaderEsteGrupo = mostrarHeaders
+
+    if (mostrarHeaderEsteGrupo) {
       let textoHeader: string
       if (esGrupoConTrabajo) {
         // v2.3.0 — preferir nombre libre del trabajo (pedido directo) por
@@ -258,7 +279,7 @@ function renderFormatoPagina(doc: PDFKit.PDFDocument, data: FacturaData, negocio
       doc.text(formatCOP(item.subtotal), col.sub, y)
       y += 16
     }
-    if (mostrarHeader) {
+    if (mostrarHeaderEsteGrupo) {
       // Espacio extra entre grupos para separación visual.
       y += 4
     }
@@ -386,20 +407,40 @@ function renderFormatoTermico(doc: PDFKit.PDFDocument, data: FacturaData, negoci
   doc.moveDown(0.1)
 
   // Items — formato vertical: descripcion arriba, cant × unit y subtotal abajo.
-  // Si el pedido tiene varios trabajos, sub-headers compactos por grupo.
+  // Si el pedido amerita agrupación (ver `decidirMostrarHeaders`), sub-headers
+  // compactos por grupo. Antes esta función tenía dos bugs:
+  //   (1) Misma condición rota `> 1` del informe sobre formato carta.
+  //   (2) NUNCA mostraba header "Otros" para items sueltos, ni siquiera con
+  //       ≥2 trabajos. Resultado: en multi-trabajo con sueltos, los sueltos
+  //       se mezclaban silenciosamente al final.
+  //   (3) Ignoraba `trabajoNombre` de v2.3.0 — pedido directo con
+  //       "Cuadro de la abuela" mostraba "Trabajo 1 · Enmarcación".
+  // Ahora ambos formatos usan la misma decisión + mismo formato de header.
   doc.fontSize(7).font('Helvetica')
   const gruposTerm = agruparItemsPorTrabajo(data.items)
-  const esMultiTerm = gruposTerm.filter((g) => g.trabajoId !== null).length > 1
+  const mostrarHeadersTerm = decidirMostrarHeaders(gruposTerm)
   for (const grupo of gruposTerm) {
-    if (esMultiTerm && grupo.trabajoId !== null) {
-      const tipoLabel = grupo.tipoTrabajo
-        ? (TIPO_TRABAJO_LABEL_PDF[grupo.tipoTrabajo] ?? grupo.tipoTrabajo)
-        : ''
+    if (grupo.items.length === 0) continue
+
+    if (mostrarHeadersTerm) {
+      let textoHeader: string
+      if (grupo.trabajoId !== null) {
+        if (grupo.nombre) {
+          textoHeader = grupo.nombre
+        } else {
+          const tipoLabel = grupo.tipoTrabajo
+            ? (TIPO_TRABAJO_LABEL_PDF[grupo.tipoTrabajo] ?? grupo.tipoTrabajo)
+            : ''
+          textoHeader = `Trabajo ${grupo.trabajoId} · ${tipoLabel}`.trimEnd()
+        }
+      } else {
+        textoHeader = 'Otros'
+      }
       doc
         .fontSize(7)
         .font('Helvetica-Bold')
         .fillColor('#57534e')
-        .text(`-- Trabajo ${grupo.trabajoId} · ${tipoLabel} --`, margin, doc.y, {
+        .text(`-- ${textoHeader} --`, margin, doc.y, {
           width: usable,
           align: 'center'
         })
