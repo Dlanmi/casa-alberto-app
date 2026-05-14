@@ -21,45 +21,105 @@ export function getConfigNumber(db: DB, clave: string, fallback = 0): number {
   return parseConfigNumber(getConfig(db, clave), fallback)
 }
 
-const CLAVES_NUMERICAS = [
-  'precio_clase_mensual',
-  'precio_kit_dibujo',
-  'porcentaje_materiales_default',
-  'tiempo_entrega_default',
-  'dias_entrega_urgente',
-  'dias_entrega_estandar',
-  'dias_entrega_sin_afan',
-  'consecutivo_facturas',
-  'consecutivo_pedidos',
-  'consecutivo_contratos'
-]
+// Spec de dominio por clave numérica de la tabla `configuracion`.
+// Antes había dos arrays sueltos (CLAVES_NUMERICAS + CLAVES_DIAS) y la
+// validación estaba inline en setConfig — esa duplicación era frágil:
+// el Excel importer escribía con su propio set de validaciones distintas
+// (bug del informe sobre 7f37f5b), generando dos paths con dominios
+// inconsistentes.
+//
+// Ahora la spec vive en UN solo lugar y la consumen:
+//   1. `setConfig` (este archivo) — escritura por IPC.
+//   2. `parseConfiguracion` (excel/plantilla.ts) — pre-validación de Excel.
+//   3. `cargarPlantilla` (excel/plantilla.ts) — escritura desde Excel,
+//       ahora también pasa por `setConfig`.
+//   4. `sanitizeConfigOnBoot` (db/sanitize-config.ts) — limpieza al boot
+//       de DBs que tienen valores corruptos de versiones anteriores.
+//
+// Rangos elegidos:
+// - Días (entero 0-365): un año cubre el tiempo más largo razonable de
+//   entrega. Negativos generan fechas en el pasado; >365 generan fechas
+//   absurdas en el futuro.
+// - Porcentajes: rangos del dominio (5-10 para materiales adicionales
+//   está en Fase 2, 0-100 para márgenes y costos genéricos).
+// - Precios: hasta 100M COP por unidad (un kit/clase no debería costar
+//   más; valores mayores casi seguro son typo o ataque).
+// - Consecutivos: enteros ≥1, máx 999M (consecutivos enteros razonables).
+export type ClaveSpec = {
+  min: number
+  max: number
+  entero?: boolean
+  /** Etiqueta legible para mensajes de error. */
+  unidad?: string
+}
 
-// Claves que representan cantidades de días. La app las usa para sugerir
-// fechas de entrega — un valor absurdo (Infinity, decimal, 99.999) generaría
-// fechas inválidas. Las acotamos a un año entero. Aplica el mismo género de
-// hardening del incidente Infinity en pedidos multi-trabajo (v2.2.1).
-const CLAVES_DIAS = new Set([
-  'tiempo_entrega_default',
-  'dias_entrega_urgente',
-  'dias_entrega_estandar',
-  'dias_entrega_sin_afan'
-])
-const DIAS_MAX = 365
+export const SPEC_NUMERICAS: Record<string, ClaveSpec> = {
+  // Días sugeridos de entrega.
+  tiempo_entrega_default: { min: 0, max: 365, entero: true, unidad: 'días' },
+  dias_entrega_urgente: { min: 0, max: 365, entero: true, unidad: 'días' },
+  dias_entrega_estandar: { min: 0, max: 365, entero: true, unidad: 'días' },
+  dias_entrega_sin_afan: { min: 0, max: 365, entero: true, unidad: 'días' },
+  // Porcentajes (rangos del dominio de Fase 2).
+  porcentaje_materiales_default: { min: 5, max: 10, unidad: '%' },
+  porcentaje_costo_materiales_armado_default: { min: 0, max: 100, unidad: '%' },
+  margen_minimo_alerta_pct: { min: 0, max: 100, unidad: '%' },
+  // Precios (COP). Tope de 100M previene typos como "100000000000".
+  precio_clase_mensual: { min: 0, max: 100_000_000, unidad: 'COP' },
+  precio_kit_dibujo: { min: 0, max: 100_000_000, unidad: 'COP' },
+  // Consecutivos: enteros ≥1, tope arbitrariamente grande.
+  consecutivo_facturas: { min: 1, max: 999_999_999, entero: true },
+  consecutivo_pedidos: { min: 1, max: 999_999_999, entero: true },
+  consecutivo_contratos: { min: 1, max: 999_999_999, entero: true },
+  consecutivo_cuentas_cobro: { min: 1, max: 999_999_999, entero: true }
+}
+
+// Resultado de la validación de dominio. Si `ok=true`, `valor` es el
+// número parseado y normalizado; si `ok=false`, `error` contiene el
+// mensaje listo para mostrar al usuario.
+export type ResultadoValidacion =
+  | { ok: true; valor: number }
+  | { ok: false; error: string }
+
+/**
+ * Valida un valor crudo (string del Excel o del IPC) contra la spec de
+ * la clave. Si la clave NO está en `SPEC_NUMERICAS`, retorna ok=true sin
+ * validar (las strings libres como `nombre_negocio` pasan).
+ */
+export function validarValorConfig(clave: string, valor: string): ResultadoValidacion {
+  const spec = SPEC_NUMERICAS[clave]
+  if (!spec) return { ok: true, valor: Number.NaN } // no es numérica, no aplica
+  const n = parseFloat(valor)
+  if (!Number.isFinite(n)) {
+    return {
+      ok: false,
+      error: `El valor de "${clave}" debe ser un número válido (recibido: "${valor}")`
+    }
+  }
+  if (spec.entero && !Number.isInteger(n)) {
+    return {
+      ok: false,
+      error: `El valor de "${clave}" debe ser un número entero${spec.unidad ? ' de ' + spec.unidad : ''}`
+    }
+  }
+  if (n < spec.min) {
+    return {
+      ok: false,
+      error: `El valor de "${clave}" no puede ser menor a ${spec.min}${spec.unidad ? ' ' + spec.unidad : ''}`
+    }
+  }
+  if (n > spec.max) {
+    return {
+      ok: false,
+      error: `El valor de "${clave}" no puede ser mayor a ${spec.max}${spec.unidad ? ' ' + spec.unidad : ''}`
+    }
+  }
+  return { ok: true, valor: n }
+}
 
 export function setConfig(db: DB, clave: string, valor: string, descripcion?: string): void {
-  if (CLAVES_NUMERICAS.includes(clave)) {
-    const n = parseFloat(valor)
-    if (isNaN(n) || n < 0) {
-      throw new Error(`El valor de "${clave}" debe ser un número válido mayor o igual a 0`)
-    }
-    if (CLAVES_DIAS.has(clave)) {
-      if (!Number.isInteger(n)) {
-        throw new Error(`El valor de "${clave}" debe ser un número entero de días`)
-      }
-      if (n > DIAS_MAX) {
-        throw new Error(`El valor de "${clave}" no puede ser mayor a ${DIAS_MAX} días`)
-      }
-    }
+  const resultado = validarValorConfig(clave, valor)
+  if (!resultado.ok) {
+    throw new Error(resultado.error)
   }
 
   const existing = db.select().from(configuracion).where(eq(configuracion.clave, clave)).get()
