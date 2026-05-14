@@ -10,6 +10,84 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.3.1] — Hardening: cuatro informes de seguridad cerrados
+
+Versión que cierra cuatro informes descubiertos en revisión de código
+de v2.3.0. Ninguno alcanzable desde uso normal de la marquetería; todos
+requieren tampering local (localStorage manipulado, Excel malformado de
+fuente no confiable) o secuencias de interacción específicas. El modelo
+de amenazas del proyecto trata esos límites como no confiables, así que
+se cierran preventivamente.
+
+### Arreglado
+
+- **El "Pedido directo" ya no se queda congelado si tiene un borrador
+  dañado.** Si por alguna razón el borrador auto-guardado quedó
+  corrupto (corte de luz a mitad de guardado, mismatch entre versiones
+  de la app, manipulación local), la app ahora lo descarta y muestra
+  un toast amarillo "Borrador anterior dañado — empezaste limpio".
+  Antes la pantalla quedaba bloqueada en blanco cada vez que se
+  entraba a la ruta, hasta que se limpiaba manualmente la caché.
+
+- **El importador de Excel ahora rechaza valores inválidos de
+  configuración.** Si un Excel tiene `dias_entrega_urgente=-2` o
+  `precio_clase_mensual=999999999`, la app muestra error claro con
+  la fila y el campo, y NADA se carga. Antes esos valores llegaban a
+  la base de datos y generaban fechas absurdas (entregas sugeridas
+  en el pasado, o años en el futuro).
+
+- **La factura PDF ahora agrupa correctamente los items.** En pedidos
+  con 1 trabajo + items sueltos (ej. "Cuadro de la abuela" +
+  "Transporte a domicilio"), el PDF ahora muestra el nombre del
+  trabajo arriba de sus items y un header "Otros" para los sueltos.
+  Antes salían mezclados sin distinción visual. Aplica también al
+  recibo térmico de la impresora POS.
+
+- **El recibo térmico ahora respeta los nombres de los trabajos.** En
+  pedido directo con varios trabajos nombrados, el recibo térmico
+  imprime "Cuadro de la abuela" en lugar del genérico
+  "Trabajo 1 · Enmarcación".
+
+- **Al editar el nombre de un trabajo, el cambio se guarda
+  correctamente.** Antes, si se editaba SOLO el nombre del trabajo
+  sin tocar ningún otro campo, al guardar el pedido se enviaba el
+  nombre viejo al backend. La factura mostraba "Trabajo 1" aunque
+  la pantalla mostrara el nombre corregido.
+
+### Mejorado
+
+- **Auto-reparación de configuración al arrancar.** Si la app
+  encuentra valores de configuración fuera de rango (por ejemplo
+  porque una versión anterior aceptaba Excel mal formado), los
+  restaura automáticamente al valor de fábrica. El papá no tiene
+  que entrar a Configuración a corregir manualmente.
+
+### Para desarrolladores
+
+- Validador exhaustivo del draft del pedido directo extraído a
+  archivo aparte para testeo aislado. PoCs exactos del informe de
+  seguridad incluidos en la suite.
+- `SPEC_NUMERICAS` unificada en `db/queries/configuracion.ts` para
+  validación de dominio compartida entre `setConfig`,
+  `parseConfiguracion` (Excel) y `sanitizeConfigOnBoot`. Antes había
+  3 paths con dominios divergentes.
+- `cargarPlantilla` ahora pasa por `setConfig` (antes escribía
+  directo con `tx.insert/update`, bypasseando validación).
+- Nuevo módulo `lib/runtime-validators.ts` con primitivos compartidos
+  (`esObjeto`, `esString`, `esStringNoVacio`, `esNumeroFinito`,
+  `esBool`, `esEnum`, `esArrayDe`). Reemplaza duplicación entre 3
+  validators.
+- `loadAutoSaveDraftWithStatus` para detectar drafts descartados y
+  notificar al usuario.
+- Función pura `decidirMostrarHeaders` exportable para PDF; ambos
+  formatos (carta y térmico) consumen la misma decisión.
+- Regla ESLint `react-hooks/exhaustive-deps` escalada de `warn` a
+  `error`. Tres stale closures detectados y cerrados.
+- `clampearDias` defensivo en renderer contra valores de config
+  fuera de rango (defense in depth en caso de DB ya corrupta).
+- ~158 tests nuevos cubriendo los 4 informes (620 → 778 tests
+  pasando, 0 fallidos).
+
 ## [2.3.0] — Pedido directo con múltiples trabajos + edición directa
 
 Versión que extiende el flujo "Nuevo pedido directo" para que un solo
