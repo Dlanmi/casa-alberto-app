@@ -28,6 +28,21 @@ export default defineConfig(
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,
       ...eslintPluginReactRefresh.configs.vite.rules,
+      // v2.3.1 — escalado de `warn` (default de la regla) a `error`. El
+      // informe de seguridad sobre 24ea88b mostró un stale closure en
+      // `handleSubmit` del pedido directo: editar el nombre de un trabajo
+      // sin tocar items dejaba el callback con la referencia vieja de
+      // `trabajos`, y el IPC enviaba `trabajoNombre` desactualizado.
+      // La auditoría reveló 2 bugs hermanos en otros archivos. CI con
+      // `--max-warnings 0` no se usa hoy, así que estos warnings entraban
+      // silenciosos. Promoverlo a `error` los bloquea en `npm run lint`.
+      //
+      // Casos legítimos para omitir una dep: agregar
+      // `// eslint-disable-next-line react-hooks/exhaustive-deps` en la
+      // línea anterior con comentario explicando POR QUÉ (ej. ref estable
+      // que React no sabe inferir). Ver overrides abajo para help-button
+      // y update-notification.
+      'react-hooks/exhaustive-deps': 'error',
       // Relajamos explicit-function-return-type: TypeScript los infiere
       // correctamente y forzarlos en cada componente React agrega ruido
       // sin beneficio. Los tipos en API boundaries (IPC handlers, queries)

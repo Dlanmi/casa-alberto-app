@@ -903,7 +903,12 @@ function StepVidrioEspejo({
     if (vidrioSeleccionado && vidrioSeleccionado.tipo !== data.tipoVidrioEspejo) {
       onChange({ tipoVidrioEspejo: vidrioSeleccionado.tipo })
     }
-  }, [data.tipoVidrioEspejo, onChange, vidrioSeleccionado?.tipo])
+    // v2.3.1 — `vidrioSeleccionado` (la ref completa) en lugar de solo
+    // `?.tipo`. El body usa la ref para el truthy check; aunque en práctica
+    // cuando la ref cambia de null↔objeto el `.tipo` también cambia (así
+    // que el comportamiento es correcto), incluir la ref completa elimina
+    // el warning de exhaustive-deps y deja la dependencia honesta.
+  }, [data.tipoVidrioEspejo, onChange, vidrioSeleccionado])
 
   const formatPrecio = (v: number): string =>
     new Intl.NumberFormat('es-CO', {

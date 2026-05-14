@@ -359,6 +359,12 @@ export default function PedidosPage(): React.JSX.Element {
       refetch,
       refetchSaldos,
       saldosMap,
+      // v2.3.1 — antes faltaba `saldosInfoMap`. Bug del mismo género del
+      // informe sobre 24ea88b: el callback usaba `saldosInfoMap.get(...)`
+      // pero no estaba en deps, así que tras un cobro el drag-and-drop
+      // del kanban podía leer info de saldos obsoleta. Escalación de
+      // `react-hooks/exhaustive-deps` a `error` previene regresiones.
+      saldosInfoMap,
       selected,
       setSearchParams,
       showToast,
