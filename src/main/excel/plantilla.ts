@@ -52,6 +52,7 @@ import {
   preciosVidrios,
   proveedores
 } from '../db/schema'
+import { setConfig, validarValorConfig } from '../db/queries/configuracion'
 
 // ---------------------------------------------------------------------------
 // Constantes y límites defensivos
@@ -1191,42 +1192,25 @@ function parseConfiguracion(
       })
       continue
     }
-    // Validaciones específicas por clave
-    if (clave === 'porcentaje_materiales_default') {
-      const n = Number(valor)
-      if (!Number.isFinite(n) || n < 5 || n > 10) {
-        errores.push({
-          hoja: HOJAS.CONFIGURACION,
-          fila: i + 2,
-          campo: 'Valor',
-          mensaje: 'porcentaje_materiales_default debe estar entre 5 y 10'
-        })
-        continue
-      }
-    }
-    if (clave === 'margen_minimo_alerta_pct') {
-      const n = Number(valor)
-      if (!Number.isFinite(n) || n < 0 || n > 100) {
-        errores.push({
-          hoja: HOJAS.CONFIGURACION,
-          fila: i + 2,
-          campo: 'Valor',
-          mensaje: 'margen_minimo_alerta_pct debe estar entre 0 y 100'
-        })
-        continue
-      }
-    }
-    if (clave === 'precio_clase_mensual' || clave === 'precio_kit_dibujo') {
-      const n = Number(valor)
-      if (!Number.isFinite(n) || n < 0 || n > MAX_PRECIO) {
-        errores.push({
-          hoja: HOJAS.CONFIGURACION,
-          fila: i + 2,
-          campo: 'Valor',
-          mensaje: `${clave} debe ser un número mayor o igual a 0`
-        })
-        continue
-      }
+    // Validación de dominio compartida con `setConfig` vía SPEC_NUMERICAS
+    // (ver db/queries/configuracion.ts). Antes esta validación estaba
+    // duplicada inline acá con rangos hard-coded — el informe de
+    // seguridad sobre 7f37f5b mostró que esa duplicación dejaba 4 claves
+    // de días sin validar. Ahora cualquier clave nueva agregada a la spec
+    // queda automáticamente validada en ambos paths (Excel + IPC).
+    //
+    // Claves no-numéricas (nombre_negocio, rut, telefono, etc.) pasan
+    // `validarValorConfig` sin chequeo de rango — la sanitización de
+    // longitud ya la hace `trunc(MAX_STR_LEN=200)` arriba.
+    const validacion = validarValorConfig(clave, valor)
+    if (!validacion.ok) {
+      errores.push({
+        hoja: HOJAS.CONFIGURACION,
+        fila: i + 2,
+        campo: 'Valor',
+        mensaje: validacion.error
+      })
+      continue
     }
     datos.configuracion.push({ clave, valor })
   }
@@ -1277,27 +1261,35 @@ export function cargarPlantilla(
     }
 
     // 1. Configuración (siempre upsert por clave)
+    //
+    // IMPORTANTE — el bug del informe sobre 7f37f5b mostró que escribir
+    // directamente con tx.insert/update bypasseaba `setConfig` y su
+    // validación de dominio. Resultado: un Excel malformado podía persistir
+    // dias_entrega_urgente=-2, generando fechas en el pasado y rompiendo el
+    // form. Ahora TODO write pasa por `setConfig(tx, ...)` que valida contra
+    // SPEC_NUMERICAS. Si una clave numérica tiene valor inválido, setConfig
+    // lanza, la transacción se aborta y nada se persiste.
+    //
+    // El error se propaga al caller del IPC y la UI lo muestra; preferimos
+    // perder un import completo a aceptar parcialmente data corrupta.
+    const setConfigEnTx = (clave: string, valor: string): void => {
+      try {
+        setConfig(tx as unknown as DB, clave, valor)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        throw new Error(`Configuración inválida en "${clave}": ${msg}`)
+      }
+    }
+
     if (parsed.negocio) {
       const negocio = parsed.negocio
-      const upsertConfig = (clave: string, valor: string): void => {
-        const existing = tx
-          .select()
-          .from(configuracion)
-          .where(eq(configuracion.clave, clave))
-          .get()
-        if (existing) {
-          tx.update(configuracion).set({ valor }).where(eq(configuracion.clave, clave)).run()
-        } else {
-          tx.insert(configuracion).values({ clave, valor, descripcion: null }).run()
-        }
-      }
-      upsertConfig('nombre_negocio', negocio.nombre)
-      upsertConfig('rut', negocio.rut)
-      upsertConfig('telefono', negocio.telefono)
-      upsertConfig('direccion', negocio.direccion)
-      if (negocio.correo) upsertConfig('correo', negocio.correo)
+      setConfigEnTx('nombre_negocio', negocio.nombre)
+      setConfigEnTx('rut', negocio.rut)
+      setConfigEnTx('telefono', negocio.telefono)
+      setConfigEnTx('direccion', negocio.direccion)
+      if (negocio.correo) setConfigEnTx('correo', negocio.correo)
       // Marca onboarding como completado al cargar negocio desde plantilla
-      upsertConfig('onboarding_completed', '1')
+      setConfigEnTx('onboarding_completed', '1')
       creados.negocio = 1
     }
 
@@ -1308,14 +1300,14 @@ export function cargarPlantilla(
         .where(eq(configuracion.clave, c.clave))
         .get()
       if (existing) {
-        if (modo !== 'solo_agregar') {
-          tx.update(configuracion).set({ valor: c.valor }).where(eq(configuracion.clave, c.clave)).run()
-          actualizados.configuracion += 1
-        } else {
+        if (modo === 'solo_agregar') {
           ignorados.configuracion += 1
+          continue
         }
+        setConfigEnTx(c.clave, c.valor)
+        actualizados.configuracion += 1
       } else {
-        tx.insert(configuracion).values({ clave: c.clave, valor: c.valor, descripcion: null }).run()
+        setConfigEnTx(c.clave, c.valor)
         creados.configuracion += 1
       }
     }

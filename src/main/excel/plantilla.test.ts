@@ -285,7 +285,87 @@ describe('plantilla — Fase B · parser', () => {
       })
     )
     expect(res.ok).toBe(false)
-    expect(res.errores.some((e) => e.mensaje.toLowerCase().includes('entre 0 y 100'))).toBe(true)
+    // Mensaje generado por `validarValorConfig` contra SPEC_NUMERICAS:
+    // "El valor de margen_minimo_alerta_pct no puede ser mayor a 100 %"
+    expect(
+      res.errores.some(
+        (e) => e.mensaje.toLowerCase().includes('100') && /mayor|menor|entre/.test(e.mensaje.toLowerCase())
+      )
+    ).toBe(true)
+  })
+
+  // ---------------------------------------------------------------------------
+  // PoCs del informe de seguridad sobre `7f37f5b` — el parser dejaba pasar
+  // dias_entrega_* sin validación. Ahora SPEC_NUMERICAS define que son
+  // enteros 0-365 y el parser rechaza valores fuera de ese dominio antes de
+  // llegar a la DB.
+  // ---------------------------------------------------------------------------
+
+  it('rechaza dias_entrega_urgente negativo (PoC -2 del informe)', () => {
+    const res = parsearPlantilla(
+      plantillaMinima(path(), {
+        [HOJAS.CONFIGURACION]: [HEADERS.configuracion, ['dias_entrega_urgente', '-2', '']]
+      })
+    )
+    expect(res.ok).toBe(false)
+    expect(res.errores.some((e) => e.campo === 'Valor')).toBe(true)
+  })
+
+  it('rechaza dias_entrega_estandar decimal (PoC 3.5 del informe)', () => {
+    const res = parsearPlantilla(
+      plantillaMinima(path(), {
+        [HOJAS.CONFIGURACION]: [HEADERS.configuracion, ['dias_entrega_estandar', '3.5', '']]
+      })
+    )
+    expect(res.ok).toBe(false)
+    expect(res.errores.some((e) => /entero/i.test(e.mensaje))).toBe(true)
+  })
+
+  it('rechaza dias_entrega_sin_afan absurdo (PoC 100000000 del informe)', () => {
+    const res = parsearPlantilla(
+      plantillaMinima(path(), {
+        [HOJAS.CONFIGURACION]: [HEADERS.configuracion, ['dias_entrega_sin_afan', '100000000', '']]
+      })
+    )
+    expect(res.ok).toBe(false)
+  })
+
+  it('rechaza tiempo_entrega_default no-número', () => {
+    const res = parsearPlantilla(
+      plantillaMinima(path(), {
+        [HOJAS.CONFIGURACION]: [HEADERS.configuracion, ['tiempo_entrega_default', 'abc', '']]
+      })
+    )
+    expect(res.ok).toBe(false)
+  })
+
+  it('rechaza porcentaje_costo_materiales_armado_default fuera de rango', () => {
+    // Antes esta clave no se validaba en ningún path. Ahora SPEC_NUMERICAS
+    // la define como 0-100.
+    const res = parsearPlantilla(
+      plantillaMinima(path(), {
+        [HOJAS.CONFIGURACION]: [
+          HEADERS.configuracion,
+          ['porcentaje_costo_materiales_armado_default', '200', '']
+        ]
+      })
+    )
+    expect(res.ok).toBe(false)
+  })
+
+  it('acepta dias_entrega_* en rango válido', () => {
+    const res = parsearPlantilla(
+      plantillaMinima(path(), {
+        [HOJAS.CONFIGURACION]: [
+          HEADERS.configuracion,
+          ['dias_entrega_urgente', '3', ''],
+          ['dias_entrega_estandar', '7', ''],
+          ['dias_entrega_sin_afan', '14', '']
+        ]
+      })
+    )
+    expect(res.ok).toBe(true)
+    expect(res.datos.configuracion).toHaveLength(3)
   })
 
   it('ignora filas marcadas como EJEMPLO', () => {
