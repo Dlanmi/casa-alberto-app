@@ -36,7 +36,7 @@ import { useToast } from '@renderer/contexts/toast-context'
 import { useIpc } from '@renderer/hooks/use-ipc'
 import {
   clearAutoSaveDraft,
-  loadAutoSaveDraft,
+  loadAutoSaveDraftWithStatus,
   useAutoSave
 } from '@renderer/hooks/use-auto-save'
 import { formatCOP, hoyISO, toFechaISO } from '@renderer/lib/format'
@@ -67,78 +67,14 @@ import {
   type TipoItemPedido,
   type TipoTrabajo
 } from '@shared/types'
-
-// ---------------------------------------------------------------------------
-// Tipos del form (estado local; se traduce a CrearPedidoDirectoInput al submit)
-// ---------------------------------------------------------------------------
-
-type ItemForm = {
-  // ID local solo para React key — no se envía al backend.
-  uid: string
-  tipoItem: TipoItemPedido | 'otro'
-  descripcion: string
-  referencia: string
-  cantidad: number
-  precioUnitario: number
-  costoUnitarioEstimado: number | null
-  // v2.3.0 — agrupación opcional en "trabajos". `null` = item suelto
-  // (comportamiento pre-v2.3.0). Si tiene valor, debe coincidir con un
-  // entry en el estado `trabajos[]` del padre.
-  trabajoIdLocal: string | null
-}
-
-// v2.3.0 — un "trabajo" agrupa items que pertenecen a un mismo cuadro o
-// pieza dentro del pedido (ej. "Cuadro de la abuela", "Espejo del baño").
-// El idLocal es un UUID generado en el cliente; el backend lo mapea a
-// trabajoId 1-indexed al persistir en pedido_items.metadata.
-type TrabajoLocal = {
-  idLocal: string
-  nombre: string
-}
-
-// v2.3.0 — clave del draft auto-guardado en localStorage. Si el papá cierra
-// la app o reload accidental, el form se reconstruye con lo que tenía.
-const DRAFT_KEY = 'pedido-directo:wip'
-
-// Shape del draft persistido. Se valida con `validarPedidoDirectoDraft`
-// antes de aplicarlo — si llega corrupto (storage manipulado, mismatch de
-// versión, parsing parcial), se descarta entero y el form arranca limpio.
-type PedidoDirectoDraft = {
-  // Solo guardamos clienteId para no clavar una snapshot del cliente que
-  // luego puede haber sido editado o eliminado. Al cargar el draft, la
-  // lógica re-fetcha el cliente fresco (o lo deja en null si ya no existe).
-  clienteId: number | null
-  tipoTrabajo: TipoTrabajo
-  descripcion: string
-  anchoCm: number | null
-  altoCm: number | null
-  fechaIngreso: string
-  fechaEntregaEditada: string | null
-  tipoEntrega: TipoEntrega
-  estadoInicial: EstadoPedido
-  notas: string
-  items: ItemForm[]
-  trabajos: TrabajoLocal[]
-  precioTotalOverride: number | null
-  conAbono: boolean
-  abonoMonto: number
-  abonoMetodo: MetodoPago
-  abonoFechaEditada: string | null
-  generarPDF: boolean
-}
-
-function validarPedidoDirectoDraft(raw: unknown): PedidoDirectoDraft | null {
-  if (!raw || typeof raw !== 'object') return null
-  const d = raw as Record<string, unknown>
-  // Sanity check de campos críticos. Si pasa esto, confiamos en defaults
-  // para campos que falten. NO validamos shape exhaustiva de items/trabajos
-  // — el form los acepta vacíos sin romper.
-  if (typeof d.fechaIngreso !== 'string') return null
-  if (!Array.isArray(d.items)) return null
-  if (d.trabajos != null && !Array.isArray(d.trabajos)) return null
-  if (typeof d.tipoTrabajo !== 'string') return null
-  return d as unknown as PedidoDirectoDraft
-}
+import {
+  clampearDias,
+  DRAFT_KEY,
+  validarPedidoDirectoDraft,
+  type ItemForm,
+  type PedidoDirectoDraft,
+  type TrabajoLocal
+} from './nuevo-directo-draft'
 
 // Estados que el dueño puede elegir como inicial. Excluimos 'cancelado' y
 // 'sin_reclamar' (no tiene sentido crear directamente en esos estados).
@@ -227,12 +163,34 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
   // al montar. Se hace fuera de useEffect porque queremos que los useState
   // arranquen con los valores del draft directamente, evitando un primer
   // render con defaults seguido de un re-render con la data.
-  // `loadAutoSaveDraft` hace validación profunda: si el draft está corrupto
-  // (storage manipulado, parsing parcial), lo descarta y limpia la key.
-  const draftInicial = useMemo(
-    () => loadAutoSaveDraft<PedidoDirectoDraft>(DRAFT_KEY, validarPedidoDirectoDraft)?.data,
-    []
-  )
+  //
+  // El validator hace validación profunda (cada item, cada trabajo): si el
+  // draft está corrupto (storage manipulado, parsing parcial, mismatch de
+  // shape entre versiones), retorna null y `loadAutoSaveDraftWithStatus`
+  // limpia la key automáticamente. `hadCorruptDraft` indica que SÍ había
+  // contenido persistido pero fue descartado, para mostrar feedback UX.
+  const { draftInicial, hadCorruptDraft } = useMemo(() => {
+    const { draft, hadCorruptDraft } = loadAutoSaveDraftWithStatus<PedidoDirectoDraft>(
+      DRAFT_KEY,
+      validarPedidoDirectoDraft
+    )
+    return { draftInicial: draft?.data, hadCorruptDraft }
+  }, [])
+
+  // Toast informativo cuando se descartó un draft corrupto. Sin esto el
+  // dueño vería el form vacío después de haber cargado uno con cosas, y
+  // pensaría que la app perdió su trabajo silenciosamente. El toast
+  // explica QUÉ pasó y QUÉ hacer.
+  useEffect(() => {
+    if (hadCorruptDraft) {
+      showToast({
+        tone: 'warning',
+        title: 'Borrador anterior dañado',
+        message:
+          'No pude recuperar tu borrador previo (datos corruptos). Empezaste con un formulario limpio.'
+      })
+    }
+  }, [hadCorruptDraft, showToast])
 
   // --- Estado del form ---
   // El cliente solo se persiste por id en el draft (para no clavar una copia
@@ -295,11 +253,18 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
       window.api.configuracion.getNumber('dias_entrega_sin_afan', DIAS_SUGERIDOS_FALLBACK.sin_afan),
     []
   )
+  // Defense in depth contra valores corruptos en la DB (ver clampearDias).
+  // Si una versión anterior de la app o un Excel malformado dejaron valores
+  // fuera de rango (negativos, decimales, miles), aquí los reemplazamos
+  // por el fallback antes de pasarlos a `Date.setDate(...)`. Las capas
+  // previas (setConfig + parseConfiguracion + sanitizeConfigOnBoot) ya
+  // previenen que llegue a la DB, pero esta capa cubre el caso transicional
+  // sin riesgo de fechas absurdas en pantalla.
   const diasSugeridos = useMemo<Record<TipoEntrega, number>>(
     () => ({
-      urgente: diasUrgente ?? DIAS_SUGERIDOS_FALLBACK.urgente,
-      estandar: diasEstandar ?? DIAS_SUGERIDOS_FALLBACK.estandar,
-      sin_afan: diasSinAfan ?? DIAS_SUGERIDOS_FALLBACK.sin_afan
+      urgente: clampearDias(diasUrgente, DIAS_SUGERIDOS_FALLBACK.urgente),
+      estandar: clampearDias(diasEstandar, DIAS_SUGERIDOS_FALLBACK.estandar),
+      sin_afan: clampearDias(diasSinAfan, DIAS_SUGERIDOS_FALLBACK.sin_afan)
     }),
     [diasUrgente, diasEstandar, diasSinAfan]
   )
@@ -421,12 +386,20 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
     // Solo persistimos si el form tiene contenido útil — sino seguimos
     // contaminando localStorage con drafts vacíos cada vez que el dueño
     // entra a la página sin completar nada.
+    // Defense in depth: aunque `validarPedidoDirectoDraft` ya rechaza
+    // drafts con items malformados, usamos optional chaining + nullish
+    // coalescing por si el draft entra desde una ruta nueva en el futuro
+    // que no pase por el validator (ej. import desde Excel, restore de
+    // backup parcial). Mejor un check tonto pasivo que un crash en
+    // render del isDirty callback.
     isDirty: (d) =>
       d.clienteId !== null ||
-      d.descripcion.length > 0 ||
-      d.notas.length > 0 ||
-      d.trabajos.length > 0 ||
-      d.items.some((it) => it.descripcion.length > 0 || it.precioUnitario > 0)
+      (d.descripcion?.length ?? 0) > 0 ||
+      (d.notas?.length ?? 0) > 0 ||
+      (d.trabajos?.length ?? 0) > 0 ||
+      (d.items ?? []).some(
+        (it) => (it?.descripcion?.length ?? 0) > 0 || (it?.precioUnitario ?? 0) > 0
+      )
   })
 
   // --- Derivados ---
@@ -439,8 +412,16 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
     ? precioTotalOverride - subtotalItems
     : 0
 
+  // Defense in depth: optional chaining contra items malformados (ver
+  // comentario del isDirty arriba). Si descripcion no es string, falla
+  // la validación silenciosamente (el dueño verá "Revisa los items" y
+  // el form lo guiará a corregir, en vez de un crash).
   const itemsValidos = items.every(
-    (it) => it.descripcion.trim().length > 0 && it.cantidad > 0 && it.precioUnitario >= 0
+    (it) =>
+      typeof it?.descripcion === 'string' &&
+      it.descripcion.trim().length > 0 &&
+      (it.cantidad ?? 0) > 0 &&
+      (it.precioUnitario ?? -1) >= 0
   )
 
   // v2.3.0 — todo trabajo definido debe tener ≥1 item asociado. Si el dueño
@@ -675,6 +656,16 @@ export default function NuevoPedidoDirectoPage(): React.JSX.Element {
     estadoInicial,
     notas,
     items,
+    // v2.3.1 — antes faltaban `trabajos` y `trabajosSinItems`. El bug
+    // (informe sobre 24ea88b) era que editar SOLO el nombre de un trabajo
+    // sin tocar items dejaba el callback con la referencia vieja de
+    // `trabajos`, y el IPC `crearDirecto` se enviaba con `trabajoNombre`
+    // desactualizado (UI mostraba "Cuadro de la abuela", DB guardaba
+    // "Trabajo 1"). Ahora la regla eslint `react-hooks/exhaustive-deps`
+    // está escalada a `error` para que regresiones de este género fallen
+    // CI antes de mergear.
+    trabajos,
+    trabajosSinItems,
     precioTotalOverride,
     abonoMetodo,
     abonoFecha,
@@ -1406,7 +1397,12 @@ function ItemRow({ index, item, onUpdate, onRemove, canRemove }: ItemRowProps): 
   )
   // Validación inline: marca campos requeridos cuando se han tocado
   const [touched, setTouched] = useState({ descripcion: false, precio: false })
-  const errDesc = touched.descripcion && !item.descripcion.trim()
+  // Defense in depth contra items malformados que pudieran filtrarse al
+  // render desde una ruta no validada (mismo razonamiento que en isDirty
+  // del useAutoSave). El validador del draft ya rechaza esto, pero un
+  // guard explícito es cheap y previene crashes catastróficos.
+  const descripcionStr = typeof item.descripcion === 'string' ? item.descripcion : ''
+  const errDesc = touched.descripcion && !descripcionStr.trim()
   const errPrecio = touched.precio && (!Number.isFinite(item.precioUnitario) || item.precioUnitario < 0)
   // Modal de selección de muestra de marco (catálogo). Solo se ofrece para
   // tipoItem='marco' — para otros conceptos no aplica. El usuario puede
