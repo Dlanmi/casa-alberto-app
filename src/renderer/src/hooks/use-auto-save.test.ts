@@ -10,7 +10,7 @@
 //   4. Borra la clave en cualquier caso de descarte para que la próxima
 //      visita no reintente con el mismo payload corrupto.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { loadAutoSaveDraft } from './use-auto-save'
+import { loadAutoSaveDraft, loadAutoSaveDraftWithStatus } from './use-auto-save'
 
 const KEY = 'test-key'
 const STORAGE_KEY = `ca:autosave:${KEY}`
@@ -129,5 +129,61 @@ describe('loadAutoSaveDraft — hardening', () => {
     expect(loadAutoSaveDraft(KEY)).toBeNull()
     // Storage ya quedó limpio.
     expect(loadAutoSaveDraft(KEY)).toBeNull()
+  })
+})
+
+describe('loadAutoSaveDraftWithStatus — detección de drafts descartados', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+  afterEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('sin draft persistido → draft=null, hadCorruptDraft=false', () => {
+    const r = loadAutoSaveDraftWithStatus(KEY)
+    expect(r.draft).toBeNull()
+    expect(r.hadCorruptDraft).toBe(false)
+  })
+
+  it('draft válido → draft poblado, hadCorruptDraft=false', () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ data: { foo: 'bar' }, savedAt: '2026-05-12T10:00:00Z' })
+    )
+    const r = loadAutoSaveDraftWithStatus<{ foo: string }>(KEY)
+    expect(r.draft?.data.foo).toBe('bar')
+    expect(r.hadCorruptDraft).toBe(false)
+  })
+
+  it('draft malformado (data null) → draft=null, hadCorruptDraft=true', () => {
+    // El caller debería notificar al usuario que tenía un borrador pero
+    // se descartó. Antes el comportamiento era silencioso y el usuario
+    // veía un form vacío sin entender por qué.
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ data: null }))
+    const r = loadAutoSaveDraftWithStatus(KEY)
+    expect(r.draft).toBeNull()
+    expect(r.hadCorruptDraft).toBe(true)
+    // Y la key ya está limpia para que no se quede acumulando.
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+
+  it('draft rechazado por validator → hadCorruptDraft=true', () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ data: { foo: 'bar' }, savedAt: '2026-05-12T10:00:00Z' })
+    )
+    // Validator estricto que rechaza todo.
+    const r = loadAutoSaveDraftWithStatus(KEY, () => null)
+    expect(r.draft).toBeNull()
+    expect(r.hadCorruptDraft).toBe(true)
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+
+  it('JSON malformado → hadCorruptDraft=true', () => {
+    window.localStorage.setItem(STORAGE_KEY, '{not-json')
+    const r = loadAutoSaveDraftWithStatus(KEY)
+    expect(r.draft).toBeNull()
+    expect(r.hadCorruptDraft).toBe(true)
   })
 })

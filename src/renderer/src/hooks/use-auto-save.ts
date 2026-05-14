@@ -240,3 +240,33 @@ export function loadAutoSaveDraft<T>(
 export function clearAutoSaveDraft(key: string): void {
   window.localStorage.removeItem(storageKey(key))
 }
+
+/**
+ * Wrapper de `loadAutoSaveDraft` que devuelve también si había un draft
+ * persistido pero fue descartado por el validador (corrupto, tampering,
+ * mismatch de shape entre versiones). Útil para mostrar feedback UX al
+ * usuario tipo "tu borrador anterior estaba dañado" sin que tenga que
+ * preguntarse por qué arrancó con el form vacío.
+ *
+ * Internamente `loadAutoSaveDraft` ya limpia la key cuando el validator
+ * rechaza, así que llamar a este wrapper NO deja el draft corrupto
+ * persistido — solo detecta el evento para que el caller pueda
+ * notificarlo. Si nadie tipea nada después, no se vuelve a guardar.
+ */
+export function loadAutoSaveDraftWithStatus<T>(
+  key: string,
+  validate?: (raw: unknown) => T | null | undefined
+): { draft: { data: T; savedAt: Date } | null; hadCorruptDraft: boolean } {
+  let rawExisted = false
+  try {
+    rawExisted = window.localStorage.getItem(storageKey(key)) != null
+  } catch {
+    // localStorage bloqueado o no accesible: tratamos como "no había".
+    rawExisted = false
+  }
+  const draft = loadAutoSaveDraft<T>(key, validate)
+  return {
+    draft,
+    hadCorruptDraft: rawExisted && draft == null
+  }
+}
