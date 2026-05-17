@@ -10,6 +10,46 @@ auto-actualizadas por electron-updater al abrir la app.
 
 ---
 
+## [2.3.2] — Corrección: contadores de números de documento
+
+Patch que corrige un error introducido en v2.3.1 en la auto-reparación
+de configuración al arrancar.
+
+### Arreglado
+
+- **La auto-reparación de configuración ya no puede dañar la
+  numeración de documentos.** En v2.3.1 se agregó una reparación
+  automática que, al abrir la app, corregía valores de configuración
+  fuera de rango. Pero trataba los contadores de números de documento
+  (facturas, pedidos, contratos, cuentas de cobro) igual que un ajuste
+  común: si un contador estaba dañado, lo reponía en 1. En una base de
+  datos que ya tiene documentos (F-0001, P-0001, etc.), eso hacía que
+  el siguiente documento intentara repetir un número ya usado — la
+  creación fallaba una y otra vez, dejando ese tipo de documento
+  imposible de generar hasta corregir el contador a mano.
+
+  Ahora, si un contador de documentos está dañado, la app calcula el
+  número correcto a partir de los documentos que ya existen (el mayor
+  número usado + 1). La numeración nunca retrocede ni repite, aunque
+  se hayan borrado documentos.
+
+### Para desarrolladores
+
+- `sanitizeConfigOnBoot` separa el tratamiento de las claves: los
+  *settings* (días, porcentajes, precios) se siguen restaurando al
+  default del seed cuando violan SPEC_NUMERICAS; los *consecutivos*
+  ahora se computan desde las filas de documentos con la nueva función
+  pura `calcularConsecutivoSeguro(numeros)` → `max(sufijo) + 1`.
+- El contador nunca se baja: se corrige sólo si está por debajo del
+  siguiente valor seguro (`!valido || actual < seguro`). Cubre tanto
+  el caso del informe (valor inválido por SPEC) como el caso hermano
+  de un contador sintácticamente válido pero por debajo de las filas
+  existentes.
+- `SanitizeReport` distingue `tipo: 'setting' | 'consecutivo'` para
+  auditoría en logs.
+- 15 tests nuevos (8 de la función pura + 7 integration cubriendo
+  tabla vacía, tabla con documentos, caso hermano, idempotencia).
+
 ## [2.3.1] — Hardening: cuatro informes de seguridad cerrados
 
 Versión que cierra cuatro informes descubiertos en revisión de código
